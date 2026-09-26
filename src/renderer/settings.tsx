@@ -1,3 +1,4 @@
+import { t } from './i18n';
 import { useEffect, useState } from 'react';
 import { Settings2, Check } from 'lucide-react';
 import {
@@ -40,12 +41,9 @@ export function SettingsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="settings-dialog">
         <DialogHeader>
-          <div className="settings-icon">
-            <Settings2 size={21} />
-          </div>
-          <DialogTitle>连接你的旅行助手</DialogTitle>
+          <DialogTitle>{t('连接你的旅行助手')}</DialogTitle>
           <DialogDescription>
-            Pi 管理旅行会话，DeepSeek 负责规划，Jev 操控本地浏览器。密钥加密保存在本机。
+            {t('Pi 管理旅行会话，DeepSeek 负责规划，Jev 操控本地浏览器。密钥加密保存在本机。')}
           </DialogDescription>
         </DialogHeader>
         <form
@@ -62,16 +60,16 @@ export function SettingsDialog({
                 }),
               );
             } catch (e) {
-              setError(e instanceof Error ? e.message : '保存失败');
+              setError(e instanceof Error ? e.message : t('保存失败'));
             } finally {
               setSaving(false);
             }
           }}
         >
           <label>
-            接口地址
+            {t('接口地址')}
             <Input
-              aria-label="模型接口地址"
+              aria-label={t('模型接口地址')}
               value={baseURL}
               onChange={(event) => setBaseURL(event.target.value)}
               required
@@ -79,28 +77,29 @@ export function SettingsDialog({
             />
           </label>
           <label>
-            模型名称
+            {t('模型名称')}
             <Input
-              aria-label="模型名称"
+              aria-label={t('模型名称')}
               value={model}
               onChange={(event) => setModel(event.target.value)}
               required
-              placeholder="填写服务商提供的模型 ID"
+              placeholder={t('填写服务商提供的模型 ID')}
             />
           </label>
           <label>
-            API Key <span>{config.hasKey ? '已保存，留空则保留' : '本地模型可留空'}</span>
+            API Key <span>{config.hasKey ? t('已保存，留空则保留') : t('本地模型可留空')}</span>
             <Input
               aria-label="API Key"
               type="password"
               autoComplete="off"
               value={key}
               onChange={(event) => setKey(event.target.value)}
-              placeholder={config.hasKey ? '••••••••（已加密保存）' : '输入 API Key'}
+              placeholder={config.hasKey ? t('••••••••（已加密保存）') : t('输入 API Key')}
             />
           </label>
           {config.hasKey && (
-            <button
+            <Button
+              variant="ghost"
               type="button"
               className="clear-key"
               onClick={async () => {
@@ -111,24 +110,27 @@ export function SettingsDialog({
                 }
               }}
             >
-              清除已保存的密钥
-            </button>
+              {t('清除已保存的密钥')}
+            </Button>
           )}
           <label>
             Jev · OpenRouter Key{' '}
-            <span>{config.hasJevKey ? '已保存，留空保留' : '浏览器自动操作使用'}</span>
+            <span>{config.hasJevKey ? t('已保存，留空保留') : t('浏览器自动操作使用')}</span>
             <Input
               aria-label="Jev OpenRouter Key"
               type="password"
               autoComplete="off"
               value={jevKey}
               onChange={(e) => setJevKey(e.target.value)}
-              placeholder={config.hasJevKey ? '••••••••（已加密保存）' : '输入 OpenRouter API Key'}
+              placeholder={
+                config.hasJevKey ? t('••••••••（已加密保存）') : t('输入 OpenRouter API Key')
+              }
             />
           </label>
-          <p className="settings-note">浏览器决策模型：typesafe/jev-1.13</p>
+          <p className="settings-note">{t('浏览器决策模型：typesafe/jev-1.13')}</p>
           {config.hasJevKey && (
-            <button
+            <Button
+              variant="ghost"
               type="button"
               className="clear-key"
               onClick={async () => {
@@ -139,8 +141,8 @@ export function SettingsDialog({
                 }
               }}
             >
-              清除 Jev 密钥
-            </button>
+              {t('清除 Jev 密钥')}
+            </Button>
           )}
           {error && (
             <p className="form-error" role="alert">
@@ -148,7 +150,7 @@ export function SettingsDialog({
             </p>
           )}
           <Button type="submit" disabled={saving} className="save-settings">
-            {saving ? '正在保存…' : '保存设置'}
+            {saving ? t('正在保存…') : t('保存设置')}
             <Check size={15} />
           </Button>
         </form>

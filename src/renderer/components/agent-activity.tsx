@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import type { ToolActivity } from '../../shared/types';
 import { CircleCheck, CircleX, LoaderCircle, PauseCircle } from 'lucide-react';
 import {
@@ -29,21 +30,25 @@ const icons = {
 export function AgentActivity({ steps }: { steps: ToolActivity[] }) {
   return (
     <ChainOfThought defaultOpen data-testid="agent-activity">
-      <ChainOfThoughtHeader>执行过程 · {steps.length} 步</ChainOfThoughtHeader>
+      <ChainOfThoughtHeader>
+        {t('执行过程 ·')}
+        {steps.length}
+        {t('步')}
+      </ChainOfThoughtHeader>
       <ChainOfThoughtContent>
         {steps.map((step) => (
           <ChainOfThoughtStep
             key={step.id}
             icon={icons[step.status]}
-            label={labels[step.name] ?? step.name}
+            label={t(labels[step.name] ?? step.name)}
             status={step.status === 'active' ? 'active' : 'complete'}
-            description={`${statuses[step.status]}${step.finishedAt ? ` · ${((step.finishedAt - step.startedAt) / 1000).toFixed(1)} 秒` : ''}`}
+            description={`${t(statuses[step.status])}${step.finishedAt ? ` · ${((step.finishedAt - step.startedAt) / 1000).toFixed(1)} ${t('秒')}` : ''}`}
           >
             <Tool>
               <ToolHeader
                 type="dynamic-tool"
                 toolName={step.name}
-                title={`${step.name} · 查看详情`}
+                title={`${step.name} · ${t('查看详情')}`}
                 state={
                   step.status === 'active'
                     ? 'input-available'
@@ -54,15 +59,16 @@ export function AgentActivity({ steps }: { steps: ToolActivity[] }) {
               />
               <ToolContent>
                 <div>
-                  <p className="text-xs text-muted-foreground">调用参数</p>
+                  <p className="text-xs text-muted-foreground">{t('调用参数')}</p>
                   <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all text-xs">
                     {step.input}
                   </pre>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">执行结果</p>
+                  <p className="text-xs text-muted-foreground">{t('执行结果')}</p>
                   <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all text-xs">
-                    {step.output || (step.status === 'active' ? '等待工具返回…' : '未返回结果')}
+                    {step.output ||
+                      (step.status === 'active' ? t('等待工具返回…') : t('未返回结果'))}
                   </pre>
                 </div>
               </ToolContent>

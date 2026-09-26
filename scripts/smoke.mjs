@@ -77,7 +77,7 @@ try {
   if (!(await evaluate("document.body?.innerText.includes('下一站，去哪里？')")))
     throw new Error('UI未渲染');
   await evaluate(
-    "[...document.querySelectorAll('button')].find(b=>b.textContent.includes('查看示例行程')).click()",
+    "[...document.querySelectorAll('button')].find(b=>b.textContent.includes('先看看一份示例行程')).click()",
   );
   for (let n = 0; n < 50; n++) {
     if (

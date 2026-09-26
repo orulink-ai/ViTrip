@@ -1,4 +1,5 @@
 import type { Notebook, Quote } from './notebook';
+import type { ItineraryLocation } from './itinerary-map';
 export interface Settings {
   baseURL: string;
   model: string;
@@ -30,7 +31,13 @@ export interface Message {
 export interface Day {
   title: string;
   subtitle: string;
-  activities: { time: string; title: string; detail: string; url?: string }[];
+  activities: {
+    time: string;
+    title: string;
+    detail: string;
+    url?: string;
+    location?: ItineraryLocation;
+  }[];
 }
 export interface Plan {
   title: string;
@@ -101,7 +108,7 @@ export interface API {
   renameTrip(id: string, title: string): Promise<Trip>;
   renameJourney(id: string, title: string): Promise<Journey>;
   moveTrip(id: string, journeyId: string): Promise<Trip>;
-  journal(): Promise<string>;
+  journal(options?: { journeyId: string; legacy?: boolean }): Promise<string>;
   demo(): Promise<Trip>;
   select(id: string): Promise<Trip>;
   remove(id: string): Promise<void>;

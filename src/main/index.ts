@@ -85,6 +85,17 @@ app
       },
     });
     const win = window;
+    // Native tile requests identify ViTrip; Chromium retains normal HTTP caching.
+    win.webContents.session.webRequest.onBeforeSendHeaders(
+      { urls: ['https://tile.openstreetmap.org/*'] },
+      (details, callback) =>
+        callback({
+          requestHeaders: {
+            ...details.requestHeaders,
+            'User-Agent': `ViTrip/${app.getVersion()}`,
+          },
+        }),
+    );
     const emit = (event: Event) => {
       if (!win.isDestroyed()) win.webContents.send('vitrip:event', event);
     };
@@ -248,9 +259,9 @@ app
             control,
             signal,
             onActivity,
-            toolNames: ['journal'],
+            toolNames: ['journal', 'plan'],
             prompt:
-              '[VITRIP_JOURNAL_SYNC] 请把本轮的重要问题、答案、偏好、决定和注意事项整理进共享手册。调用 journal，沿用原条目 id 更新，保留其他内容。html 使用完整 HTML/CSS，持续完善原页面。无新信息可提交空 entries。不要再次向用户输出聊天回复。' +
+              '[VITRIP_JOURNAL_SYNC] 请把本轮的重要问题、答案、偏好、决定和注意事项整理进共享手册。调用 journal，沿用原条目 id 更新，保留其他内容。有新增或改变的行程安排时调用 plan 更新完整的结构化行程。不要生成 HTML，交互界面由应用负责。无新信息可提交空 entries。不要再次向用户输出聊天回复。' +
               sharedContext(),
             execute: (name, args) => execute(name, args, trip, signal),
             onText: () => {},
@@ -334,7 +345,17 @@ app
       await stop(false);
       return store.moveTrip(z.string().parse(id), z.string().parse(journeyId));
     });
-    handle('journal', () => journalHTML(store.journeyFor(current)));
+    handle('journal', (raw) => {
+      const options = z
+        .object({ journeyId: z.string(), legacy: z.boolean().optional() })
+        .optional()
+        .parse(raw);
+      const journey = options
+        ? store.journeys.find((item) => item.id === options.journeyId)
+        : store.journeyFor(current);
+      if (!journey) throw new Error('旅行文件夹不存在');
+      return journalHTML(options?.legacy ? { ...journey, plan: null } : journey);
+    });
     handle('demo', async () => {
       await stop(false);
       current = store.create();

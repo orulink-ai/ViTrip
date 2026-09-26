@@ -1,3 +1,5 @@
+import { Button } from './components/ui/button';
+import { ButtonGroup } from './components/ui/button-group';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { Quote } from '../shared/notebook';
@@ -60,16 +62,20 @@ export function ReplySelection({
       {children}
       {selection &&
         createPortal(
-          <div
-            className="reply-selection-menu"
+          <ButtonGroup
+            className="fixed z-50"
             role="toolbar"
             aria-label="选中文字操作"
             style={{ left: selection.x, top: selection.y }}
             onMouseDown={(e) => e.preventDefault()}
           >
-            <button onClick={() => apply(onQuote)}>添加到对话</button>
-            <button onClick={() => apply(onBookmark)}>标记到笔记本</button>
-          </div>,
+            <Button variant="outline" size="sm" onClick={() => apply(onQuote)}>
+              添加到对话
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => apply(onBookmark)}>
+              标记到笔记本
+            </Button>
+          </ButtonGroup>,
           document.body,
         )}
     </div>

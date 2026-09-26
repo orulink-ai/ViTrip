@@ -239,7 +239,7 @@ test('local desktop: real browser tools, itinerary, approval and takeover', asyn
   await expect(page.getByText('已在真实浏览器中搜索京都，并生成测试行程。')).toBeVisible();
   await expect(
     page
-      .frameLocator('iframe[title="旅行手册"]')
+      .getByRole('region', { name: '交互行程正文' })
       .getByRole('heading', { name: '测试行程 · 京都', exact: true }),
   ).toBeVisible();
   const activity = page.getByTestId('agent-activity').first();
@@ -307,7 +307,7 @@ test('restores conversation and itinerary after restarting', async () => {
   page = await app.firstWindow();
   await expect(
     page
-      .frameLocator('iframe[title="旅行手册"]')
+      .getByRole('region', { name: '交互行程正文' })
       .getByRole('heading', { name: '测试行程 · 京都', exact: true }),
   ).toBeVisible();
   await expect(page.getByText('我已重新观察当前页面，接管后的内容已保留。')).toBeVisible();
@@ -317,14 +317,12 @@ test('restores conversation and itinerary after restarting', async () => {
 });
 
 test('travel folders, rename, cross-session memory and searchable HTML journal', async () => {
-  await page
-    .getByRole('button', { name: '新的旅行', exact: true })
-    .and(page.locator('[data-slot=button]'))
-    .click();
+  await page.getByRole('button', { name: '创建新的旅行', exact: true }).click();
   await page.getByLabel('名称', { exact: true }).fill('普吉岛');
   await page.getByRole('button', { name: '保存', exact: true }).click();
   await page.getByRole('button', { name: '新的会话', exact: true }).hover();
-  await page.getByRole('button', { name: '重命名会话 新的会话', exact: true }).click();
+  await page.getByRole('button', { name: '会话操作 新的会话', exact: true }).click();
+  await page.getByRole('menuitem', { name: '重命名会话', exact: true }).click();
   await page.getByLabel('名称', { exact: true }).fill('住宿问题');
   await page.getByRole('button', { name: '保存', exact: true }).click();
   await page
@@ -336,21 +334,24 @@ test('travel folders, rename, cross-session memory and searchable HTML journal',
   const journal = page.frameLocator('iframe[title="旅行手册"]');
   await expect(journal.getByRole('heading', { name: '普吉岛旅行手册', exact: true })).toBeVisible();
   await expect(journal.getByText('已决定住卡塔海滩，喜欢安静')).toBeVisible();
-  await page.getByRole('button', { name: '在 普吉岛 新建会话', exact: true }).click();
+  await page.getByRole('button', { name: '旅行操作 普吉岛', exact: true }).click();
+  await page.getByRole('menuitem', { name: '新建会话', exact: true }).click();
   await page.getByRole('button', { name: '新的会话', exact: true }).hover();
-  await page.getByRole('button', { name: '重命名会话 新的会话', exact: true }).click();
+  await page.getByRole('button', { name: '会话操作 新的会话', exact: true }).click();
+  await page.getByRole('menuitem', { name: '重命名会话', exact: true }).click();
   await page.getByLabel('名称', { exact: true }).fill('出海问题');
   await page.getByRole('button', { name: '保存', exact: true }).click();
   await page.getByLabel('旅行需求', { exact: true }).fill('共享记忆测试：出海要注意什么？');
   await page.getByRole('button', { name: '发送', exact: true }).click();
   await expect(page.getByText('已沿用卡塔海滩的住宿决定，并补充出海提醒。')).toBeVisible();
-  await page.getByRole('button', { name: '已整理', exact: true }).click();
+  await page.getByRole('tab', { name: '已整理', exact: true }).click();
   await expect(page.getByText('已决定住卡塔海滩，喜欢安静')).toBeVisible();
   await expect(page.getByText('确认天气和返程安排')).toBeVisible();
   await page.getByLabel('搜索已整理信息').fill('卡塔');
   await expect(page.getByText('已决定住卡塔海滩，喜欢安静')).toBeVisible();
   await expect(page.getByText('确认天气和返程安排')).not.toBeVisible();
-  await page.getByRole('button', { name: '重命名旅行 普吉岛', exact: true }).click();
+  await page.getByRole('button', { name: '旅行操作 普吉岛', exact: true }).click();
+  await page.getByRole('menuitem', { name: '重命名旅行', exact: true }).click();
   await page.getByLabel('名称', { exact: true }).fill('普吉岛七日游');
   await page.getByRole('button', { name: '保存', exact: true }).click();
   const state = await page.evaluate(() => window.vitrip.init());
@@ -362,7 +363,7 @@ test('travel folders, rename, cross-session memory and searchable HTML journal',
       .sort(),
   ).toEqual(['住宿问题', '出海问题']);
   expect(folder.entries).toHaveLength(2);
-  await page.getByRole('button', { name: '页面', exact: true }).click();
+  await page.getByRole('tab', { name: '页面', exact: true }).click();
   await expect(
     page
       .frameLocator('iframe[title="旅行手册"]')

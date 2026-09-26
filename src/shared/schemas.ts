@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { locationSchema } from './itinerary-map';
 export const planSchema = z.object({
   title: z.string().max(160),
   subtitle: z.string().max(1000),
@@ -15,6 +16,7 @@ export const planSchema = z.object({
               title: z.string().max(200),
               detail: z.string().max(2000),
               url: z.string().url().optional(),
+              location: locationSchema.optional(),
             }),
           )
           .max(20),

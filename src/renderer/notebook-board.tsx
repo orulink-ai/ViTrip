@@ -1,3 +1,4 @@
+import { useLocale } from './i18n';
 import { useState } from 'react';
 import { Excalidraw, MainMenu, serializeAsJSON } from '@excalidraw/excalidraw';
 import type { ExcalidrawInitialDataState } from '@excalidraw/excalidraw/types';
@@ -15,12 +16,13 @@ export default function NotebookBoard({
   value: string;
   onChange: (value: string) => void;
 }) {
+  const locale = useLocale();
   const [initial] = useState<ExcalidrawInitialDataState>(() => (value ? JSON.parse(value) : {}));
   return (
     <div className="notebook-board">
       <Excalidraw
         initialData={initial}
-        langCode="zh-CN"
+        langCode={locale === 'en' ? 'en' : 'zh-CN'}
         detectScroll
         onChange={(elements, state, files) => {
           const serialized = serializeAsJSON(elements, state, files, 'local');

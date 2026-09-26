@@ -1,17 +1,19 @@
+import { t } from './i18n';
 import {
-  Queue,
   QueueSection,
   QueueSectionTrigger,
   QueueSectionLabel,
   QueueSectionContent,
   QueueList,
   QueueItem,
-  QueueItemContent,
   QueueItemActions,
   QueueItemAction,
 } from './components/ai-elements/queue';
-import { useState } from 'react';
-import { Trash2 } from 'lucide-react';
+import { Input } from './components/ui/input';
+import { Button } from './components/ui/button';
+import { Checkbox } from './components/ui/checkbox';
+import { useId, useRef, useState } from 'react';
+import { Plus, Trash2 } from 'lucide-react';
 import type { Todo } from '../shared/notebook';
 
 export function NotebookTodos({
@@ -22,83 +24,102 @@ export function NotebookTodos({
   onChange: (todos: Todo[]) => void;
 }) {
   const [draft, setDraft] = useState('');
+  const input = useRef<HTMLInputElement>(null);
+  const id = useId();
   const completed = todos.filter((todo) => todo.completed).length;
+  const remaining = todos.length - completed;
+  const summary = !todos.length
+    ? t('暂无待办')
+    : !remaining
+      ? t('全部完成 · {count} 项', { count: completed })
+      : t('{count} 项待完成', { count: remaining }) +
+        (completed ? t(' · {count} 项已完成', { count: completed }) : '');
+
   return (
-    <Queue
-      className="notebook-section notebook-todos gap-0 p-0 shadow-none"
-      role="region"
-      aria-label="旅行待办事项"
-    >
-      <QueueSection>
-        <h2>
-          <QueueSectionTrigger className="rounded-none px-4 py-3">
-            <QueueSectionLabel label="待办事项" />
-            <span>
-              {completed} / {todos.length} 已完成
-            </span>
-          </QueueSectionTrigger>
-        </h2>
-        <QueueSectionContent>
-          <form
-            className="todo-create"
-            onSubmit={(event) => {
-              event.preventDefault();
-              const text = draft.trim();
-              if (!text || todos.length >= 1000) return;
-              onChange([...todos, { id: crypto.randomUUID(), text, completed: false }]);
-              setDraft('');
-            }}
-          >
-            <input
-              aria-label="新的待办事项"
-              placeholder="添加待办，例如：确认酒店、带好证件…"
-              value={draft}
-              maxLength={500}
-              onChange={(event) => setDraft(event.target.value)}
-            />
-            <button type="submit" disabled={!draft.trim() || todos.length >= 1000}>
-              添加待办
-            </button>
-          </form>
-          {todos.length === 0 ? (
-            <p className="notebook-empty">把出发前和旅途中要做的事记在这里，完成一件，勾掉一件。</p>
-          ) : (
-            <QueueList className="todo-list">
-              {todos.map((todo) => (
-                <QueueItem key={todo.id} className="flex-row items-center">
-                  <label>
-                    <input
-                      type="checkbox"
+    <QueueSection defaultOpen={todos.length === 0}>
+      <QueueSectionTrigger>
+        <QueueSectionLabel label={t('待办事项')} />
+        <span className="text-xs font-normal" aria-live="polite">
+          {summary}
+        </span>
+      </QueueSectionTrigger>
+      <QueueSectionContent>
+        {!!todos.length && (
+          <QueueList>
+            {todos.map((todo) => (
+              <QueueItem key={todo.id}>
+                <div className="flex items-start gap-2">
+                  <label
+                    htmlFor={id + todo.id}
+                    className="flex min-w-0 flex-1 cursor-pointer items-start gap-2 py-1"
+                  >
+                    <Checkbox
+                      id={id + todo.id}
+                      className="mt-0.5"
                       checked={todo.completed}
-                      onChange={(event) =>
+                      onCheckedChange={(checked) =>
                         onChange(
                           todos.map((item) =>
-                            item.id === todo.id
-                              ? { ...item, completed: event.target.checked }
-                              : item,
+                            item.id === todo.id ? { ...item, completed: checked === true } : item,
                           ),
                         )
                       }
                     />
-                    <QueueItemContent completed={todo.completed} className="line-clamp-none">
+                    <span
+                      className={
+                        'min-w-0 break-words ' +
+                        (todo.completed ? 'text-muted-foreground line-through' : '')
+                      }
+                    >
                       {todo.text}
-                    </QueueItemContent>
+                    </span>
                   </label>
                   <QueueItemActions>
                     <QueueItemAction
-                      className="opacity-100"
-                      aria-label={'删除待办：' + todo.text}
+                      className="mt-1 group-focus-within:opacity-100"
+                      aria-label={t('删除待办：') + todo.text}
+                      title={t('删除待办')}
                       onClick={() => onChange(todos.filter((item) => item.id !== todo.id))}
                     >
                       <Trash2 size={14} />
                     </QueueItemAction>
                   </QueueItemActions>
-                </QueueItem>
-              ))}
-            </QueueList>
-          )}
-        </QueueSectionContent>
-      </QueueSection>
-    </Queue>
+                </div>
+              </QueueItem>
+            ))}
+          </QueueList>
+        )}
+        <form
+          className="mt-3 flex items-center gap-2 px-3 pb-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const text = draft.trim();
+            if (!text || todos.length >= 1000) return;
+            onChange([...todos, { id: crypto.randomUUID(), text, completed: false }]);
+            setDraft('');
+            input.current?.focus();
+          }}
+        >
+          <Input
+            ref={input}
+            aria-label={t('新的待办事项')}
+            placeholder={t('添加待办，按 Enter 保存')}
+            value={draft}
+            maxLength={500}
+            onChange={(event) => setDraft(event.target.value)}
+          />
+          <Button
+            type="submit"
+            variant="ghost"
+            size="icon"
+            aria-label={t('添加待办')}
+            title={t('添加待办')}
+            disabled={!draft.trim() || todos.length >= 1000}
+          >
+            <Plus />
+          </Button>
+        </form>
+      </QueueSectionContent>
+    </QueueSection>
   );
 }

@@ -19,35 +19,35 @@ export function QuotedReply({
 }) {
   return (
     <Queue
-      className={
-        onRemove ? 'composer-quote mb-2 bg-muted/40 shadow-none' : 'mb-2 bg-muted/40 shadow-none'
-      }
+      className={onRemove ? 'composer-quote mb-2' : 'mb-2'}
       aria-label={onRemove ? '待发送的引用' : '引用的回复'}
     >
       <ul>
-        <QueueItem className="flex-row items-start gap-2 px-1">
-          <QuoteIcon aria-hidden className="mt-1 size-3.5 shrink-0 text-muted-foreground" />
-          <QueueItemContent className="line-clamp-none min-w-0">
-            <button
-              type="button"
-              className={
-                (onRemove ? 'quote-excerpt' : 'message-quote') +
-                ' block w-full text-left text-xs whitespace-pre-wrap break-words ' +
-                (onRemove ? 'line-clamp-3' : 'max-h-32 overflow-auto')
-              }
-              onClick={onSource}
-              title="回到原对话"
-            >
-              {quote.text}
-            </button>
-          </QueueItemContent>
-          {onRemove && (
-            <QueueItemActions>
-              <QueueItemAction className="opacity-100" aria-label="移除引用" onClick={onRemove}>
-                <X size={15} />
-              </QueueItemAction>
-            </QueueItemActions>
-          )}
+        <QueueItem>
+          <div className="flex items-center gap-2">
+            <QuoteIcon aria-hidden className="mt-1 size-3.5 shrink-0 text-muted-foreground" />
+            <QueueItemContent className="line-clamp-none min-w-0">
+              <button
+                type="button"
+                className={
+                  (onRemove ? 'quote-excerpt' : 'message-quote') +
+                  ' block w-full text-left text-xs whitespace-pre-wrap break-words ' +
+                  (onRemove ? 'line-clamp-3' : 'max-h-32 overflow-auto')
+                }
+                onClick={onSource}
+                title="回到原对话"
+              >
+                {quote.text}
+              </button>
+            </QueueItemContent>
+            {onRemove && (
+              <QueueItemActions>
+                <QueueItemAction aria-label="移除引用" onClick={onRemove}>
+                  <X size={15} />
+                </QueueItemAction>
+              </QueueItemActions>
+            )}
+          </div>
         </QueueItem>
       </ul>
     </Queue>
