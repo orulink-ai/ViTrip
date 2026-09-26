@@ -1,0 +1,100 @@
+# ViTrip
+
+独立旅行规划桌面客户端：中间对话，右侧真实本地浏览器与可视化行程。
+
+**AI Elements + Pi Agent SDK + Jev + Electron + React + TypeScript + SQLite**。不以 LibreChat 为运行依赖。AI Elements 由官方 CLI 安装，其依赖的基础 UI 组件一并保留。
+
+## 打开与使用
+
+双击项目里的 **ViTrip.app** 或 **启动 ViTrip.command**。
+
+- 在左下角「模型设置」配置主模型与 Jev 密钥。密钥经操作系统加密保存在本机，不包含在源码或安装包中。
+- 主模型默认：`deepseek-v4.1-flash`；百炼接口：`https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1`。
+- 浏览器决策模型：`typesafe/jev-1.13`；OpenRouter 接口：`https://openrouter.ai/api/v1/systemone`。它是结构化决策接口，不是 Chat Completions。
+- 告诉助手目的地、出发时间和偏好。它可以查询网页，操作浏览器并更新右侧行程。
+- 右侧可手动输入网址；点击「接管」暂停 AI，手动处理后「交还 AI」。模型会重新观察页面。
+- 「行程」展示每日安排与来源，可导出独立 HTML。
+- 对话中的「执行过程」复用 AI Elements Chain of Thought 和 Tool 组件，显示工具步骤、耗时、结果与错误；可折叠展开，记录随会话保存并在重启后恢复。中断的步骤明确标记，不生成虚构的思考内容。
+- 选中 AI 回复文字后可「添加到对话」或「标记到笔记本」；引用会随问题发送，点击引用可回到来源。
+- 「笔记本」按旅行共享：顶部是可折叠的本地 Excalidraw 画板，画板下方是可添加、勾选和删除的「待办事项」，接着为 Markdown 编辑/预览，底部是「标记过的内容」。内容自动保存；取消标记不删除已经插入的笔记。
+- 个人笔记和画板独立保存，不由 AI 自动改写，也不自动发送到模型。当前画板为单人本地使用，不含多人协作；HTML 行程导出暂不包含笔记和画板。
+- 「查看示例行程」明确标注为静态示例，不代表实时查询。
+
+## 架构与能力
+
+- **Pi 0.87.1** 管理流式对话、工具调用、压缩与持久会话。每个旅行独立保存完整工具记录。只加载显式旅行工具，不开放 bash、文件读写或自动发现本机 Skills。
+- **DeepSeek** 负责旅行规划、回答和填写字段所需的文字。
+- **Jev** 从当前 DOM 快照选择操作和元素；执行前校验候选、概率和页面是否变化。一次最多12步，连续三次无进展停止。DONE 仍需要核实页面证据。
+- **Electron WebContentsView** 显示真正的本机 Chromium 网页，CDP 执行鼠标点击、键盘输入。不是网页 iframe，也不依赖云端浏览器。
+- 表单提交、Enter 和识别出的预订/支付等敏感点击需要逐次确认。密码和支付等敏感字段不进入快照，不允许 AI 填写。
+- 接管先取消模型请求，再等待当前浏览器操作结束；恢复时读取最新页面，废弃旧引用。
+- SQLite 保存对话与行程，Pi 保存工具历史。密钥通过 Electron safeStorage 加密；renderer 只收到已保存标记。
+- 远程网页禁用 Node、启用 sandbox/contextIsolation，没有应用 preload API。行程 HTML 转义内容并禁止脚本。
+
+## 当前边界
+
+这是可运行的早期版本，尚未完成真实酒店或机票站点的完整预订验收。
+
+- 使用 ViTrip 自己的本地浏览器 Profile，需要在其中登录；不会读取系统 Chrome 的现有 Profile。
+- 浏览器控制基于主文档 DOM 与 CDP，不是视觉驱动的全电脑操控。复杂 iframe、Canvas、验证码和部分登录弹窗需要接管。
+- 当前共享一个浏览器页面；新窗口在当前页打开。暂不支持下载、硬件权限、原生 SELECT 操作；当前网址不随重启恢复。
+- 敏感操作识别基于表单语义与文字规则，不能覆盖任意网站的所有交易入口。最终预订与付款宜人工完成。
+- 网页正文、普通表单值和聊天内容会发送到对应模型服务。
+- 无云端同步、多账号、地图 API、自动更新或应用商店发行。macOS 包使用本机 ad-hoc 签名，未公证。
+
+## 开发
+
+Node.js >= 22.19；当前验证平台为 macOS Apple Silicon。
+
+```bash
+npm ci
+npm start
+npm test
+npm run build
+npm run test:e2e
+npm run package
+npm run test:package
+```
+
+AI Elements 是 React 源码组件，这里用 Vite 构建 renderer，无需运行 Next.js 服务。Pi 与 Jev 在 Electron 主进程运行，通过受校验的 IPC 推送 UI 事件。
+
+- `src/main/agent.ts`：Pi 运行时、显式旅行工具、流式事件与持久会话。
+- `src/main/activity.ts`：工具执行事件适配、结果截断、密钥脱敏与中断标记。
+- `src/main/jev.ts`：决策协议、候选校验、浏览器循环及文字生成。
+- `src/main/browser.ts`：真实浏览器、页面快照、元素引用与 CDP。
+- `src/main/control.ts`：串行操作和接管。
+- `src/main/storage.ts`：SQLite 与系统加密。
+- `src/main/index.ts`：窗口、IPC、会话编排、确认与导出。
+- `src/renderer/`：旅行工作区与官方 AI Elements 组件。
+- `tests/`：核心测试及真实 Electron 端到端测试。
+
+运行数据：`~/Library/Application Support/ViTrip/`；数据库 `vitrip.sqlite`；Pi 会话 `sessions/<trip-id>/`。删除该目录会清除聊天、模型设置和登录状态，请先备份。
+
+## 验收
+
+2026-09-26，核心测试、Electron 端到端测试和打包检查通过。覆盖真实输入/点击、行程更新、操作确认同意/拒绝、接管后重新观察、敏感字段排除、历史工具记录复用及重启恢复。
+
+另用真实百炼和 OpenRouter 接口完成受控网页联调：Pi 委托 Jev 输入杭州、点击搜索，独立核实 DOM 中出现杭州搜索结果，并生成计划。此测试不等同于真实预订验收。
+
+`scripts/live-check.ts` 是需真实凭据、会产生模型调用的手动联调脚本，不随 `npm test` 自动运行。凭据从 stdin 输入，输出仅含操作步骤和验证结果。
+
+## 来源与许可
+
+自有代码 MIT。AI Elements 许可证见 `docs/AI-ELEMENTS-LICENSE`；依赖许可见 `docs/THIRD-PARTY-LICENSES.txt`。
+
+Jev 动态操作与元素候选方案参考并适配自 [browser-use/jev-ultrafast](https://github.com/browser-use/jev-ultrafast)，保留其 MIT 许可证于 `docs/JEV-ULTRAFAST-LICENSE`。Pi 使用 [官方 SDK](https://pi.dev/docs/latest/sdk)。浏览器使用 Electron 官方 WebContentsView / debugger API。
+
+之前下载的 LibreChat 完整工程保留在桌面的 `ViTrip-LibreChat-reference`，仅供研究，与本项目启动无关。
+
+## 旅行文件夹与共享 HTML 手册
+
+「新的旅行」创建文件夹，每个文件夹可展开多个会话。文件夹名称旁的铅笔可改旅行名，`+` 创建会话；鼠标移到会话上，可改名或移动到另一趟旅行。手动设置的名称不会被首条消息覆盖。
+
+右侧「行程」有两个视图：
+
+- **页面**：AI 持续生成和编辑的 HTML/CSS 旅行手册，可自由调整布局。模型生成的脚本和不允许的元素会被过滤，页面运行在禁用脚本的隔离预览中；来源链接仍在本地浏览器中打开。
+- **已整理**：可以搜索偏好、已确认决定、问题答案、提醒和待核实事项。条目按稳定 ID 合并，修正同一个问题不删除其他事项，导出 HTML 时一并包含。
+
+同一旅行的所有会话共享页面和已整理资料；每轮对话注入最新资料，必要时追加自动整理。不同旅行隔离。旧版数据首次启动会自动迁移，每个旧行程成为一个文件夹，原聊天与计划保留；之后可把会话移到同一文件夹。移动会话不会搬走或删除原旅行的共享手册。
+
+真实百炼模型已验证两个独立会话连续编辑同一份手册：第一轮记录卡塔海滩、预算和偏好；第二轮沿用已有资料补充出海提醒，原条目保留。自动整理仍可能遗漏或误解，应检查已确认与待核实标记。

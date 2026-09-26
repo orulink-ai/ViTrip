@@ -1,0 +1,27 @@
+import AppKit
+let size = 1024
+let image = NSImage(size: NSSize(width: size, height: size))
+image.lockFocus()
+NSColor(calibratedRed: 0.20, green: 0.35, blue: 0.27, alpha: 1).setFill()
+NSBezierPath(roundedRect: NSRect(x: 55, y: 55, width: 914, height: 914), xRadius: 208, yRadius: 208).fill()
+let circle = NSBezierPath(ovalIn: NSRect(x: 238, y: 238, width: 548, height: 548))
+NSColor(calibratedRed: 0.91, green: 0.94, blue: 0.86, alpha: 1).setStroke()
+circle.lineWidth = 26
+circle.stroke()
+let north = NSBezierPath()
+north.move(to: NSPoint(x: 654, y: 690))
+north.line(to: NSPoint(x: 564, y: 460))
+north.line(to: NSPoint(x: 460, y: 564))
+north.close()
+NSColor(calibratedRed: 0.92, green: 0.95, blue: 0.88, alpha: 1).setFill()
+north.fill()
+let south = NSBezierPath()
+south.move(to: NSPoint(x: 370, y: 334))
+south.line(to: NSPoint(x: 460, y: 564))
+south.line(to: NSPoint(x: 564, y: 460))
+south.close()
+NSColor(calibratedRed: 0.59, green: 0.70, blue: 0.49, alpha: 1).setFill()
+south.fill()
+image.unlockFocus()
+let bitmap = NSBitmapImageRep(data: image.tiffRepresentation!)!
+try bitmap.representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: CommandLine.arguments[1]))
