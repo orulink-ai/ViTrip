@@ -10,6 +10,14 @@ import {
 import { Tool, ToolHeader, ToolContent } from './ai-elements/tool';
 
 const labels: Record<string, string> = {
+  bash: '执行本机命令',
+  powershell: '执行 PowerShell',
+  read: '读取文件',
+  write: '写入文件',
+  edit: '编辑文件',
+  grep: '搜索文件内容',
+  find: '查找文件',
+  ls: '查看目录',
   navigate: '打开网页',
   observe: '阅读网页',
   computer_use: '操作浏览器',

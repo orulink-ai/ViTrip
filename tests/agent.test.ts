@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
-import { travelTools, resourceLoader } from '../src/main/agent';
+import { travelTools, travelPrompt } from '../src/main/agent';
 import { RunControl } from '../src/main/control';
-it('travel tools have no filesystem or shell access and validate before execution', async () => {
+it('custom travel tools validate arguments before execution', async () => {
   const control = new RunControl();
   control.resume();
   let executed = false;
@@ -24,8 +24,7 @@ it('travel tools have no filesystem or shell access and validate before executio
   await click.execute('id', { ref: 1 }, undefined, undefined, {} as never);
   expect(executed).toBe(true);
 });
-it('loads only the explicit travel prompt, without ambient skills or AGENTS files', () => {
-  expect(resourceLoader.getSkills().skills).toEqual([]);
-  expect(resourceLoader.getAgentsFiles().agentsFiles).toEqual([]);
-  expect(resourceLoader.getSystemPrompt()).toContain('ViTrip');
+it('keeps travel instructions while allowing CLI and API access', () => {
+  expect(travelPrompt).toContain('ViTrip');
+  expect(travelPrompt).toContain('CLI');
 });

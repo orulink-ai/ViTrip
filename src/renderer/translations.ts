@@ -1,4 +1,12 @@
 export const translations: Record<string, string> = {
+  执行本机命令: 'Run local command',
+  '执行 PowerShell': 'Run PowerShell',
+  读取文件: 'Read file',
+  写入文件: 'Write file',
+  编辑文件: 'Edit file',
+  搜索文件内容: 'Search file contents',
+  查找文件: 'Find files',
+  查看目录: 'List directory',
   地图: 'Map',
   行程地图: 'Itinerary map',
   地图日期: 'Map day',
