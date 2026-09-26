@@ -82,7 +82,7 @@ try {
   for (let n = 0; n < 50; n++) {
     if (
       await evaluate(
-        "document.querySelector('iframe')?.contentDocument?.body?.innerText.includes('去京都，把脚步放慢')",
+        "document.querySelector('[aria-label=\"交互行程正文\"]')?.innerText.includes('去京都，把脚步放慢')",
       )
     )
       break;
@@ -90,7 +90,7 @@ try {
   }
   if (
     !(await evaluate(
-      "document.querySelector('iframe')?.contentDocument?.body?.innerText.includes('去京都，把脚步放慢')",
+      "document.querySelector('[aria-label=\"交互行程正文\"]')?.innerText.includes('去京都，把脚步放慢')",
     ))
   )
     throw new Error('行程未渲染');

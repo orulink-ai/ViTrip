@@ -311,7 +311,9 @@ function App() {
                   <>
                     {running && (
                       <p role="status" className="text-sm text-muted-foreground">
-                        {status}
+                        {/^正在使用 (.+)…$/.test(status)
+                          ? t('正在使用 {tool}…', { tool: status.slice(5, -1) })
+                          : t(status)}
                       </p>
                     )}
                     {approval && (
@@ -561,7 +563,7 @@ function App() {
           </div>
         </SidebarProvider>
         {notice && (
-          <Alert className="fixed bottom-4 left-1/2 z-50 flex w-auto max-w-xl -translate-x-1/2 items-center gap-4">
+          <Alert className="fixed top-16 left-1/2 z-50 flex w-auto max-w-xl -translate-x-1/2 items-center gap-4">
             <span>{notice}</span>
             <Button variant="ghost" aria-label={t('关闭提示')} onClick={() => setNotice('')}>
               <X size={16} />

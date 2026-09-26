@@ -1,5 +1,5 @@
 @import 'tailwindcss';
-@import "tw-shimmer";
+@import 'tw-shimmer';
 
 @custom-variant dark (&:is(.dark *));
 @source "../../node_modules/streamdown/dist/*.js";
@@ -37,19 +37,19 @@
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar: var(--sidebar);
   @keyframes collapsible-down {
-  from {
-    height: 0;
+    from {
+      height: 0;
     }
-  to {
-    height: var(--radix-collapsible-content-height, var(--collapsible-panel-height, auto));
+    to {
+      height: var(--radix-collapsible-content-height, var(--collapsible-panel-height, auto));
     }
   }
   @keyframes collapsible-up {
-  from {
-    height: var(--radix-collapsible-content-height, var(--collapsible-panel-height, auto));
+    from {
+      height: var(--radix-collapsible-content-height, var(--collapsible-panel-height, auto));
     }
-  to {
-    height: 0;
+    to {
+      height: 0;
     }
   }
 }
@@ -153,24 +153,6 @@
 .panel-heading h1 {
   @apply text-base font-semibold;
 }
-.chat-conversation {
-  flex: 1;
-  min-height: 0;
-}
-.chat-content,
-.composer-wrap {
-  width: 100%;
-  max-width: 42rem;
-  margin-inline: auto;
-  padding-inline: 24px;
-}
-.chat-panel[data-empty='true'] .chat-conversation {
-  flex: 0 1 auto;
-  margin-top: auto;
-}
-.chat-panel[data-empty='true'] .composer-wrap {
-  margin-bottom: auto;
-}
 .welcome {
   display: flex;
   flex-direction: column;
@@ -194,10 +176,6 @@
   justify-content: center;
   gap: 8px;
   margin-top: 8px;
-}
-.composer-wrap {
-  padding-block: 16px 24px;
-  flex-shrink: 0;
 }
 .composer-model {
   max-width: 250px;
