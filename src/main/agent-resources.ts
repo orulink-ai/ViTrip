@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { fileURLToPath } from 'node:url';
 import {
   createExtensionRuntime,
   loadSkills,
@@ -33,6 +34,7 @@ export function createTravelResources(options: {
   ];
   let skills: ReturnType<typeof loadSkills> = { skills: [], diagnostics: [] };
   const instructions = `${options.prompt}
+整理、导入或更新行程，以及搜集酒店和景点照片时，先用 read 阅读已加载的 itinerary-organizer Skill；按任务需要读取其照片参考文件。以当前工具 schema 和实际返回结果判断可用能力。
 你可以使用 Pi 内置工具 read、write、edit、bash、grep、find、ls，以及环境已安装时的 powershell。文件和命令在本机执行，默认工作目录为 ${options.cwd}，可按用户任务使用其他路径。旅行专用是工作目标，不代表只能调用浏览器。查询或处理资料优先使用合适的 CLI/API；需要网页交互时再用浏览器。
 飞书 CLI：${options.cliPath ? `已找到 ${options.cliPath}，通过 bash 调用 lark-cli。` : '未找到 lark-cli；不要声称已接通，需要先安装或配置 PATH。'}
 涉及飞书时先用 read 阅读 lark-shared 和对应业务 SKILL.md，按技能中的相对路径读取 references；按需运行 --help，不猜命令参数。认证沿用本机 CLI，先检查 auth status，访问用户资源使用 --as user。缺少权限时说明实际错误，按所需业务域授权，不自动扩大到全部权限。不要读取或打印凭据文件、访问令牌或密钥。CLI 路径参数使用当前工作目录内的相对路径。
@@ -50,7 +52,14 @@ export function createTravelResources(options: {
     getAppendSystemPromptSources: () => [],
     extendResources: () => {},
     reload: async () => {
-      const skillPaths: string[] = [];
+      // Source tests run under src/main; the bundled main runs under dist.
+      const bundledSkill = ['../skills/', '../../skills/']
+        .map((relative) =>
+          fileURLToPath(new URL(`${relative}itinerary-organizer/SKILL.md`, import.meta.url)),
+        )
+        .find((file) => fs.existsSync(file));
+      if (!bundledSkill) throw new Error('缺少内置 itinerary-organizer Skill');
+      const skillPaths: string[] = [bundledSkill];
       for (const root of roots) {
         if (!fs.existsSync(root)) continue;
         for (const entry of fs.readdirSync(root, { withFileTypes: true })) {

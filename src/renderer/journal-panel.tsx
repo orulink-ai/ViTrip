@@ -1,4 +1,6 @@
 import { t } from './i18n';
+import { PackingList } from './packing-list';
+import type { Todo } from '../shared/notebook';
 import { Button } from './components/ui/button';
 import { Input } from './components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from './components/ui/tabs';
@@ -13,11 +15,15 @@ export function JournalPanel({
   onBrowse,
   onBuildPlan,
   building,
+  todos,
+  onTodos,
 }: {
   journey: Journey;
   onBrowse: (url: string) => void;
   onBuildPlan: () => void;
   building: boolean;
+  todos?: Todo[];
+  onTodos?: (todos: Todo[]) => void;
 }) {
   // IPC clones Journey even when only knowledge or its title changes.
   const planKey = JSON.stringify(journey.plan);
@@ -57,28 +63,22 @@ export function JournalPanel({
       pendingStop.current = undefined;
     }
   }
-  const entries = journey.entries.filter((e) =>
+  const travelEntries = journey.entries.filter((e) => !e.id.startsWith('capability-'));
+  const entries = travelEntries.filter((e) =>
     (e.category + ' ' + e.question + ' ' + e.answer).toLowerCase().includes(query.toLowerCase()),
   );
   return (
     <div className="journal-panel">
       <div className="journal-toolbar">
-        <div>
-          <strong>{journey.title}</strong>
-          <span>
-            {journey.entries.length}
-            {t('条已整理 · 所有会话共享')}
-          </span>
-        </div>
         <Tabs value={mode} onValueChange={(value) => setMode(value as typeof mode)}>
           <TabsList>
             <TabsTrigger value="page">
               <BookOpen size={14} />
-              {t('页面')}
+              {t('总览')}
             </TabsTrigger>
             <TabsTrigger value="notes">
               <FileText size={14} />
-              {t('已整理')}
+              {t('参考资料')}
             </TabsTrigger>
             <TabsTrigger value="map">{t('地图')}</TabsTrigger>
           </TabsList>
@@ -94,7 +94,7 @@ export function JournalPanel({
             if (mode === 'page') scroll.current = event.currentTarget.scrollTop;
           }}
         >
-          {(plan || mode === 'map') && (
+          {mode === 'map' && (
             <JourneyMap
               plan={plan}
               selection={selection}
@@ -110,11 +110,15 @@ export function JournalPanel({
               plan={plan}
               selectedId={selection.stopId}
               onBrowse={onBrowse}
+              onDay={(day) => setSelection({ day })}
               onLocate={(stopId, day) => {
                 setSelection({ stopId, day });
                 setMode('map');
               }}
             />
+          )}
+          {mode === 'page' && !!plan?.packing?.length && todos && onTodos && (
+            <PackingList items={plan.packing} todos={todos} onChange={onTodos} />
           )}
           {mode === 'page' && !plan && (
             <div className="space-y-3 px-6 py-4">

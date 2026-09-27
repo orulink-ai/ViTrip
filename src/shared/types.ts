@@ -28,15 +28,30 @@ export interface Message {
   role: 'user' | 'assistant';
   content: string;
 }
+export interface ItinerarySource {
+  url?: string;
+  excerpt: string;
+}
 export interface Day {
   title: string;
   subtitle: string;
+  stay?: {
+    name: string;
+    status: 'planned' | 'booked' | 'pending';
+    sourceUrl?: string;
+  };
+  issues?: string[];
   activities: {
     time: string;
     title: string;
     detail: string;
     url?: string;
     location?: ItineraryLocation;
+    origin?: 'source' | 'suggestion' | 'user';
+    kind?: 'transport' | 'activity' | 'meal' | 'stay';
+    optionGroup?: string;
+    optional?: boolean;
+    source?: ItinerarySource;
   }[];
 }
 export interface Plan {
@@ -44,6 +59,8 @@ export interface Plan {
   subtitle: string;
   budget: string;
   days: Day[];
+  source?: ItinerarySource;
+  packing?: string[];
 }
 export interface KnowledgeEntry {
   id: string;

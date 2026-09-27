@@ -344,7 +344,7 @@ test('travel folders, rename, cross-session memory and searchable HTML journal',
   await page.getByLabel('旅行需求', { exact: true }).fill('共享记忆测试：出海要注意什么？');
   await page.getByRole('button', { name: '发送', exact: true }).click();
   await expect(page.getByText('已沿用卡塔海滩的住宿决定，并补充出海提醒。')).toBeVisible();
-  await page.getByRole('tab', { name: '已整理', exact: true }).click();
+  await page.getByRole('tab', { name: '参考资料', exact: true }).click();
   await expect(page.getByText('已决定住卡塔海滩，喜欢安静')).toBeVisible();
   await expect(page.getByText('确认天气和返程安排')).toBeVisible();
   await page.getByLabel('搜索已整理信息').fill('卡塔');
@@ -363,7 +363,7 @@ test('travel folders, rename, cross-session memory and searchable HTML journal',
       .sort(),
   ).toEqual(['住宿问题', '出海问题']);
   expect(folder.entries).toHaveLength(2);
-  await page.getByRole('tab', { name: '页面', exact: true }).click();
+  await page.getByRole('tab', { name: '总览', exact: true }).click();
   await expect(
     page
       .frameLocator('iframe[title="旅行手册"]')

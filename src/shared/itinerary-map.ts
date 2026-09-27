@@ -26,6 +26,8 @@ export interface ItineraryStop {
   time: string;
   detail: string;
   location?: ItineraryLocation;
+  optional?: boolean;
+  optionGroup?: string;
 }
 export type Coordinate = [longitude: number, latitude: number];
 
@@ -54,6 +56,10 @@ export function routeSegments(stops: ItineraryStop[]): Coordinate[][] {
   const segments: Coordinate[][] = [];
   let previous: ItineraryStop | undefined;
   for (const stop of stops) {
+    if (stop.optional || stop.optionGroup) {
+      previous = undefined;
+      continue;
+    }
     if (
       previous?.location &&
       stop.location &&

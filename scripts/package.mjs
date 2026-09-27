@@ -7,6 +7,7 @@ const staging = path.join(root, '.packaging');
 const manifest = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
 mkdirSync(staging, { recursive: true });
 cpSync(path.join(root, 'dist'), path.join(staging, 'dist'), { recursive: true });
+cpSync(path.join(root, 'skills'), path.join(staging, 'skills'), { recursive: true });
 cpSync(path.join(root, 'docs'), path.join(staging, 'dist', 'licenses'), { recursive: true });
 cpSync(path.join(root, 'LICENSE'), path.join(staging, 'dist', 'LICENSE'));
 writeFileSync(
@@ -36,7 +37,7 @@ const config = {
   npmRebuild: false,
   asar: true,
   directories: { output: path.join(root, 'release'), buildResources: path.join(root, 'build') },
-  files: ['dist/**/*', '!dist/*-check.mjs', '!dist/main.cjs', 'package.json'],
+  files: ['dist/**/*', 'skills/**/*', '!dist/*-check.mjs', '!dist/main.cjs', 'package.json'],
   mac: {
     category: 'public.app-category.travel',
     icon: path.join(root, 'build/icon.icns'),

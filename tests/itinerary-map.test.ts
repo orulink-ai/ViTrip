@@ -156,3 +156,28 @@ it('自定义 HTML 也带有离线地点摘要，导出保留安全边界', () =
   expect(html).not.toContain('<script');
   expect(html).toContain("script-src 'none'");
 });
+
+it('备选和可选活动不会串成路线，也不跨过备选空隙连线', () => {
+  const value: Plan = plan();
+  const base = {
+    time: '',
+    title: '地点',
+    detail: '',
+    location: { ...location, precision: 'place' as const },
+  };
+  value.days[0].activities = [
+    { ...base },
+    { ...base, optionGroup: 'choice' },
+    { ...base, optionGroup: 'choice' },
+    { ...base },
+    { ...base, optional: true },
+    { ...base },
+    { ...base, location: { ...base.location, longitude: 136 } },
+  ];
+  expect(routeSegments(itineraryStops(value, 0))).toEqual([
+    [
+      [135.785, 34.9949],
+      [136, 34.9949],
+    ],
+  ]);
+});

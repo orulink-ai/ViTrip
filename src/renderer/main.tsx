@@ -22,6 +22,8 @@ import {
   Leaf,
   Map,
   MapPin,
+  Maximize2,
+  Minimize2,
   Mountain,
   Plus,
   RefreshCw,
@@ -65,6 +67,7 @@ function App() {
     hasKey: false,
   });
   const [browser, setBrowser] = useState(initialBrowser);
+  const [expandedPlan, setExpandedPlan] = useState(false);
   const [tab, setTab] = useState<'browser' | 'plan' | 'notebook'>('plan');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [running, setRunning] = useState(false);
@@ -272,6 +275,7 @@ function App() {
           </Sidebar>
           <div
             className="workspace"
+            data-expanded-plan={expandedPlan && tab === 'plan'}
             ref={layout}
             style={{ '--chat-width': panel + '%' } as React.CSSProperties}
           >
@@ -387,6 +391,16 @@ function App() {
                     <TabsTrigger value="notebook">{t('笔记本')}</TabsTrigger>
                   </TabsList>
                 </Tabs>
+                {tab === 'plan' && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={t(expandedPlan ? '恢复对话布局' : '展开行程工作区')}
+                    onClick={() => setExpandedPlan(!expandedPlan)}
+                  >
+                    {expandedPlan ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+                  </Button>
+                )}
                 {tab === 'notebook' ? null : tab === 'plan' ? (
                   <Button
                     variant="ghost"
@@ -421,6 +435,8 @@ function App() {
                     key={journey.id}
                     journey={journey}
                     building={running}
+                    todos={notebook.value?.todos}
+                    onTodos={(todos) => notebook.update({ todos })}
                     onBuildPlan={() =>
                       void send(
                         '请将本旅行的已有手册、决定和参考资料整理成完整的结构化交互行程，调用 plan 保存。按天组织活动，保留仍有效内容和来源。只为有可靠 WGS84 经纬度的地点提供 location，其他活动保留为待定位。不要生成 HTML，不要重复询问已有答案，未确定的信息明确标注。',

@@ -25,13 +25,15 @@ test('React 行程与真实地图双向定位、筛选日期、切换视图与�
     await page.getByRole('button', { name: '先看看一份示例行程' }).click();
     await expect(page.getByRole('region', { name: '交互行程正文' })).toBeVisible();
     await expect(page.locator('iframe[title="旅行手册"]')).toHaveCount(0);
+    await page.getByRole('tab', { name: '地图', exact: true }).click();
     const map = page.getByLabel('行程交互地图', { exact: true });
     await expect(map).toHaveAttribute('data-map-ready', 'true');
     await expect(map.locator('canvas')).toBeVisible();
-    await expect(page.getByText('5 个已定位 · 1 个待定位', { exact: true })).toBeVisible();
+    await expect(
+      page.getByText('0 个地点 · 5 个区域参考 · 1 个待定位', { exact: true }),
+    ).toBeVisible();
     await page.getByRole('button', { name: '地图地点 1 清水寺', exact: true }).click();
     await expect(page.getByLabel('选中地点')).toContainText('从清水寺走进东山');
-    await page.getByRole('button', { name: '展开地图', exact: true }).click();
     await expect(page.getByLabel('展开的行程地图')).toBeVisible();
     await expect(
       page.getByRole('button', { name: '地图地点 1 清水寺', exact: true }),
@@ -72,10 +74,16 @@ test('React 行程与真实地图双向定位、筛选日期、切换视图与�
     await page.route('https://tile.openstreetmap.org/**', (route) =>
       route.fulfill({ contentType: 'image/png', body: tile }),
     );
+    await page.getByRole('button', { name: '查看第 1 天', exact: true }).click();
     await expect(page.getByRole('region', { name: '交互行程正文' })).toContainText(
       '从清水寺走进东山',
     );
-    await expect(page.getByText('5 个已定位 · 1 个待定位', { exact: true })).toBeVisible();
+    await page.getByRole('tab', { name: '地图', exact: true }).click();
+    await page.getByRole('combobox', { name: '地图日期' }).click();
+    await page.getByRole('option', { name: '全部日期', exact: true }).click();
+    await expect(
+      page.getByText('0 个地点 · 5 个区域参考 · 1 个待定位', { exact: true }),
+    ).toBeVisible();
   } finally {
     await app.close();
     await rm(dir, { recursive: true, force: true });
@@ -95,6 +103,7 @@ test('底图失败仍可筛选地点，未知坐标不落点，新旅行不会�
       offline ? route.abort() : route.fulfill({ contentType: 'image/png', body: tile }),
     );
     await page.getByRole('button', { name: '先看看一份示例行程' }).click();
+    await page.getByRole('tab', { name: '地图', exact: true }).click();
     await expect(page.getByText('底图加载失败，地点和顺序仍可查看。')).toBeVisible();
     await page
       .getByRole('button', { name: '2. 找一间小店，吃一顿好饭 · 待定位', exact: true })

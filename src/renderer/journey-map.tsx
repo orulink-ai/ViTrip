@@ -89,10 +89,14 @@ export function JourneyMap({
       )}
       <div className="space-y-2 px-4 pt-3">
         <p className="text-xs text-muted-foreground">
-          {t('{located} 个已定位 · {pending} 个待定位', {
-            located: located.length,
+          {t('{exact} 个地点 · {area} 个区域参考 · {pending} 个待定位', {
+            exact: located.filter((s) => s.location?.precision === 'place').length,
+            area: located.filter((s) => s.location?.precision === 'approximate').length,
             pending: stops.length - located.length,
           })}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          {t('备选不代表已安排，连线仅表示顺序，不代表导航路线。')}
         </p>
         <div
           aria-label="地图地点列表"

@@ -1,14 +1,35 @@
 import { z } from 'zod';
 import { locationSchema } from './itinerary-map';
+const sourceUrlSchema = z
+  .string()
+  .url()
+  .refine((value) => {
+    const url = new URL(value);
+    return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password;
+  });
+const itinerarySourceSchema = z.object({
+  url: sourceUrlSchema.optional(),
+  excerpt: z.string().trim().min(1).max(2000),
+});
 export const planSchema = z.object({
   title: z.string().max(160),
   subtitle: z.string().max(1000),
   budget: z.string().max(200),
+  source: itinerarySourceSchema.optional(),
+  packing: z.array(z.string().trim().min(1).max(200)).max(100).optional(),
   days: z
     .array(
       z.object({
         title: z.string().max(160),
         subtitle: z.string().max(500),
+        stay: z
+          .object({
+            name: z.string().trim().min(1).max(200),
+            status: z.enum(['planned', 'booked', 'pending']),
+            sourceUrl: sourceUrlSchema.optional(),
+          })
+          .optional(),
+        issues: z.array(z.string().trim().min(1).max(500)).max(20).optional(),
         activities: z
           .array(
             z.object({
@@ -17,6 +38,11 @@ export const planSchema = z.object({
               detail: z.string().max(2000),
               url: z.string().url().optional(),
               location: locationSchema.optional(),
+              origin: z.enum(['source', 'suggestion', 'user']).optional(),
+              kind: z.enum(['transport', 'activity', 'meal', 'stay']).optional(),
+              optionGroup: z.string().trim().min(1).max(100).optional(),
+              optional: z.boolean().optional(),
+              source: itinerarySourceSchema.optional(),
             }),
           )
           .max(20),

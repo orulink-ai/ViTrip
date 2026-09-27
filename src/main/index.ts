@@ -1,3 +1,4 @@
+import { RequestOutcome } from './request-outcome';
 import { messagePrompt, quoteSchema, type Quote } from '../shared/notebook';
 import { app, BrowserWindow, ipcMain, safeStorage, dialog, Menu } from 'electron';
 import path from 'node:path';
@@ -195,8 +196,17 @@ app
       control.resume();
       controller = new AbortController();
       const userSignal = controller.signal;
-      const signal = AbortSignal.any([userSignal, AbortSignal.timeout(180000)]);
+      const timeoutSignal = AbortSignal.timeout(180000);
+      const signal = AbortSignal.any([userSignal, timeoutSignal]);
+      const outcome = new RequestOutcome();
+      let syncing = false;
       const trip = current;
+      const executeForRequest = async (name: ToolName, args: Record<string, unknown>) => {
+        const result = await execute(name, args, trip, signal);
+        // Record only successful durable writes; older journey revisions are irrelevant.
+        if (name === 'plan' || name === 'journal') outcome.saved(name);
+        return result;
+      };
       let activityMessage: Trip['messages'][number] | undefined;
       const onActivity = (step: import('../shared/types').ToolActivity) => {
         if (!activityMessage) {
@@ -243,7 +253,7 @@ app
           settings: { ...store.settings },
           control,
           onDelta: (text) => emit({ type: 'delta', text }),
-          execute: (name, args) => execute(name, args, trip, signal),
+          execute: executeForRequest,
           onText: (text) => {
             emit({ type: 'delta', text: '' });
             add(trip, 'assistant', text);
@@ -252,6 +262,7 @@ app
           signal,
         });
         if (!signal.aborted && store.journeyFor(trip).revision === revisionBefore) {
+          syncing = true;
           emit({ type: 'status', text: '正在整理到共享旅行手册…' });
           await runTravelAgent({
             settings: { ...store.settings },
@@ -263,7 +274,7 @@ app
             prompt:
               '[VITRIP_JOURNAL_SYNC] 请把本轮的重要问题、答案、偏好、决定和注意事项整理进共享手册。调用 journal，沿用原条目 id 更新，保留其他内容。有新增或改变的行程安排时调用 plan 更新完整的结构化行程。不要生成 HTML，交互界面由应用负责。无新信息可提交空 entries。不要再次向用户输出聊天回复。' +
               sharedContext(),
-            execute: (name, args) => execute(name, args, trip, signal),
+            execute: executeForRequest,
             onText: () => {},
             onDelta: () => {},
             onStatus: () => {},
@@ -271,12 +282,13 @@ app
         }
       })()
         .catch((error) => {
-          if (!userSignal.aborted) {
-            let message = error instanceof Error ? error.message : '未知错误';
-            for (const key of [store.settings.apiKey, store.settings.jevApiKey])
-              if (key) message = message.replaceAll(key, '[密钥已隐藏]');
-            add(trip, 'assistant', '本次请求未完成：' + message.slice(0, 500));
-          }
+          const message = outcome.failure(error, {
+            cancelled: userSignal.aborted,
+            timedOut: timeoutSignal.aborted,
+            syncing,
+            secrets: [store.settings.apiKey, store.settings.jevApiKey],
+          });
+          if (message) add(trip, 'assistant', message);
         })
         .finally(() => {
           task = null;

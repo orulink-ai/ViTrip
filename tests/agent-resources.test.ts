@@ -33,8 +33,10 @@ it('discovers Feishu skills with readable reference paths and retains travel ins
       .getSkills()
       .skills.map((skill) => skill.name)
       .sort(),
-  ).toEqual(['lark-doc', 'lark-shared']);
-  expect(loader.getSkills().skills[0].filePath).toContain(root);
+  ).toEqual(['itinerary-organizer', 'lark-doc', 'lark-shared']);
+  expect(loader.getSkills().skills.find((skill) => skill.name === 'lark-doc')?.filePath).toContain(
+    root,
+  );
   expect(loader.getSystemPrompt()).toContain('/test/bin/lark-cli');
   expect(loader.getSystemPrompt()).toContain('ViTrip 旅行');
   expect(builtinToolNames).toEqual(
@@ -45,7 +47,7 @@ it('still enables normal tools without an installed Feishu CLI or skills', async
   const home = fixture();
   const loader = createTravelResources({ home, cwd: home, prompt: 'ViTrip', cliPath: undefined });
   await loader.reload();
-  expect(loader.getSkills().skills).toEqual([]);
+  expect(loader.getSkills().skills.map((skill) => skill.name)).toEqual(['itinerary-organizer']);
   expect(loader.getSystemPrompt()).toContain('未找到');
 });
 it('resolves an executable CLI in nvm when launched with a desktop PATH', () => {
