@@ -541,6 +541,11 @@ app
     handle('renameTrip', (id, title) =>
       store.renameTrip(z.string().parse(id), z.string().parse(title)),
     );
+    handle('setJourneyCompleted', (id, completed) => {
+      const journey = store.setJourneyCompleted(z.string().parse(id), z.boolean().parse(completed));
+      emit({ type: 'journey', journey });
+      return journey;
+    });
     handle('renameJourney', (id, title) => {
       const journey = store.renameJourney(z.string().parse(id), z.string().parse(title));
       emit({ type: 'journey', journey });

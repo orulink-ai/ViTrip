@@ -65,7 +65,8 @@ export function TripSidebar({
   onOverlay: (open: boolean) => void;
   error: (text: string) => void;
 }) {
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [folderOpen, setFolderOpen] = useState<Map<string, boolean>>(new Map());
+  const isFolderOpen = (id: string) => folderOpen.get(id) ?? active?.journeyId === id;
   const [menuOpen, setMenuOpen] = useState(false);
   const [editor, setEditor] = useState<Editor | null>(null);
   useEffect(() => onOverlay(menuOpen || !!editor), [menuOpen, editor, onOverlay]);
@@ -113,17 +114,17 @@ export function TripSidebar({
                 {journeys.map((journey) => (
                   <SidebarMenuItem key={journey.id}>
                     <SidebarMenuButton
-                      aria-expanded={!collapsed.has(journey.id)}
+                      aria-expanded={isFolderOpen(journey.id)}
                       title={journey.title}
                       onClick={() =>
-                        setCollapsed((previous) => {
-                          const next = new Set(previous);
-                          next.has(journey.id) ? next.delete(journey.id) : next.add(journey.id);
+                        setFolderOpen((previous) => {
+                          const next = new Map(previous);
+                          next.set(journey.id, !isFolderOpen(journey.id));
                           return next;
                         })
                       }
                     >
-                      <ChevronRight className={collapsed.has(journey.id) ? '' : 'rotate-90'} />
+                      <ChevronRight className={isFolderOpen(journey.id) ? 'rotate-90' : ''} />
                       <FolderOpen />
                       <span>{journey.title}</span>
                     </SidebarMenuButton>
@@ -138,9 +139,9 @@ export function TripSidebar({
                           onSelect={() =>
                             void run(async () => {
                               const trip = await window.vitrip.create(journey.id);
-                              setCollapsed((previous) => {
-                                const next = new Set(previous);
-                                next.delete(journey.id);
+                              setFolderOpen((previous) => {
+                                const next = new Map(previous);
+                                next.set(journey.id, true);
                                 return next;
                               });
                               await onChange(trip.id);
@@ -160,7 +161,7 @@ export function TripSidebar({
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
-                    {!collapsed.has(journey.id) && (
+                    {isFolderOpen(journey.id) && (
                       <SidebarMenuSub>
                         {trips
                           .filter((t) => t.journeyId === journey.id)

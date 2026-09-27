@@ -91,6 +91,7 @@ export type ThreadComponents = {
   Selection?: ComponentType;
   AssistantMessage?: ComponentType | undefined;
   Welcome?: ComponentType | undefined;
+  WelcomeFooter?: ComponentType | undefined;
   ToolFallback?: ToolCallMessagePartComponent | undefined;
   ToolGroup?: ComponentType<PropsWithChildren<{ group: ThreadGroupPart }>> | undefined;
   ReasoningGroup?: ComponentType<PropsWithChildren<{ group: ThreadGroupPart }>> | undefined;
@@ -173,7 +174,12 @@ export const Thread: FC<ThreadProps> = ({ components = EMPTY_COMPONENTS, autoFoc
 };
 
 const ThreadRoot: FC<{ isEmpty: boolean; autoFocus: boolean }> = ({ isEmpty, autoFocus }) => {
-  const { Welcome = ThreadWelcome, Footer, Selection } = useContext(ThreadComponentsContext);
+  const {
+    Welcome = ThreadWelcome,
+    WelcomeFooter,
+    Footer,
+    Selection,
+  } = useContext(ThreadComponentsContext);
 
   return (
     <ThreadPrimitive.Root
@@ -193,7 +199,8 @@ const ThreadRoot: FC<{ isEmpty: boolean; autoFocus: boolean }> = ({ isEmpty, aut
         <div
           className={cn(
             'mx-auto flex w-full max-w-(--thread-max-width) flex-1 flex-col px-4 pt-4',
-            isEmpty && 'justify-center',
+            isEmpty &&
+              (WelcomeFooter ? 'justify-start pt-10 @min-[600px]:pt-16' : 'justify-center'),
           )}
         >
           <AuiIf condition={isNewChatView}>
@@ -221,6 +228,11 @@ const ThreadRoot: FC<{ isEmpty: boolean; autoFocus: boolean }> = ({ isEmpty, aut
               <ThreadSuggestions />
             </AuiIf>
           </ThreadPrimitive.ViewportFooter>
+          {WelcomeFooter && (
+            <AuiIf condition={isNewChatView}>
+              <WelcomeFooter />
+            </AuiIf>
+          )}
         </div>
       </ThreadPrimitive.Viewport>
       {Selection && <Selection />}

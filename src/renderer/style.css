@@ -156,10 +156,10 @@
 .welcome {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 24px 0 8px;
-  align-items: center;
-  text-align: center;
+  gap: 12px;
+  padding: 0 0 24px;
+  align-items: flex-start;
+  text-align: left;
 }
 .welcome h1 {
   font-size: clamp(26px, 2.3vw, 34px);
@@ -375,4 +375,61 @@
 .workspace[data-expanded-plan='true'] > .chat-panel,
 .workspace[data-expanded-plan='true'] > .resize-handle {
   display: none;
+}
+
+/* Keep the home canvas single-column until a workspace is requested. */
+.workspace[data-workspace-open='false'] > .chat-panel {
+  width: 100%;
+}
+.workspace[data-workspace-open='false'] > .right-panel,
+.workspace[data-workspace-open='false'] > .resize-handle {
+  display: none;
+}
+
+@media (max-height: 800px) {
+  .welcome {
+    gap: 10px;
+    padding: 0 0 20px;
+  }
+}
+
+/* The globe extends beyond the viewport; only its upper-left portion is visible. */
+.home-globe-corner {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: min(38%, 480px);
+  height: min(40%, 380px);
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 2;
+}
+.home-globe-preview {
+  position: absolute;
+  width: 640px;
+  height: 640px;
+  left: -45px;
+  top: -65px;
+  opacity: 0.65;
+  mask-image: linear-gradient(135deg, transparent, black 35%);
+}
+.home-globe-action {
+  position: absolute;
+  right: 16px;
+  bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  pointer-events: auto;
+}
+.home-globe-map {
+  width: 100%;
+  height: min(65vh, 640px);
+}
+@media (max-height: 760px) {
+  .home-globe-corner {
+    height: 170px;
+    width: 270px;
+  }
 }

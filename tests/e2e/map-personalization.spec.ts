@@ -34,6 +34,7 @@ test('密集地点可展开，偏好仅筛选候选，切换视图保留地图�
   let app = await electron.launch({ args: ['.'], env: { ...process.env, VITRIP_TEST_DATA: dir } });
   try {
     let page = await app.firstWindow();
+    await page.getByRole('tab', { name: '行程', exact: true }).click();
     await page.route('https://tile.openstreetmap.org/**', (route) => route.abort());
     await page.getByRole('tab', { name: '地图', exact: true }).click();
     const cluster = page.getByRole('button', { name: '展开 3 个邻近地点' });
@@ -62,6 +63,7 @@ test('密集地点可展开，偏好仅筛选候选，切换视图保留地图�
     await app.close();
     app = await electron.launch({ args: ['.'], env: { ...process.env, VITRIP_TEST_DATA: dir } });
     page = await app.firstWindow();
+    await page.getByRole('tab', { name: '行程', exact: true }).click();
     await page.route('https://tile.openstreetmap.org/**', (route) => route.abort());
     await page.getByRole('tab', { name: '地图', exact: true }).click();
     await expect(page.getByLabel('选中地点')).toContainText('地点 1');

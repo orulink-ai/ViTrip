@@ -78,6 +78,7 @@ export const journalSchema = z.object({
   entries: z.array(knowledgeSchema).max(40),
 });
 export const journeySchema = z.object({
+  completed: z.boolean().optional(),
   photos: z.array(photoSchema).max(100).optional(),
   id: z.string(),
   title: z.string(),

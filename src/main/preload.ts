@@ -10,6 +10,8 @@ const api: API = {
   create: (id) => ipcRenderer.invoke('vitrip:create', id),
   createJourney: (title) => ipcRenderer.invoke('vitrip:createJourney', title),
   renameTrip: (id, title) => ipcRenderer.invoke('vitrip:renameTrip', id, title),
+  setJourneyCompleted: (id, completed) =>
+    ipcRenderer.invoke('vitrip:setJourneyCompleted', id, completed),
   renameJourney: (id, title) => ipcRenderer.invoke('vitrip:renameJourney', id, title),
   moveTrip: (id, journeyId) => ipcRenderer.invoke('vitrip:moveTrip', id, journeyId),
   journal: (options) => ipcRenderer.invoke('vitrip:journal', options),

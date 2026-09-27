@@ -1,4 +1,26 @@
 export const translations: Record<string, string> = {
+  旅行地球: 'Travel globe',
+  旅行地球入口: 'Travel globe entry',
+  展开旅行地球: 'Explore travel globe',
+  探索地球: 'Explore globe',
+  '底图暂时无法加载，请检查网络后重新打开。':
+    'Unable to load the map. Check your connection and reopen it.',
+  '拖动旋转，滚轮缩放，探索下一站。当前展示地理底图，尚未标记旅行足迹。':
+    'Drag to rotate and scroll to zoom. Explore your next destination. Travel footprints have not been added yet.',
+  查看全部旅行: 'View all trips',
+  '告诉我一个想法，一起把旅行安排好。': 'Share an idea. Let\u2019s plan your trip together.',
+  '你的旅行，从这里开始': 'Your next journey starts here',
+  '查看旅行进展，或把已经结束的旅程标记完成。':
+    'Review your trips or mark a finished journey as complete.',
+  旅行记录: 'Travel history',
+  '继续旅行：{title}': 'Continue trip: {title}',
+  收起工作区: 'Collapse workspace',
+  '还没有旅行记录，聊聊你想去的地方吧。': 'No trips yet. Tell me where you would like to go.',
+  行程待完善: 'Itinerary to be planned',
+  '{days} 天行程': '{days}-day itinerary',
+  累计旅行: 'Total trips',
+  规划中: 'Planning',
+  我的旅行: 'My travels',
   回到行程: 'Back to itinerary',
   '来源行程已删除，引用原文仍保留。':
     'The source itinerary was deleted. The quoted text is still available.',

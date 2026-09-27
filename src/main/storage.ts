@@ -227,6 +227,13 @@ export class Storage {
     this.save();
     return trip;
   }
+  setJourneyCompleted(id: string, completed: boolean) {
+    const journey = this.journeys.find((j) => j.id === id);
+    if (!journey) throw new Error('旅行文件夹不存在');
+    journey.completed = z.boolean().parse(completed);
+    this.save();
+    return journey;
+  }
   renameJourney(id: string, title: string) {
     const journey = this.journeys.find((j) => j.id === id);
     if (!journey) throw new Error('旅行文件夹不存在');

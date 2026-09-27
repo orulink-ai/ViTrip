@@ -19,13 +19,18 @@ import { AgentActivity } from './components/agent-activity';
 import { ArrowRight } from 'lucide-react';
 import { t } from './i18n';
 import { toThreadMessages, resolveQuote } from './thread-adapter';
-import type { Trip, ToolActivity, PublicSettings } from '../shared/types';
+import { TravelOverview } from './travel-overview';
+import type { Journey, Trip, ToolActivity, PublicSettings } from '../shared/types';
 import type { Quote } from '../shared/notebook';
 
 type Props = {
   disabled?: boolean;
   trip: Trip | null;
   trips: Trip[];
+  journeys: Journey[];
+  onOpenJourney: (id: string) => void;
+  onOverlay: (open: boolean) => void;
+  onError: (message: string) => void;
   draft: string;
   running: boolean;
   quoteRequest?: Quote;
@@ -105,36 +110,51 @@ function QuoteRequest() {
   return null;
 }
 function Welcome() {
-  const { onDemo } = useTravel();
+  return (
+    <div className="welcome">
+      <p className="text-sm">{t('你的旅行，从这里开始')}</p>
+      <h1>{t('下一站，去哪里？')}</h1>
+      <p>{t('告诉我一个想法，一起把旅行安排好。')}</p>
+    </div>
+  );
+}
+function WelcomeFooter() {
+  const { onDemo, journeys, trips, onOpenJourney, onError, onOverlay } = useTravel();
   const aui = useAui();
   const choices = [
     ['周末，去山里透透气', '我想从深圳出发，安排一次轻松的周末短途旅行。'],
-    ['第一次去日本，怎么安排？', '我想第一次去日本，帮我一起规划行程。'],
-    ['不赶路，找个地方慢下来', '想找一个适合放松、慢节奏的旅行目的地。'],
+    ['帮我安排一次海岛旅行', '我想安排一次轻松的海岛旅行，帮我一起规划行程。'],
   ];
   return (
-    <div className="welcome">
-      <h1>{t('下一站，去哪里？')}</h1>
-      <p>{t('告诉我目的地、时间和预算，开始规划旅行。')}</p>
-      <div className="suggestions">
-        {choices.map(([title, text]) => (
-          <Button
-            variant="outline"
-            size="sm"
-            key={title}
-            onClick={() => {
-              aui.composer().setText(t(text));
-              document.querySelector<HTMLTextAreaElement>('.aui-composer-input')?.focus();
-            }}
-          >
-            {t(title)}
-          </Button>
-        ))}
+    <div className="space-y-10 pb-10">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap gap-2">
+          {choices.map(([title, text]) => (
+            <Button
+              variant="outline"
+              size="sm"
+              key={title}
+              onClick={() => {
+                aui.composer().setText(t(text));
+                document.querySelector<HTMLTextAreaElement>('.aui-composer-input')?.focus();
+              }}
+            >
+              {t(title)}
+            </Button>
+          ))}
+        </div>
+        <Button variant="ghost" size="sm" onClick={onDemo} aria-label={t('先看看一份示例行程')}>
+          {t('示例行程')}
+          <ArrowRight size={14} />
+        </Button>
       </div>
-      <Button variant="ghost" onClick={onDemo}>
-        {t('先看看一份示例行程')}
-        <ArrowRight size={14} />
-      </Button>
+      <TravelOverview
+        journeys={journeys}
+        trips={trips}
+        onOpen={onOpenJourney}
+        onError={onError}
+        onOverlay={onOverlay}
+      />
     </div>
   );
 }
@@ -234,6 +254,7 @@ function Footer() {
 }
 const components: ThreadComponents = {
   Welcome,
+  WelcomeFooter,
   ComposerTools: Tools,
   ComposerQuote: Preview,
   MessageHeader: Header,

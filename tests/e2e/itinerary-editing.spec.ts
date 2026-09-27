@@ -14,6 +14,7 @@ test('连续行程可新增和跨日移动，重启后保留活动身份', async
   let app = await electron.launch({ args: ['.'], env: { ...process.env, VITRIP_TEST_DATA: dir } });
   try {
     let page = await app.firstWindow();
+    await page.getByRole('tab', { name: '行程', exact: true }).click();
     await expect(page.getByRole('article', { name: '行程活动 1', exact: true })).toBeVisible();
     await expect(page.getByRole('article', { name: '行程活动 4', exact: true })).toBeVisible();
     await expect(page.getByRole('table', { name: '每日总览' })).toHaveCount(0);
@@ -37,6 +38,7 @@ test('连续行程可新增和跨日移动，重启后保留活动身份', async
     await app.close();
     app = await electron.launch({ args: ['.'], env: { ...process.env, VITRIP_TEST_DATA: dir } });
     page = await app.firstWindow();
+    await page.getByRole('tab', { name: '行程', exact: true }).click();
     await expect(page.locator('#itinerary-day-1').locator(`[id="${id}"]`)).toContainText(
       '从清水寺走进东山',
     );

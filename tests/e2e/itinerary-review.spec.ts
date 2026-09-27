@@ -17,6 +17,7 @@ test('连续行程可切换辅助总览，日期跳转和详情按需展开', as
   });
   try {
     const page = await app.firstWindow();
+    await page.getByRole('tab', { name: '行程', exact: true }).click();
     await expect(page.getByRole('article', { name: '行程活动 1', exact: true })).toBeVisible();
     await page.getByRole('button', { name: '每日总览', exact: true }).click();
     await expect(page.getByRole('table', { name: '每日总览' })).toBeVisible();
@@ -51,6 +52,7 @@ test('普吉岛原攻略：总览住宿、互斥备选、来源、准备清单�
   let app = await electron.launch({ args: ['.'], env: { ...process.env, VITRIP_TEST_DATA: dir } });
   try {
     let page = await app.firstWindow();
+    await page.getByRole('tab', { name: '行程', exact: true }).click();
     await page.getByRole('button', { name: '每日总览', exact: true }).click();
     const table = page.getByRole('table', { name: '每日总览' });
     await expect(table.getByRole('row')).toHaveCount(7);
@@ -92,6 +94,7 @@ test('普吉岛原攻略：总览住宿、互斥备选、来源、准备清单�
     await app.close();
     app = await electron.launch({ args: ['.'], env: { ...process.env, VITRIP_TEST_DATA: dir } });
     page = await app.firstWindow();
+    await page.getByRole('tab', { name: '行程', exact: true }).click();
     await page.getByRole('button', { name: '每日总览', exact: true }).click();
     await expect(page.getByRole('table', { name: '每日总览' })).toContainText(
       'Hotel Clover Patong',

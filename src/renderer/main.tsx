@@ -1,3 +1,6 @@
+import { lazy, Suspense } from 'react';
+const HomeGlobe = lazy(() => import('./home-globe'));
+
 import { CopyLink } from './copy-link';
 import {
   Dialog,
@@ -57,6 +60,32 @@ const initialBrowser: BrowserState = {
   canBack: false,
   canForward: false,
 };
+function WorkspaceTabs({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: 'plan' | 'browser' | 'notebook') => void;
+}) {
+  return (
+    <Tabs
+      value={value}
+      onValueChange={(value) => onChange(value as 'plan' | 'browser' | 'notebook')}
+    >
+      <TabsList variant={value ? 'default' : 'line'} aria-label={t('旅行工作区')}>
+        <TabsTrigger value="plan">
+          <Map size={15} />
+          {t('行程')}
+        </TabsTrigger>
+        <TabsTrigger value="browser">
+          <Globe2 size={15} />
+          {t('浏览器')}
+        </TabsTrigger>
+        <TabsTrigger value="notebook">{t('笔记本')}</TabsTrigger>
+      </TabsList>
+    </Tabs>
+  );
+}
 function App() {
   useLocale();
   const [linkOpen, setLinkOpen] = useState(false);
@@ -75,7 +104,12 @@ function App() {
   });
   const [browser, setBrowser] = useState(initialBrowser);
   const [expandedPlan, setExpandedPlan] = useState(false);
-  const [tab, setTab] = useState<'browser' | 'plan' | 'notebook'>('plan');
+  const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const [tab, setActiveTab] = useState<'browser' | 'plan' | 'notebook'>('plan');
+  function setTab(value: 'browser' | 'plan' | 'notebook') {
+    setActiveTab(value);
+    setWorkspaceOpen(true);
+  }
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [running, setRunning] = useState(false);
   const [paused, setPaused] = useState(false);
@@ -183,7 +217,14 @@ function App() {
       const initial = await window.vitrip.init();
       setTrips(initial.trips);
       setJourneys(initial.journeys);
-      setTrip(initial.trips[0] || null);
+      const active = initial.trips[0] || null;
+      setTrip(active);
+      setWorkspaceOpen(
+        Boolean(
+          active?.messages.length &&
+          initial.journeys.find((j) => j.id === active.journeyId)?.plan,
+        ),
+      );
       setConfig(initial.settings);
       setBrowser(initial.browser);
       if (initial.link) await openLink(initial.link);
@@ -225,6 +266,7 @@ function App() {
           width: rect?.width || 0,
           height: rect?.height || 0,
           visible:
+            workspaceOpen &&
             tab === 'browser' &&
             !settingsOpen &&
             !organizeOpen &&
@@ -242,7 +284,7 @@ function App() {
       observer.disconnect();
       window.removeEventListener('resize', sync);
     };
-  }, [tab, settingsOpen, organizeOpen, linkOpen, browser.url, panel]);
+  }, [tab, workspaceOpen, settingsOpen, organizeOpen, linkOpen, browser.url, panel]);
   async function send(text: string, quoted?: Quote) {
     if (!text.trim() || running) return;
     if (config.runtime !== 'codex' && !config.model) {
@@ -272,6 +314,7 @@ function App() {
       updateTrip(selected.id === trip?.id ? selected : await window.vitrip.select(selected.id));
     else setTrip(null);
     setDraft('');
+    if (!selected?.messages.length) setWorkspaceOpen(false);
   };
   const demo = () =>
     perform(async () => {
@@ -309,7 +352,14 @@ function App() {
               error={setNotice}
               onChange={refreshWorkspace}
               onSelect={async (id) => {
-                updateTrip(await window.vitrip.select(id));
+                const selected = await window.vitrip.select(id);
+                updateTrip(selected);
+                setWorkspaceOpen(
+                  Boolean(
+                    selected.messages.length &&
+                    journeys.find((j) => j.id === selected.journeyId)?.plan,
+                  ),
+                );
                 setDraft('');
               }}
             />
@@ -334,11 +384,17 @@ function App() {
           </Sidebar>
           <div
             className="workspace"
-            data-expanded-plan={expandedPlan && tab === 'plan'}
+            data-workspace-open={workspaceOpen}
+            data-expanded-plan={workspaceOpen && expandedPlan && tab === 'plan'}
             ref={layout}
             style={{ '--chat-width': panel + '%' } as React.CSSProperties}
           >
             <main className="chat-panel" data-empty={!trip?.messages.length}>
+              {!trip?.messages.length && !workspaceOpen && (
+                <Suspense fallback={null}>
+                  <HomeGlobe />
+                </Suspense>
+              )}
               <div className="panel-heading">
                 <div>
                   {trip?.messages.length ? (
@@ -349,15 +405,26 @@ function App() {
                     </span>
                   )}
                 </div>
-                <Badge variant="secondary">
-                  <Sparkles size={12} />
-                  {t('旅行助手')}
-                </Badge>
+                {!workspaceOpen && <WorkspaceTabs value="" onChange={setTab} />}
               </div>
               <TravelThread
                 key={trip?.id || 'new'}
                 trip={trip}
                 trips={trips}
+                journeys={journeys}
+                onOverlay={setOrganizeOpen}
+                onOpenJourney={(id) =>
+                  void perform(async () => {
+                    const target = trips
+                      .filter((item) => item.journeyId === id)
+                      .sort((a, b) => b.updatedAt - a.updatedAt)[0];
+                    if (target) {
+                      updateTrip(await window.vitrip.select(target.id));
+                      setDraft('');
+                      setTab('plan');
+                    }
+                  })
+                }
                 draft={draft}
                 running={running}
                 disabled={switchingTrip || switchingRuntime}
@@ -375,6 +442,7 @@ function App() {
                   }
                 }}
                 onSend={send}
+                onError={setNotice}
                 onStop={() => window.vitrip.stop()}
                 onSource={(value) => void perform(() => showSource(value))}
                 onBookmark={(value) => void notebook.add(value).then(() => setTab('notebook'))}
@@ -439,19 +507,18 @@ function App() {
                 {trip && tab !== 'browser' && (
                   <CopyLink compact target={{ kind: tab, id: trip.journeyId }} />
                 )}
-                <Tabs value={tab} onValueChange={(value) => setTab(value as typeof tab)}>
-                  <TabsList>
-                    <TabsTrigger value="plan">
-                      <Map size={15} />
-                      {t('行程')}
-                    </TabsTrigger>
-                    <TabsTrigger value="browser">
-                      <Globe2 size={15} />
-                      {t('浏览器')}
-                    </TabsTrigger>
-                    <TabsTrigger value="notebook">{t('笔记本')}</TabsTrigger>
-                  </TabsList>
-                </Tabs>
+                {workspaceOpen && <WorkspaceTabs value={tab} onChange={setTab} />}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={t('收起工作区')}
+                  onClick={() => {
+                    setWorkspaceOpen(false);
+                    setExpandedPlan(false);
+                  }}
+                >
+                  <X size={16} />
+                </Button>
                 {tab === 'plan' && (
                   <Button
                     variant="ghost"

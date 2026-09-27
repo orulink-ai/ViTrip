@@ -382,6 +382,9 @@ test('travel folders, rename, cross-session memory and searchable HTML journal',
     t.messages.some((m) => m.activities?.some((a) => a.name === 'navigate')),
   )!;
   expect(recorded).toBeTruthy();
+  const recordedFolder = restored.journeys.find((journey) => journey.id === recorded.journeyId)!;
+  const folderButton = page.getByRole('button', { name: recordedFolder.title, exact: true });
+  if ((await folderButton.getAttribute('aria-expanded')) === 'false') await folderButton.click();
   await page.getByRole('button', { name: recorded.title, exact: true }).click();
   await expect(page.getByTestId('agent-activity').first()).toBeVisible();
   await expect(

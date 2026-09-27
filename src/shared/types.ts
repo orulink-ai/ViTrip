@@ -85,6 +85,7 @@ export interface KnowledgeEntry {
   sources: string[];
 }
 export interface Journey {
+  completed?: boolean;
   photos?: TravelPhoto[];
   id: string;
   title: string;
@@ -153,6 +154,7 @@ export interface API {
   create(journeyId?: string): Promise<Trip>;
   createJourney(title: string): Promise<Trip>;
   renameTrip(id: string, title: string): Promise<Trip>;
+  setJourneyCompleted(id: string, completed: boolean): Promise<Journey>;
   renameJourney(id: string, title: string): Promise<Journey>;
   moveTrip(id: string, journeyId: string): Promise<Trip>;
   journal(options?: { journeyId: string; legacy?: boolean }): Promise<string>;

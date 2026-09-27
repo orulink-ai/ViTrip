@@ -88,6 +88,7 @@ test('引用行程保留草稿与来源，解释不改计划，模型调用 plan
   let app = await electron.launch({ args: ['.'], env: { ...process.env, VITRIP_TEST_DATA: dir } });
   try {
     let page = await app.firstWindow();
+    await page.getByRole('tab', { name: '行程', exact: true }).click();
     await page.evaluate(
       (port) =>
         window.vitrip.settings({
@@ -120,6 +121,7 @@ test('引用行程保留草稿与来源，解释不改计划，模型调用 plan
     await app.close();
     app = await electron.launch({ args: ['.'], env: { ...process.env, VITRIP_TEST_DATA: dir } });
     page = await app.firstWindow();
+    await page.getByRole('tab', { name: '行程', exact: true }).click();
     const state = await page.evaluate(() => window.vitrip.init());
     expect(state.journeys[0].plan).toEqual(updated);
     expect(state.trips[0].messages.find((m) => m.role === 'user')?.quote?.source).toMatchObject({

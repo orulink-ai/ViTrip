@@ -137,6 +137,7 @@ test('真实浏览器照片经模型工具缓存，图像传入接口，行程�
       }),
     ).toMatch(/^data:image\/png;base64,/);
     await page.evaluate((id) => window.vitrip.create(id), trip.journeyId);
+    await page.getByRole('tab', { name: '行程', exact: true }).click();
     await expect(
       page.getByRole('article', { name: '行程活动 1', exact: true }).locator('img'),
     ).toHaveJSProperty('naturalWidth', 160);

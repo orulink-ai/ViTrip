@@ -17,6 +17,7 @@ test('React 行程与真实地图双向定位、筛选日期、切换视图与�
   let app = await electron.launch({ args: ['.'], env: { ...process.env, VITRIP_TEST_DATA: dir } });
   try {
     let page = await app.firstWindow();
+    await page.getByRole('tab', { name: '行程', exact: true }).click();
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
     await page.route('https://tile.openstreetmap.org/**', (route) =>
@@ -71,6 +72,7 @@ test('React 行程与真实地图双向定位、筛选日期、切换视图与�
     await app.close();
     app = await electron.launch({ args: ['.'], env: { ...process.env, VITRIP_TEST_DATA: dir } });
     page = await app.firstWindow();
+    await page.getByRole('tab', { name: '行程', exact: true }).click();
     await page.route('https://tile.openstreetmap.org/**', (route) =>
       route.fulfill({ contentType: 'image/png', body: tile }),
     );
@@ -98,6 +100,7 @@ test('底图失败仍可筛选地点，未知坐标不落点，新旅行不会�
   });
   try {
     const page = await app.firstWindow();
+    await page.getByRole('tab', { name: '行程', exact: true }).click();
     let offline = true;
     await page.route('https://tile.openstreetmap.org/**', (route) =>
       offline ? route.abort() : route.fulfill({ contentType: 'image/png', body: tile }),
@@ -157,6 +160,7 @@ test('同时保存旧手册与结构化计划时，React 为主并保留旧内�
   });
   try {
     const page = await app.firstWindow();
+    await page.getByRole('tab', { name: '行程', exact: true }).click();
     await page.route('https://tile.openstreetmap.org/**', (route) =>
       route.fulfill({ contentType: 'image/png', body: tile }),
     );
