@@ -19,9 +19,11 @@ import type { Todo } from '../shared/notebook';
 export function NotebookTodos({
   todos,
   onChange,
+  defaultOpen,
 }: {
   todos: Todo[];
   onChange: (todos: Todo[]) => void;
+  defaultOpen?: boolean;
 }) {
   const [draft, setDraft] = useState('');
   const input = useRef<HTMLInputElement>(null);
@@ -36,7 +38,7 @@ export function NotebookTodos({
         (completed ? t(' · {count} 项已完成', { count: completed }) : '');
 
   return (
-    <QueueSection defaultOpen={todos.length === 0}>
+    <QueueSection defaultOpen={defaultOpen ?? todos.length === 0}>
       <QueueSectionTrigger>
         <QueueSectionLabel label={t('待办事项')} />
         <span className="text-xs font-normal" aria-live="polite">

@@ -16,7 +16,8 @@ test('空白会话居中引导，建议聚焦输入，开始会话后切换阅�
     const main = await page.getByRole('main').boundingBox();
     const hero = await heading.boundingBox();
     if (!main || !hero) throw new Error('欢迎页未显示');
-    expect(Math.abs(hero.x + hero.width / 2 - main.x - main.width / 2)).toBeLessThan(25);
+    const input = await page.locator('.aui-composer-root').boundingBox();
+    expect(Math.abs(hero.x - input!.x)).toBeLessThan(3);
     expect(hero.y - main.y).toBeGreaterThan(80);
     await page.getByRole('button', { name: '周末，去山里透透气' }).click();
     const composer = page.getByLabel('旅行需求', { exact: true });

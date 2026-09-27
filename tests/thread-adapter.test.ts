@@ -29,3 +29,58 @@ describe('Thread bridge', () => {
     expect(toThreadMessages([], '', false)).toEqual([]);
   });
 });
+it('bridges ordered parts without moving tools ahead of text, including legacy messages', () => {
+  const activity = {
+    id: 'search',
+    name: 'webSearch',
+    input: '汇率',
+    output: '结果',
+    status: 'complete' as const,
+    startedAt: 1,
+  };
+  const original = {
+    id: 'ordered',
+    role: 'assistant' as const,
+    content: '之前\n\n之后',
+    activities: [activity],
+  };
+  const rows = toThreadMessages(
+    [
+      {
+        ...original,
+        parts: [
+          { type: 'text', text: '之前' },
+          { type: 'tool', toolId: 'search' },
+          { type: 'text', text: '之后' },
+        ],
+      },
+    ],
+    '',
+    false,
+  );
+  expect(rows[0].content).toEqual([
+    { type: 'text', text: '之前' },
+    {
+      type: 'tool-call',
+      toolCallId: 'search',
+      toolName: 'webSearch',
+      args: {},
+      argsText: '汇率',
+      result: '结果',
+      isError: false,
+    },
+    { type: 'text', text: '之后' },
+  ]);
+  expect(toThreadMessages([original], '', false)[0].content).toEqual([
+    { type: 'text', text: '之前\n\n之后' },
+    {
+      type: 'tool-call',
+      toolCallId: 'search',
+      toolName: 'webSearch',
+      args: {},
+      argsText: '汇率',
+      result: '结果',
+      isError: false,
+    },
+  ]);
+});

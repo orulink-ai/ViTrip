@@ -8,6 +8,7 @@ test('中英文切换立即生效并重启保留，不改写笔记或会话', as
   try {
     let page = await app.firstWindow();
     await page.getByRole('tab', { name: '笔记本', exact: true }).click();
+    await page.getByRole('button', { name: '编辑 Markdown', exact: true }).click();
     await page.getByLabel('我的笔记 Markdown').fill('京都旅行原文');
     await expect(page.getByText('已保存到本地', { exact: true })).toBeVisible();
     await page.getByLabel('旅行需求', { exact: true }).fill('保留我的草稿');

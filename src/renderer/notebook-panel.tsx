@@ -1,3 +1,5 @@
+import { referenceRehypePlugins } from './reference-markdown';
+import { referenceUrlTransform } from './link-url';
 import { t } from './i18n';
 import { NotebookTodos } from './notebook-todos';
 import { lazy, Suspense, useLayoutEffect, useRef, useState } from 'react';
@@ -25,14 +27,16 @@ export function NotebookPanel({
   onQuote,
   onSource,
   onBrowse,
+  showExtras = true,
 }: {
+  showExtras?: boolean;
   title: string;
   notebook: ReturnType<typeof useNotebook>;
   onQuote: (quote: Quote) => void;
   onSource: (quote: Quote) => void;
   onBrowse: (url: string) => void;
 }) {
-  const [preview, setPreview] = useState(false);
+  const [preview, setPreview] = useState(true);
   const editor = useRef<HTMLTextAreaElement>(null);
   const lastCanvas = useRef(notebook.value?.canvas ?? '');
   const { value, error, pending, update } = notebook;
@@ -87,6 +91,8 @@ export function NotebookPanel({
         )}
         {preview ? (
           <MessageResponse
+            urlTransform={referenceUrlTransform}
+            rehypePlugins={referenceRehypePlugins}
             components={{
               a: ({ href, children }) => (
                 <a
@@ -115,86 +121,88 @@ export function NotebookPanel({
             placeholder={t('写下旅途中的想法…支持 Markdown')}
           />
         )}
-        <div className="mt-6 flex flex-col gap-2">
-          <QueueSection defaultOpen={false}>
-            <QueueSectionTrigger>
-              <QueueSectionLabel label={t('标记过的内容')} count={value.bookmarks.length} />
-            </QueueSectionTrigger>
-            <QueueSectionContent>
-              {!value.bookmarks.length && (
-                <p className="px-3 py-2 text-sm text-muted-foreground">
-                  {t('选中回复中的文字，即可标记到这里。')}
-                </p>
-              )}
-              <QueueList>
-                {value.bookmarks.map((mark) => (
-                  <QueueItem key={mark.id} className="bookmark-card">
-                    <div className="flex items-center gap-2">
-                      <QueueItemContent title={mark.text}>{mark.text}</QueueItemContent>
-                      <QueueItemActions>
-                        <QueueItemAction
-                          aria-label={t('插入笔记')}
-                          onClick={() => {
-                            update({
-                              markdown:
-                                value.markdown +
-                                (value.markdown ? '\n\n' : '') +
-                                mark.text
-                                  .split('\n')
-                                  .map((line) => '> ' + line)
-                                  .join('\n') +
-                                '\n\n',
-                            });
-                            setPreview(false);
-                          }}
-                        >
-                          <FilePlus2 size={14} />
-                        </QueueItemAction>
-                        <QueueItemAction aria-label={t('继续提问')} onClick={() => onQuote(mark)}>
-                          <MessageSquare size={14} />
-                        </QueueItemAction>
-                        <QueueItemAction
-                          aria-label={t('回到原对话')}
-                          onClick={() => onSource(mark)}
-                        >
-                          <ArrowUpLeft size={14} />
-                        </QueueItemAction>
-                        <QueueItemAction
-                          aria-label={t('取消标记')}
-                          onClick={() => void notebook.remove(mark.id)}
-                        >
-                          <Trash2 size={14} />
-                        </QueueItemAction>
-                      </QueueItemActions>
-                    </div>
-                    <QueueItemDescription>
-                      {mark.tripTitle} · {new Date(mark.createdAt).toLocaleDateString()}
-                    </QueueItemDescription>
-                  </QueueItem>
-                ))}
-              </QueueList>
-            </QueueSectionContent>
-          </QueueSection>
-          <NotebookTodos todos={value.todos} onChange={(todos) => update({ todos })} />
-          <QueueSection defaultOpen={false}>
-            <QueueSectionTrigger>
-              <QueueSectionLabel label={t('画板')} />
-            </QueueSectionTrigger>
-            <QueueSectionContent>
-              <Suspense fallback={<p>{t('正在加载画板…')}</p>}>
-                <Board
-                  value={value.canvas}
-                  onChange={(canvas) => {
-                    if (canvas !== lastCanvas.current) {
-                      lastCanvas.current = canvas;
-                      update({ canvas });
-                    }
-                  }}
-                />
-              </Suspense>
-            </QueueSectionContent>
-          </QueueSection>
-        </div>
+        {showExtras && (
+          <div className="mt-6 flex flex-col gap-2">
+            <QueueSection defaultOpen={false}>
+              <QueueSectionTrigger>
+                <QueueSectionLabel label={t('标记过的内容')} count={value.bookmarks.length} />
+              </QueueSectionTrigger>
+              <QueueSectionContent>
+                {!value.bookmarks.length && (
+                  <p className="px-3 py-2 text-sm text-muted-foreground">
+                    {t('选中回复中的文字，即可标记到这里。')}
+                  </p>
+                )}
+                <QueueList>
+                  {value.bookmarks.map((mark) => (
+                    <QueueItem key={mark.id} className="bookmark-card">
+                      <div className="flex items-center gap-2">
+                        <QueueItemContent title={mark.text}>{mark.text}</QueueItemContent>
+                        <QueueItemActions>
+                          <QueueItemAction
+                            aria-label={t('插入笔记')}
+                            onClick={() => {
+                              update({
+                                markdown:
+                                  value.markdown +
+                                  (value.markdown ? '\n\n' : '') +
+                                  mark.text
+                                    .split('\n')
+                                    .map((line) => '> ' + line)
+                                    .join('\n') +
+                                  '\n\n',
+                              });
+                              setPreview(false);
+                            }}
+                          >
+                            <FilePlus2 size={14} />
+                          </QueueItemAction>
+                          <QueueItemAction aria-label={t('继续提问')} onClick={() => onQuote(mark)}>
+                            <MessageSquare size={14} />
+                          </QueueItemAction>
+                          <QueueItemAction
+                            aria-label={t('回到原对话')}
+                            onClick={() => onSource(mark)}
+                          >
+                            <ArrowUpLeft size={14} />
+                          </QueueItemAction>
+                          <QueueItemAction
+                            aria-label={t('取消标记')}
+                            onClick={() => void notebook.remove(mark.id)}
+                          >
+                            <Trash2 size={14} />
+                          </QueueItemAction>
+                        </QueueItemActions>
+                      </div>
+                      <QueueItemDescription>
+                        {mark.tripTitle} · {new Date(mark.createdAt).toLocaleDateString()}
+                      </QueueItemDescription>
+                    </QueueItem>
+                  ))}
+                </QueueList>
+              </QueueSectionContent>
+            </QueueSection>
+            <NotebookTodos todos={value.todos} onChange={(todos) => update({ todos })} />
+            <QueueSection defaultOpen={false}>
+              <QueueSectionTrigger>
+                <QueueSectionLabel label={t('画板')} />
+              </QueueSectionTrigger>
+              <QueueSectionContent>
+                <Suspense fallback={<p>{t('正在加载画板…')}</p>}>
+                  <Board
+                    value={value.canvas}
+                    onChange={(canvas) => {
+                      if (canvas !== lastCanvas.current) {
+                        lastCanvas.current = canvas;
+                        update({ canvas });
+                      }
+                    }}
+                  />
+                </Suspense>
+              </QueueSectionContent>
+            </QueueSection>
+          </div>
+        )}
       </div>
     </article>
   );

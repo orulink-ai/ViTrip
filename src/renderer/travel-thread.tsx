@@ -1,9 +1,16 @@
-import { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import { AssistantModal } from './components/assistant-ui/elements/assistant-modal.aui';
+import { ConversationMapAui } from './components/assistant-ui/elements/conversation-map.aui';
+import { createAttachmentAdapter } from './attachment-adapter';
+import { AgentSelector } from './agent-selector';
+import { CopyLink } from './copy-link';
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   AssistantRuntimeProvider,
   useExternalStoreRuntime,
   useAui,
   useAuiState,
+  useThreadViewport,
   type QuoteInfo,
 } from '@assistant-ui/react';
 import { Thread, type ThreadComponents } from './components/assistant-ui/elements/thread.aui';
@@ -13,23 +20,31 @@ import {
   QuoteBlock,
 } from './components/assistant-ui/elements/quote.aui';
 import { Button } from './components/ui/button';
-import { AgentActivity } from './components/agent-activity';
-import { ArrowRight, ChevronRight } from 'lucide-react';
+import { ActivityPart, ActivityGroup } from './components/agent-activity';
+import { ArrowRight } from 'lucide-react';
 import { t } from './i18n';
-import { toThreadMessages, resolveQuote } from './thread-adapter';
-import type { Trip, ToolActivity } from '../shared/types';
+import { toThreadMessages, resolveQuote, toBranchRepository } from './thread-adapter';
+import { TravelOverview } from './travel-overview';
+import type { Journey, Trip, PublicSettings } from '../shared/types';
 import type { Quote } from '../shared/notebook';
 
 type Props = {
+  floating?: boolean;
+  onFloatingOpenChange?: (open: boolean) => void;
   disabled?: boolean;
   trip: Trip | null;
   trips: Trip[];
+  journeys: Journey[];
+  onOpenJourney: (id: string) => void;
+  onOverlay: (open: boolean) => void;
   draft: string;
   running: boolean;
   quoteRequest?: Quote;
-  model: string;
+  config: PublicSettings;
+  onRuntimeChange: (runtime: 'pi' | 'codex') => Promise<void>;
   footer: ReactNode;
-  onSend: (text: string, quote?: Quote) => Promise<void>;
+  onSend: (text: string, quote?: Quote, attachmentIds?: string[]) => Promise<void>;
+  onError: (message: string) => void;
   onStop: () => Promise<void>;
   onSource: (quote: Quote) => void;
   onBookmark: (quote: Quote) => void;
@@ -43,11 +58,54 @@ function useTravel() {
 }
 
 export function TravelThread(props: Props) {
+  const threadHost = useMemo(() => {
+    const host = document.createElement('div');
+    host.className = 'h-full min-h-0';
+    return host;
+  }, []);
+  const mountThread = (node: HTMLDivElement | null) => {
+    if (node && threadHost.parentElement !== node) node.append(threadHost);
+  };
   const messages = useMemo(
     () => toThreadMessages(props.trip?.messages ?? [], props.draft, props.running),
     [props.trip?.messages, props.draft, props.running],
   );
+  const attachmentAdapter = useMemo(
+    () =>
+      props.trip ? createAttachmentAdapter(props.trip.id, window.vitrip, props.onError) : undefined,
+    [props.trip?.id, props.onError],
+  );
+  const repository = useMemo(
+    () => (props.trip ? toBranchRepository(props.trip, props.running) : undefined),
+    [props.trip, props.running],
+  );
   const runtime = useExternalStoreRuntime({
+    messageRepository: repository,
+    setMessages: () => {},
+    unstable_onBranchChange: ({ headId }) => {
+      if (headId)
+        void window.vitrip.selectBranch(headId).catch((e: Error) => props.onError(e.message));
+    },
+    onReload: async (parentId) => {
+      const path = props.trip?.messages ?? [];
+      const index = path.findIndex((m) => m.id === parentId);
+      const question = path.slice(0, index + 1).findLast((m) => m.role === 'user');
+      if (question)
+        await window.vitrip.regenerate(question.id).catch((e: Error) => {
+          props.onError(e.message);
+          throw e;
+        });
+    },
+    adapters: {
+      attachments: attachmentAdapter,
+      feedback: {
+        submit: ({ message, type }) => {
+          void window.vitrip
+            .feedback(message.id, type)
+            .catch((e: Error) => props.onError(e.message));
+        },
+      },
+    },
     isDisabled: props.disabled,
     messages,
     convertMessage: (message) => message,
@@ -62,16 +120,52 @@ export function TravelThread(props: Props) {
         props.trips,
         props.quoteRequest,
       );
-      await props.onSend(text, quote);
+      await props.onSend(
+        text,
+        quote,
+        message.attachments?.map((attachment) => attachment.id),
+      );
     },
     onCancel: props.onStop,
   });
+  useEffect(() => {
+    if (!props.trip) return;
+    const key = `vitrip:draft:${props.trip.id}`;
+    const composer = runtime.thread.composer;
+    try {
+      composer.setText(localStorage.getItem(key) ?? '');
+    } catch {
+      /* storage unavailable */
+    }
+    return composer.subscribe(() => {
+      try {
+        const text = composer.getState().text;
+        if (text) localStorage.setItem(key, text);
+        else localStorage.removeItem(key);
+      } catch {
+        /* keep editing even when storage is full */
+      }
+    });
+  }, [runtime, props.trip?.id]);
   return (
     <Context.Provider value={props}>
       <AssistantRuntimeProvider runtime={runtime}>
         <QuoteRequest />
         <div
           className="min-h-0 flex-1"
+          onKeyDownCapture={(event) => {
+            if (
+              props.running &&
+              event.key === 'Enter' &&
+              !event.shiftKey &&
+              !event.nativeEvent.isComposing &&
+              (event.target as HTMLElement).matches('.aui-composer-input')
+            ) {
+              event.preventDefault();
+              event.stopPropagation();
+              void runtime.thread.composer.send();
+            }
+          }}
           onClickCapture={(event) => {
             const anchor = (event.target as HTMLElement).closest('a[href]');
             const href = anchor?.getAttribute('href');
@@ -82,7 +176,18 @@ export function TravelThread(props: Props) {
             }
           }}
         >
-          <Thread components={components} />
+          {createPortal(<Thread components={components} />, threadHost)}
+          {props.floating ? (
+            <AssistantModal
+              title={props.trip?.title || '旅行助手'}
+              openRequest={props.quoteRequest}
+              onOpenChange={props.onFloatingOpenChange}
+            >
+              <div ref={mountThread} className="h-full min-h-0" />
+            </AssistantModal>
+          ) : (
+            <div ref={mountThread} className="h-full min-h-0" />
+          )}
         </div>
       </AssistantRuntimeProvider>
     </Context.Provider>
@@ -102,45 +207,79 @@ function QuoteRequest() {
   return null;
 }
 function Welcome() {
-  const { onDemo } = useTravel();
+  return (
+    <div className="welcome">
+      <p className="text-sm">{t('你的旅行，从这里开始')}</p>
+      <h1>{t('下一站，去哪里？')}</h1>
+      <p>{t('告诉我一个想法，一起把旅行安排好。')}</p>
+    </div>
+  );
+}
+function WelcomeFooter() {
+  const { onDemo, journeys, trips, onOpenJourney, onError, onOverlay } = useTravel();
   const aui = useAui();
   const choices = [
     ['周末，去山里透透气', '我想从深圳出发，安排一次轻松的周末短途旅行。'],
-    ['第一次去日本，怎么安排？', '我想第一次去日本，帮我一起规划行程。'],
-    ['不赶路，找个地方慢下来', '想找一个适合放松、慢节奏的旅行目的地。'],
+    ['帮我安排一次海岛旅行', '我想安排一次轻松的海岛旅行，帮我一起规划行程。'],
   ];
   return (
-    <div className="welcome">
-      <h1>{t('下一站，去哪里？')}</h1>
-      <p>{t('告诉我目的地、时间和预算，开始规划旅行。')}</p>
-      <div className="suggestions">
-        {choices.map(([title, text]) => (
-          <Button
-            variant="outline"
-            size="sm"
-            key={title}
-            onClick={() => {
-              aui.composer().setText(t(text));
-              document.querySelector<HTMLTextAreaElement>('.aui-composer-input')?.focus();
-            }}
-          >
-            {t(title)}
-          </Button>
-        ))}
+    <div className="space-y-10 pb-10">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap gap-2">
+          {choices.map(([title, text]) => (
+            <Button
+              variant="outline"
+              size="sm"
+              key={title}
+              onClick={() => {
+                aui.composer().setText(t(text));
+                document.querySelector<HTMLTextAreaElement>('.aui-composer-input')?.focus();
+              }}
+            >
+              {t(title)}
+            </Button>
+          ))}
+        </div>
+        <Button variant="ghost" size="sm" onClick={onDemo} aria-label={t('先看看一份示例行程')}>
+          {t('示例行程')}
+          <ArrowRight size={14} />
+        </Button>
       </div>
-      <Button variant="ghost" onClick={onDemo}>
-        {t('先看看一份示例行程')}
-        <ArrowRight size={14} />
-      </Button>
+      <TravelOverview
+        journeys={journeys}
+        trips={trips}
+        onOpen={onOpenJourney}
+        onError={onError}
+        onOverlay={onOverlay}
+      />
     </div>
   );
 }
 function Tools() {
-  const { model, onSettings } = useTravel();
+  const { config, running, disabled, onRuntimeChange, onSettings } = useTravel();
   return (
-    <Button variant="ghost" size="sm" className="composer-model" onClick={onSettings}>
-      {model || t('连接模型')}
-      <ChevronRight size={12} />
+    <AgentSelector
+      config={config}
+      disabled={running || !!disabled}
+      onChange={onRuntimeChange}
+      onSettings={onSettings}
+    />
+  );
+}
+function InterruptSend() {
+  const { running } = useTravel();
+  const aui = useAui();
+  const canSend = useAuiState((s) => s.composer.canSend && !s.thread.isDisabled);
+  if (!running) return null;
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      disabled={!canSend}
+      onClick={() => aui.composer().send()}
+    >
+      {t('打断并发送')}
     </Button>
   );
 }
@@ -155,7 +294,7 @@ function Preview() {
         type="button"
         className="min-w-0 flex-1 text-left"
         onClick={() => local && onSource(local)}
-        title={t('回到原对话')}
+        title={t(local?.source?.kind === 'itinerary' ? '回到行程' : '回到原对话')}
       >
         <ComposerQuotePreview.Text />
       </button>
@@ -167,19 +306,28 @@ function Preview() {
     </ComposerQuotePreview.Root>
   );
 }
+function MessageActions() {
+  const { trip } = useTravel();
+  const messageId = useAuiState((s) => s.message.id);
+  if (!trip?.messages.some((message) => message.id === messageId)) return null;
+  return <CopyLink compact target={{ kind: 'message', id: trip.id, messageId }} />;
+}
+function MessageMenuActions() {
+  const { trip } = useTravel();
+  const messageId = useAuiState((s) => s.message.id);
+  return trip ? <CopyLink menu target={{ kind: 'message', id: trip.id, messageId }} /> : null;
+}
 function Header() {
   const { onSource } = useTravel();
   const custom = useAuiState((s) => s.message.metadata.custom);
   const quote = custom.quote as Quote | undefined;
-  const activities = custom.activities as ToolActivity[] | undefined;
   return (
     <>
-      {!!activities?.length && <AgentActivity steps={activities} />}
       {quote && (
         <button
           type="button"
           className="message-quote block w-full text-left"
-          title={t('回到原对话')}
+          title={t(quote.source?.kind === 'itinerary' ? '回到行程' : '回到原对话')}
           onClick={() => onSource(quote)}
         >
           <QuoteBlock text={quote.text} messageId={quote.messageId} />
@@ -221,11 +369,32 @@ function Selection() {
 function Footer() {
   return <>{useTravel().footer}</>;
 }
+function Navigation() {
+  const viewport = useThreadViewport((s) => s.element.viewport);
+  const count = useAuiState((s) => s.thread.messages.filter((m) => m.role === 'user').length);
+  const [fits, setFits] = useState(false);
+  useEffect(() => {
+    if (!viewport) return;
+    const update = () => setFits(viewport.clientWidth >= 420);
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, [viewport]);
+  return fits && count > 1 ? <ConversationMapAui /> : null;
+}
 const components: ThreadComponents = {
+  ToolFallback: ActivityPart,
+  ToolGroup: ActivityGroup,
+  Navigation,
   Welcome,
+  WelcomeFooter,
   ComposerTools: Tools,
+  ComposerInterrupt: InterruptSend,
   ComposerQuote: Preview,
   MessageHeader: Header,
+  MessageActions,
+  MessageMenuActions,
   Selection,
   Footer,
 };

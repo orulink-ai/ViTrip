@@ -24,7 +24,13 @@ test('Pi 内置工具实际读写文件、读取飞书技能并通过 bash 执�
   });
   const actions = [
     ['write', { path: 'travel-note.txt', content: 'first draft' }],
-    ['edit', { path: 'travel-note.txt', oldText: 'first draft', newText: 'verified itinerary' }],
+    [
+      'edit',
+      {
+        path: 'travel-note.txt',
+        edits: [{ oldText: 'first draft', newText: 'verified itinerary' }],
+      },
+    ],
     ['read', { path: 'travel-note.txt' }],
     ['ls', { path: '.' }],
     ['find', { pattern: '*.txt', path: '.' }],
@@ -133,7 +139,7 @@ test('Pi 内置工具实际读写文件、读取飞书技能并通过 bash 执�
     expect(steps).toHaveLength(actions.length);
     expect(steps.every((step) => step.status === 'complete')).toBe(true);
     const activity = page.getByTestId('agent-activity');
-    await activity.getByRole('button', { name: /bash · 查看详情/ }).click();
+    await activity.getByRole('button', { name: /bash/ }).click();
     await expect(activity.getByText(/fixture-lark-ready/)).toBeVisible();
     await page.screenshot({ path: 'test-results/pi-tools-lark.png' });
     await page.getByLabel('旅行需求', { exact: true }).fill('验证停止长命令');

@@ -156,10 +156,10 @@
 .welcome {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 24px 0 8px;
-  align-items: center;
-  text-align: center;
+  gap: 12px;
+  padding: 0 0 24px;
+  align-items: flex-start;
+  text-align: left;
 }
 .welcome h1 {
   font-size: clamp(26px, 2.3vw, 34px);
@@ -375,4 +375,92 @@
 .workspace[data-expanded-plan='true'] > .chat-panel,
 .workspace[data-expanded-plan='true'] > .resize-handle {
   display: none;
+}
+
+/* Keep the home canvas single-column until a workspace is requested. */
+.workspace[data-workspace-open='false'] > .chat-panel {
+  width: 100%;
+}
+.workspace[data-workspace-open='false'] > .right-panel,
+.workspace[data-workspace-open='false'] > .resize-handle {
+  display: none;
+}
+
+@media (max-height: 800px) {
+  .welcome {
+    gap: 10px;
+    padding: 0 0 20px;
+  }
+}
+
+/* Floating chat remains mounted; its official modal portals out of this pane. */
+.workspace[data-floating-chat='true'] > .chat-panel,
+.workspace[data-floating-chat='true'] > .resize-handle {
+  display: none;
+}
+
+/* Static city texture: crop source controls outside the viewport and soften the top/left edges. */
+.home-map-corner {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: min(42%, 540px);
+  height: min(43%, 400px);
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 2;
+}
+.home-map-preview {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-top-left-radius: 80%;
+  opacity: 0;
+  transition: opacity 400ms ease;
+  mask-image: radial-gradient(ellipse 90% 100% at 100% 100%, black 25%, #000b 48%, transparent 90%);
+}
+.home-map-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 45%;
+  filter: grayscale(1);
+}
+.home-map-preview[data-ready='true'] {
+  opacity: 0.6;
+}
+.home-map-action {
+  position: absolute;
+  right: 16px;
+  bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  pointer-events: auto;
+}
+.home-map-action > span {
+  max-width: 330px;
+  text-align: right;
+}
+.home-map-interactive {
+  width: 100%;
+  height: min(65vh, 640px);
+  opacity: 0;
+  transition: opacity 400ms ease;
+}
+.home-map-interactive[data-ready='true'] {
+  opacity: 1;
+}
+@media (max-height: 760px) {
+  .home-map-corner {
+    height: 170px;
+    width: 270px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-map-preview,
+  .home-map-interactive {
+    transition: none;
+  }
 }

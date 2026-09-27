@@ -14,8 +14,12 @@ export function needsApproval(label: string): boolean {
 }
 export function redactSettings(settings: Settings): PublicSettings {
   return {
+    ...(settings.runtime ? { runtime: settings.runtime } : {}),
+    ...(settings.codexModel !== undefined ? { codexModel: settings.codexModel } : {}),
+    ...(settings.codexEffort !== undefined ? { codexEffort: settings.codexEffort } : {}),
     baseURL: settings.baseURL,
     model: settings.model,
+    ...(settings.imageInput !== undefined ? { imageInput: settings.imageInput } : {}),
     hasKey: Boolean(settings.apiKey),
     ...(settings.jevApiKey ? { hasJevKey: true } : {}),
   };

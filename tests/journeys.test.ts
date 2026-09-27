@@ -128,3 +128,20 @@ it('renders editable HTML plus all saved knowledge without executable content', 
   expect(html).not.toContain('javascript:');
   expect(html).toContain("script-src 'none'");
 });
+
+it('persists completion and allows returning a journey to planning', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'vitrip-completion-'));
+  try {
+    const store = new Storage(dir, cipher);
+    const trip = store.create();
+    store.setJourneyCompleted(trip.journeyId, true);
+    store.close();
+    const restored = new Storage(dir, cipher);
+    expect(restored.journeys[0].completed).toBe(true);
+    expect(restored.setJourneyCompleted(trip.journeyId, false).completed).toBe(false);
+    expect(() => restored.setJourneyCompleted('missing', true)).toThrow();
+    restored.close();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

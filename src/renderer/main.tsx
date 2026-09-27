@@ -1,11 +1,23 @@
+import { lazy, Suspense } from 'react';
+const HomeGlobe = lazy(() => import('./home-globe'));
+
+import { RunStatus } from './run-status';
+import { CopyLink } from './copy-link';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from './components/ui/dialog';
 import { TravelThread } from './travel-thread';
 import { LanguageSwitch } from './language-switch';
 import { useLocale, t } from './i18n';
-import { Sidebar, SidebarProvider, SidebarFooter } from './components/ui/sidebar';
+import { Sidebar, SidebarProvider, SidebarFooter, SidebarTrigger } from './components/ui/sidebar';
 import { Tabs, TabsList, TabsTrigger } from './components/ui/tabs';
 import { Badge } from './components/ui/badge';
 import { Alert } from './components/ui/alert';
-import { NotebookPanel } from './notebook-panel';
+import { NotebookWorkspace } from './notebook-workspace';
 import { useNotebook } from './use-notebook';
 import type { Quote } from '../shared/notebook';
 import React, { useEffect, useRef, useState } from 'react';
@@ -32,12 +44,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import {
-  Confirmation,
-  ConfirmationTitle,
-  ConfirmationActions,
-  ConfirmationAction,
-} from './components/ai-elements/confirmation';
+import { ApprovalCard } from './components/assistant-ui/elements/approval-card';
 import { Button } from './components/ui/button';
 import { TooltipProvider } from './components/ui/tooltip';
 import { SettingsDialog } from './settings';
@@ -54,11 +61,41 @@ const initialBrowser: BrowserState = {
   canBack: false,
   canForward: false,
 };
+function WorkspaceTabs({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: 'plan' | 'browser' | 'notebook') => void;
+}) {
+  return (
+    <Tabs
+      value={value}
+      onValueChange={(value) => onChange(value as 'plan' | 'browser' | 'notebook')}
+    >
+      <TabsList variant={value ? 'default' : 'line'} aria-label={t('旅行工作区')}>
+        <TabsTrigger value="plan">
+          <Map size={15} />
+          {t('行程')}
+        </TabsTrigger>
+        <TabsTrigger value="browser">
+          <Globe2 size={15} />
+          {t('浏览器')}
+        </TabsTrigger>
+        <TabsTrigger value="notebook">{t('笔记本')}</TabsTrigger>
+      </TabsList>
+    </Tabs>
+  );
+}
 function App() {
   useLocale();
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [linkValue, setLinkValue] = useState('');
+  const [linkError, setLinkError] = useState('');
   const [trips, setTrips] = useState<Trip[]>([]);
   const [journeys, setJourneys] = useState<Journey[]>([]);
   const [organizeOpen, setOrganizeOpen] = useState(false);
+  const [switchingRuntime, setSwitchingRuntime] = useState(false);
   const [switchingTrip, setSwitchingTrip] = useState(false);
   const [trip, setTrip] = useState<Trip | null>(null);
   const [config, setConfig] = useState<PublicSettings>({
@@ -68,35 +105,66 @@ function App() {
   });
   const [browser, setBrowser] = useState(initialBrowser);
   const [expandedPlan, setExpandedPlan] = useState(false);
-  const [tab, setTab] = useState<'browser' | 'plan' | 'notebook'>('plan');
+  const [floatingChat, setFloatingChat] = useState(false);
+  const [floatingOpen, setFloatingOpen] = useState(false);
+  const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const [tab, setActiveTab] = useState<'browser' | 'plan' | 'notebook'>('plan');
+  function setTab(value: 'browser' | 'plan' | 'notebook') {
+    setActiveTab(value);
+    setWorkspaceOpen(true);
+  }
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [running, setRunning] = useState(false);
   const [paused, setPaused] = useState(false);
   const [status, setStatus] = useState(t('准备好下一段旅程'));
   const [draft, setDraft] = useState('');
   const [quote, setQuote] = useState<Quote>();
+  const [itinerarySource, setItinerarySource] = useState<Quote['source']>();
   const [sourceTarget, setSourceTarget] = useState<string>();
   const notebook = useNotebook(trip?.journeyId);
   useEffect(() => {
     setQuote(undefined);
   }, [trip?.id]);
   useEffect(() => {
-    if (sourceTarget) {
+    if (!sourceTarget) return;
+    const locate = () => {
       const target = document.getElementById('message-' + sourceTarget);
-      if (target) {
-        target.scrollIntoView({ block: 'center' });
-        target.focus();
-        setSourceTarget(undefined);
-      }
-    }
+      if (!target) return false;
+      target.scrollIntoView({ block: 'center' });
+      target.focus({ preventScroll: true });
+      setSourceTarget(undefined);
+      return true;
+    };
+    const frame = requestAnimationFrame(locate);
+    const observer = new MutationObserver(() => {
+      if (locate()) observer.disconnect();
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
   }, [sourceTarget, trip]);
   function quoteReply(value: Quote) {
+    setFloatingChat(true);
     setQuote(value);
     requestAnimationFrame(() =>
       document.querySelector<HTMLTextAreaElement>('.aui-composer-input')?.focus(),
     );
   }
   async function showSource(value: Quote) {
+    if (value.source?.kind === 'itinerary') {
+      const target = journeys.find((j) => j.id === value.source!.journeyId);
+      const conversation = trips.find((item) => item.journeyId === target?.id);
+      if (!target || !conversation) {
+        setNotice(t('来源行程已删除，引用原文仍保留。'));
+        return;
+      }
+      if (trip?.journeyId !== target.id) updateTrip(await window.vitrip.select(conversation.id));
+      setTab('plan');
+      setItinerarySource({ ...value.source });
+      return;
+    }
     const source = trips.find((t) => t.id === value.tripId);
     if (!source?.messages.some((m) => m.id === value.messageId)) {
       setNotice(t('来源会话已删除，引用原文仍保留。'));
@@ -125,16 +193,51 @@ function App() {
       setNotice(error instanceof Error ? error.message : t('操作失败，请重试'));
     }
   };
+  async function openLink(url: string) {
+    const result = await window.vitrip.openLink(url);
+    updateTrip(result.trip);
+    setDraft('');
+    setExpandedPlan(false);
+    setSourceTarget(result.target.kind === 'message' ? result.target.messageId : undefined);
+    setTab(result.target.kind === 'notebook' ? 'notebook' : 'plan');
+    setLinkOpen(false);
+    setLinkError('');
+  }
+  useEffect(() => {
+    const follow = (event: MouseEvent) => {
+      const href = (event.target as HTMLElement).closest('a[href]')?.getAttribute('href');
+      if (href?.startsWith('vitrip://')) {
+        event.preventDefault();
+        event.stopPropagation();
+        void perform(() => openLink(href));
+      }
+    };
+    document.addEventListener('click', follow, true);
+    return () => document.removeEventListener('click', follow, true);
+  }, []);
   useEffect(() => {
     void perform(async () => {
       const initial = await window.vitrip.init();
       setTrips(initial.trips);
       setJourneys(initial.journeys);
-      setTrip(initial.trips[0] || null);
+      const active =
+        initial.trips.find((trip) => trip.id === initial.activeTripId) || initial.trips[0] || null;
+      setTrip(active);
+      setWorkspaceOpen(
+        Boolean(
+          active?.messages.length && initial.journeys.find((j) => j.id === active.journeyId)?.plan,
+        ),
+      );
+      setRunning(initial.running);
+      setPaused(initial.paused);
+      setStatus(initial.status);
+      setApproval(initial.approval);
       setConfig(initial.settings);
       setBrowser(initial.browser);
+      if (initial.link) await openLink(initial.link);
     });
     return window.vitrip.onEvent((event) => {
+      if (event.type === 'link' && event.link) void perform(() => openLink(event.link!));
       if (event.browser) {
         setBrowser(event.browser);
         setAddress(event.browser.url);
@@ -170,9 +273,12 @@ function App() {
           width: rect?.width || 0,
           height: rect?.height || 0,
           visible:
+            workspaceOpen &&
             tab === 'browser' &&
             !settingsOpen &&
             !organizeOpen &&
+            !floatingOpen &&
+            !linkOpen &&
             Boolean(browser.url) &&
             Boolean(rect),
         })
@@ -186,16 +292,16 @@ function App() {
       observer.disconnect();
       window.removeEventListener('resize', sync);
     };
-  }, [tab, settingsOpen, organizeOpen, browser.url, panel]);
-  async function send(text: string, quoted?: Quote) {
-    if (!text.trim() || running) return;
-    if (!config.model) {
+  }, [tab, workspaceOpen, settingsOpen, organizeOpen, linkOpen, browser.url, panel, floatingOpen]);
+  async function send(text: string, quoted?: Quote, attachmentIds: string[] = []) {
+    if (!text.trim() && !attachmentIds.length) return;
+    if (config.runtime !== 'codex' && !config.model) {
       setSettingsOpen(true);
       setNotice(t('先连接一个支持工具调用的模型，就可以开始规划。'));
       throw new Error(t('连接模型'));
     }
     try {
-      await window.vitrip.send(text, quoted);
+      await window.vitrip.send(text, quoted, attachmentIds);
       setQuote(undefined);
     } catch (error) {
       setNotice(String(error));
@@ -216,6 +322,7 @@ function App() {
       updateTrip(selected.id === trip?.id ? selected : await window.vitrip.select(selected.id));
     else setTrip(null);
     setDraft('');
+    if (!selected?.messages.length) setWorkspaceOpen(false);
   };
   const demo = () =>
     perform(async () => {
@@ -244,7 +351,29 @@ function App() {
           className="app-body min-h-0"
           style={{ '--sidebar-width': '248px' } as React.CSSProperties}
         >
-          <Sidebar collapsible="none" className="shrink-0 border-r">
+          <div
+            className="fixed top-2 right-32 z-40 flex items-center gap-2"
+            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+          >
+            <SidebarTrigger aria-label="切换旅行侧边栏" />
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setFloatingChat(!floatingChat);
+                setExpandedPlan(false);
+                if (!floatingChat) {
+                  setWorkspaceOpen(true);
+                }
+              }}
+            >
+              {floatingChat ? '停靠聊天' : '浮动聊天'}
+            </Button>
+          </div>
+          <Sidebar
+            collapsible="offcanvas"
+            className="top-[52px] h-[calc(100vh-52px)] shrink-0 border-r"
+          >
             <TripSidebar
               journeys={journeys}
               trips={trips}
@@ -253,11 +382,21 @@ function App() {
               error={setNotice}
               onChange={refreshWorkspace}
               onSelect={async (id) => {
-                updateTrip(await window.vitrip.select(id));
+                const selected = await window.vitrip.select(id);
+                updateTrip(selected);
+                setWorkspaceOpen(
+                  Boolean(
+                    selected.messages.length &&
+                    journeys.find((j) => j.id === selected.journeyId)?.plan,
+                  ),
+                );
                 setDraft('');
               }}
             />
             <SidebarFooter>
+              <Button variant="ghost" onClick={() => setLinkOpen(true)}>
+                {t('打开本机链接')}
+              </Button>
               <LanguageSwitch />
               <Button
                 variant="ghost"
@@ -275,11 +414,18 @@ function App() {
           </Sidebar>
           <div
             className="workspace"
-            data-expanded-plan={expandedPlan && tab === 'plan'}
+            data-workspace-open={workspaceOpen}
+            data-floating-chat={floatingChat}
+            data-expanded-plan={workspaceOpen && expandedPlan && tab === 'plan'}
             ref={layout}
             style={{ '--chat-width': panel + '%' } as React.CSSProperties}
           >
             <main className="chat-panel" data-empty={!trip?.messages.length}>
+              {!trip?.messages.length && !workspaceOpen && !floatingChat && (
+                <Suspense fallback={null}>
+                  <HomeGlobe />
+                </Suspense>
+              )}
               <div className="panel-heading">
                 <div>
                   {trip?.messages.length ? (
@@ -290,21 +436,46 @@ function App() {
                     </span>
                   )}
                 </div>
-                <Badge variant="secondary">
-                  <Sparkles size={12} />
-                  {t('旅行助手')}
-                </Badge>
+                {!workspaceOpen && <WorkspaceTabs value="" onChange={setTab} />}
               </div>
               <TravelThread
                 key={trip?.id || 'new'}
+                floating={floatingChat}
+                onFloatingOpenChange={setFloatingOpen}
                 trip={trip}
                 trips={trips}
+                journeys={journeys}
+                onOverlay={setOrganizeOpen}
+                onOpenJourney={(id) =>
+                  void perform(async () => {
+                    const target = trips
+                      .filter((item) => item.journeyId === id)
+                      .sort((a, b) => b.updatedAt - a.updatedAt)[0];
+                    if (target) {
+                      updateTrip(await window.vitrip.select(target.id));
+                      setDraft('');
+                      setTab('plan');
+                    }
+                  })
+                }
                 draft={draft}
                 running={running}
-                disabled={switchingTrip}
+                disabled={switchingTrip || switchingRuntime}
                 quoteRequest={quote}
-                model={config.model}
+                config={config}
+                onRuntimeChange={async (runtime) => {
+                  if (running || switchingRuntime || runtime === (config.runtime ?? 'pi')) return;
+                  setSwitchingRuntime(true);
+                  try {
+                    setConfig(await window.vitrip.settings({ ...config, runtime }));
+                  } catch (error) {
+                    setNotice(String(error));
+                  } finally {
+                    setSwitchingRuntime(false);
+                  }
+                }}
                 onSend={send}
+                onError={setNotice}
                 onStop={() => window.vitrip.stop()}
                 onSource={(value) => void perform(() => showSource(value))}
                 onBookmark={(value) => void notebook.add(value).then(() => setTab('notebook'))}
@@ -313,38 +484,44 @@ function App() {
                 onBrowse={(url) => void browse(url)}
                 footer={
                   <>
+                    {!running && trip?.messages.at(-1)?.role === 'user' && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <span>{t('这条消息尚未收到回复')}</span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            void perform(() => window.vitrip.regenerate(trip.messages.at(-1)!.id))
+                          }
+                        >
+                          {t('继续回复')}
+                        </Button>
+                      </div>
+                    )}
                     {running && (
-                      <p role="status" className="text-sm text-muted-foreground">
-                        {/^正在使用 (.+)…$/.test(status)
-                          ? t('正在使用 {tool}…', { tool: status.slice(5, -1) })
-                          : t(status)}
-                      </p>
+                      <RunStatus
+                        label={
+                          approval
+                            ? t('需要你确认')
+                            : /^正在使用 (.+)…$/.test(status)
+                              ? t('正在使用 {tool}…', { tool: status.slice(5, -1) })
+                              : t(status)
+                        }
+                      />
                     )}
                     {approval && (
-                      <Confirmation state="approval-requested" approval={{ id: approval.id }}>
-                        <ConfirmationTitle>
-                          <strong>{t('需要你确认')}</strong>
-                          <p>{approval.label}</p>
-                          <small>{t('请先检查右侧网页上的操作内容。')}</small>
-                        </ConfirmationTitle>
-                        <ConfirmationActions>
-                          <ConfirmationAction
-                            variant="outline"
-                            onClick={() =>
-                              void perform(() => window.vitrip.approve(approval.id, false))
-                            }
-                          >
-                            {t('拒绝')}
-                          </ConfirmationAction>
-                          <ConfirmationAction
-                            onClick={() =>
-                              void perform(() => window.vitrip.approve(approval.id, true))
-                            }
-                          >
-                            {t('允许这次操作')}
-                          </ConfirmationAction>
-                        </ConfirmationActions>
-                      </Confirmation>
+                      <ApprovalCard
+                        state="request"
+                        title={t('需要你确认')}
+                        subtitle={approval.label}
+                        description={t('请先检查右侧网页上的操作内容。')}
+                        allowOnceLabel={t('允许这次操作')}
+                        denyLabel={t('拒绝')}
+                        onAllowOnce={() =>
+                          void perform(() => window.vitrip.approve(approval.id, true))
+                        }
+                        onDeny={() => void perform(() => window.vitrip.approve(approval.id, false))}
+                      />
                     )}
                   </>
                 }
@@ -378,19 +555,22 @@ function App() {
             </div>
             <section className="right-panel" aria-label={t('旅行工作区')}>
               <div className="right-heading">
-                <Tabs value={tab} onValueChange={(value) => setTab(value as typeof tab)}>
-                  <TabsList>
-                    <TabsTrigger value="plan">
-                      <Map size={15} />
-                      {t('行程')}
-                    </TabsTrigger>
-                    <TabsTrigger value="browser">
-                      <Globe2 size={15} />
-                      {t('浏览器')}
-                    </TabsTrigger>
-                    <TabsTrigger value="notebook">{t('笔记本')}</TabsTrigger>
-                  </TabsList>
-                </Tabs>
+                {trip && tab !== 'browser' && (
+                  <CopyLink compact target={{ kind: tab, id: trip.journeyId }} />
+                )}
+                {workspaceOpen && <WorkspaceTabs value={tab} onChange={setTab} />}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={t('收起工作区')}
+                  onClick={() => {
+                    setWorkspaceOpen(false);
+                    setFloatingChat(false);
+                    setExpandedPlan(false);
+                  }}
+                >
+                  <X size={16} />
+                </Button>
                 {tab === 'plan' && (
                   <Button
                     variant="ghost"
@@ -420,8 +600,9 @@ function App() {
                   <Badge variant="secondary">{t('本地浏览器')}</Badge>
                 )}
               </div>
-              {tab === 'notebook' ? (
-                <NotebookPanel
+              {tab === 'notebook' && trip ? (
+                <NotebookWorkspace
+                  journeyId={trip.journeyId}
                   key={trip?.journeyId}
                   notebook={notebook}
                   title={journey?.title || t('新的旅行')}
@@ -434,6 +615,9 @@ function App() {
                   <JournalPanel
                     key={journey.id}
                     journey={journey}
+                    tripId={trip?.id}
+                    onQuote={quoteReply}
+                    quoteTarget={itinerarySource}
                     building={running}
                     todos={notebook.value?.todos}
                     onTodos={(todos) => notebook.update({ todos })}
@@ -586,6 +770,34 @@ function App() {
             </Button>
           </Alert>
         )}
+        <Dialog open={linkOpen} onOpenChange={setLinkOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{t('打开本机链接')}</DialogTitle>
+              <DialogDescription>
+                {t('粘贴 ViTrip 链接，定位到这台设备上的记录。')}
+              </DialogDescription>
+            </DialogHeader>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                setLinkError('');
+                void openLink(linkValue.trim()).catch((error: Error) =>
+                  setLinkError(error.message),
+                );
+              }}
+            >
+              <Input
+                aria-label={t('本机链接')}
+                value={linkValue}
+                onChange={(e) => setLinkValue(e.target.value)}
+                placeholder="vitrip://…"
+              />
+              {linkError && <p role="alert">{linkError}</p>}
+              <Button type="submit">{t('打开记录')}</Button>
+            </form>
+          </DialogContent>
+        </Dialog>
         <SettingsDialog
           open={settingsOpen}
           onOpenChange={setSettingsOpen}

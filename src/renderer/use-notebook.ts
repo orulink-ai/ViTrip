@@ -22,7 +22,20 @@ export function useNotebook(journeyId?: string) {
         .catch((e) => {
           if (!cancelled) setError(String(e));
         });
+    const unsubscribe = window.vitrip.onEvent((event) => {
+      if (event.type !== 'prepare' || event.journeyId !== journeyId || !journeyId) return;
+      void window.vitrip
+        .notebook(journeyId)
+        .then((saved) => {
+          if (!cancelled)
+            setValue((current) => (current ? { ...current, todos: saved.todos } : saved));
+        })
+        .catch((error) => {
+          if (!cancelled) setError(String(error));
+        });
+    });
     return () => {
+      unsubscribe();
       cancelled = true;
     };
   }, [journeyId]);
