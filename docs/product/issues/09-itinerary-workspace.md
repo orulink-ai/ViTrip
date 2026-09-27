@@ -1,5 +1,7 @@
 # 行程工作区：参考 Mindtrip 的按天列表与地点详情
 
+GitHub 跟踪：[Issue #1](https://github.com/orulink-ai/ViTrip/issues/1)。关联：[个性化地图 #2](https://github.com/orulink-ai/ViTrip/issues/2)、[真实照片 #3](https://github.com/orulink-ai/ViTrip/issues/3)。
+
 ## 问题与目标
 
 当前行程以总览表和单日详情切换为主，缺少可连续浏览的图文行程。用户希望参考 Mindtrip：在右侧快速看懂每天去哪、何时活动、住哪里，并围绕地点继续查看资料、调整安排和定位地图。

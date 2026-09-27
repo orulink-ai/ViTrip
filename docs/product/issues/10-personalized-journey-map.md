@@ -1,5 +1,7 @@
 # 个性化行程地图：路线、地点与当天安排联动
 
+GitHub 跟踪：[Issue #2](https://github.com/orulink-ai/ViTrip/issues/2)。关联：[行程工作区 #1](https://github.com/orulink-ai/ViTrip/issues/1)、[真实照片 #3](https://github.com/orulink-ai/ViTrip/issues/3)。
+
 ## 问题与目标
 
 当前地图已有地点与行程双向定位，但需要让使用者一眼读懂自己的整趟旅行。参考用户提供的 Roadtrippers 截图：列表和地图共享编号，路线形成主线，地点按类别区分，重要地点带照片，沿途候选保持可探索性。

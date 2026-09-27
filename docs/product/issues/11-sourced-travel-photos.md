@@ -1,5 +1,7 @@
 # 真实旅行照片：采集、来源核对与超时前保存
 
+GitHub 跟踪：[Issue #3](https://github.com/orulink-ai/ViTrip/issues/3)。关联：[行程工作区 #1](https://github.com/orulink-ai/ViTrip/issues/1)、[个性化地图 #2](https://github.com/orulink-ai/ViTrip/issues/2)。
+
 ## 问题与实测依据
 
 用户希望酒店和景点配上来自官网、旅行平台及小红书原帖的真实照片，并在行程与地图中复用。目前已内置 itinerary-organizer Skill，但尚未接通图片采集、模型图片输入和相册展示。
