@@ -1,5 +1,9 @@
+import { filterCandidates } from '../shared/map-clusters';
+import { StopIcon } from './stop-icon';
+import { PhotoGallery } from './photo-gallery';
+import { photosForActivity, type TravelPhoto } from '../shared/photos';
 import { t } from './i18n';
-import { lazy, Suspense, useMemo } from 'react';
+import { lazy, Suspense, useMemo, useState } from 'react';
 import { Expand, ArrowLeft, LocateFixed } from 'lucide-react';
 import type { Plan } from '../shared/types';
 import { itineraryStops, locationURL } from '../shared/itinerary-map';
@@ -20,6 +24,8 @@ export interface MapSelection {
 
 export function JourneyMap({
   plan,
+  journeyId,
+  photos = [],
   selection,
   onSelection,
   expanded,
@@ -28,6 +34,8 @@ export function JourneyMap({
   onRead,
 }: {
   plan: Plan | null;
+  journeyId?: string;
+  photos?: TravelPhoto[];
   selection: MapSelection;
   onSelection: (value: MapSelection) => void;
   expanded: boolean;
@@ -35,7 +43,19 @@ export function JourneyMap({
   onBrowse: (url: string) => void;
   onRead: (id: string) => void;
 }) {
-  const stops = useMemo(() => itineraryStops(plan, selection.day), [plan, selection.day]);
+  const allStops = useMemo(() => itineraryStops(plan, selection.day), [plan, selection.day]);
+  const contextStops = useMemo(
+    () =>
+      selection.day === undefined
+        ? []
+        : itineraryStops(plan).filter((stop) => stop.dayIndex !== selection.day),
+    [plan, selection.day],
+  );
+  const [preference, setPreference] = useState('');
+  const preferences = [
+    ...new Set(allStops.flatMap((stop) => stop.recommendation?.preferences ?? [])),
+  ];
+  const stops = useMemo(() => filterCandidates(allStops, preference), [allStops, preference]);
   const located = stops.filter((stop) => stop.location);
   const selected = stops.find((stop) => stop.id === selection.stopId);
   return (
@@ -64,6 +84,27 @@ export function JourneyMap({
               ))}
             </SelectContent>
           </Select>
+          {!!preferences.length && (
+            <Select
+              value={preference || 'all'}
+              onValueChange={(value) => {
+                setPreference(value === 'all' ? '' : value);
+                onSelection({ day: selection.day });
+              }}
+            >
+              <SelectTrigger aria-label="推荐偏好" size="sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部偏好</SelectItem>
+                {preferences.map((value) => (
+                  <SelectItem key={value} value={value}>
+                    {value}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <Button variant="outline" size="sm" onClick={() => onExpand(!expanded)}>
             {expanded ? <ArrowLeft /> : <Expand />}
             {t(expanded ? '返回行程' : '展开地图')}
@@ -75,7 +116,12 @@ export function JourneyMap({
           fallback={<p className="p-4 text-sm text-muted-foreground">{t('正在加载地图…')}</p>}
         >
           <MapCanvas
+            key={`${journeyId}:${selection.day ?? 'all'}`}
+            viewportKey={
+              journeyId ? `vitrip-map:${journeyId}:${selection.day ?? 'all'}` : undefined
+            }
             stops={stops}
+            contextStops={contextStops}
             selectedId={selection.stopId}
             expanded={expanded}
             onSelect={(stopId) => onSelection({ ...selection, stopId })}
@@ -114,8 +160,10 @@ export function JourneyMap({
               aria-pressed={selected?.id === stop.id}
               onClick={() => onSelection({ ...selection, stopId: stop.id })}
             >
+              <StopIcon kind={stop.kind} />
               {stop.number}. {stop.location?.name ?? stop.title}
               {!stop.location && ' · ' + t('待定位')}
+              {(stop.optional || stop.optionGroup || stop.recommendation) && ' · 候选'}
             </Button>
           ))}
         </div>
@@ -131,6 +179,19 @@ export function JourneyMap({
                 : t('待定位')}
             </p>
             <p>{selected.detail}</p>
+            {selected.recommendation && (
+              <p>
+                推荐理由：{selected.recommendation.reason} ·{' '}
+                {selected.recommendation.preferences.join('、')}
+              </p>
+            )}
+            {journeyId && (
+              <PhotoGallery
+                journeyId={journeyId}
+                photos={photosForActivity(selected, photos)}
+                onBrowse={onBrowse}
+              />
+            )}
             <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="outline" onClick={() => onRead(selected.id)}>
                 {t('查看行程条目')}

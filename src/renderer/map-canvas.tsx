@@ -1,3 +1,6 @@
+import { renderToStaticMarkup } from 'react-dom/server';
+import { StopIcon } from './stop-icon';
+import { clusterStops } from '../shared/map-clusters';
 import { t, useLocale } from './i18n';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -24,11 +27,18 @@ const mapStyle = (): StyleSpecification => ({
       tileSize: 256,
       maxzoom: 19,
     },
+    contextStops: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
     itinerary: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
   },
   layers: [
     { id: 'background', type: 'background', paint: { 'background-color': '#f5f5f5' } },
     { id: 'basemap', type: 'raster', source: 'basemap' },
+    {
+      id: 'context-stops',
+      type: 'circle',
+      source: 'contextStops',
+      paint: { 'circle-radius': 4, 'circle-color': '#737373', 'circle-opacity': 0.35 },
+    },
     {
       id: 'itinerary',
       type: 'line',
@@ -40,12 +50,16 @@ const mapStyle = (): StyleSpecification => ({
 
 export default function MapCanvas({
   stops,
+  contextStops = [],
+  viewportKey,
   selectedId,
   onSelect,
   onBrowse,
   expanded,
 }: {
   stops: ItineraryStop[];
+  viewportKey?: string;
+  contextStops?: ItineraryStop[];
   selectedId?: string;
   onSelect: (id: string) => void;
   onBrowse: (url: string) => void;
@@ -68,18 +82,33 @@ export default function MapCanvas({
     setProblem('');
     let instance: Map;
     try {
+      let viewport: { center: [number, number]; zoom: number } | undefined;
+      try {
+        const value = JSON.parse(localStorage.getItem(viewportKey ?? '') ?? 'null');
+        if (
+          Array.isArray(value?.center) &&
+          value.center.length === 2 &&
+          value.center.every((n: unknown) => typeof n === 'number' && Number.isFinite(n)) &&
+          Number.isFinite(value.zoom) &&
+          value.zoom >= 0 &&
+          value.zoom <= 19
+        )
+          viewport = value;
+      } catch {
+        /* A missing or old view starts from the itinerary bounds. */
+      }
       instance = new Map({
         container: container.current,
         style: mapStyle(),
         attributionControl: false,
-        center: [0, 0],
-        zoom: 1,
+        center: viewport?.center ?? [0, 0],
+        zoom: viewport?.zoom ?? 1,
         maxZoom: 19,
         locale: {
           'NavigationControl.ZoomIn': t('放大地图'),
           'NavigationControl.ZoomOut': t('缩小地图'),
         },
-        bounds: mapBounds(latest.current.stops) ?? undefined,
+        bounds: viewport ? undefined : (mapBounds(latest.current.stops) ?? undefined),
         fitBoundsOptions: { padding: 50, maxZoom: 14, duration: 0 },
       });
     } catch {
@@ -87,6 +116,18 @@ export default function MapCanvas({
       return;
     }
     map.current = instance;
+    instance.on('moveend', () => {
+      if (viewportKey) {
+        try {
+          localStorage.setItem(
+            viewportKey,
+            JSON.stringify({ center: instance.getCenter().toArray(), zoom: instance.getZoom() }),
+          );
+        } catch {
+          /* View persistence is optional. */
+        }
+      }
+    });
     instance.addControl(new NavigationControl({ showCompass: false }), 'top-right');
     const timer = window.setTimeout(() => setProblem('底图加载较慢，地点和顺序仍可查看。'), 12000);
     instance.on('error', () => {
@@ -117,6 +158,16 @@ export default function MapCanvas({
     if (!readyMap || !instance || readyMap !== instance) return;
     markers.current.forEach((marker) => marker.remove());
     markers.current = [];
+    (instance.getSource('contextStops') as GeoJSONSource).setData({
+      type: 'FeatureCollection',
+      features: contextStops
+        .filter((stop) => stop.location)
+        .map((stop) => ({
+          type: 'Feature' as const,
+          properties: {},
+          geometry: { type: 'Point' as const, coordinates: coordinate(stop.location!) },
+        })),
+    });
     (instance.getSource('itinerary') as GeoJSONSource).setData({
       type: 'FeatureCollection',
       features: routeSegments(stops).map((coordinates) => ({
@@ -125,35 +176,70 @@ export default function MapCanvas({
         geometry: { type: 'LineString', coordinates },
       })),
     });
-    for (const stop of stops) {
-      if (!stop.location) continue;
-      const element = document.createElement('button');
-      element.type = 'button';
-      element.textContent = String(stop.number);
-      element.setAttribute(
-        'aria-label',
-        t('地图地点 {number} {name}', { number: stop.number, name: stop.location.name }),
-      );
-      element.dataset.stopId = stop.id;
-      element.title = stop.location.name;
-      element.addEventListener('click', () => latest.current.onSelect(stop.id));
-      const marker = new Marker({ element }).setLngLat(coordinate(stop.location)).addTo(instance);
-      markers.current.push(marker);
+    function drawMarkers() {
+      markers.current.forEach((marker) => marker.remove());
+      markers.current = [];
+      const groups = clusterStops(stops, (point) => instance!.project(point), selectedId);
+      for (const group of groups) {
+        const stop = group[0];
+        const element = document.createElement('button');
+        element.type = 'button';
+        const cluster = group.length > 1;
+        const selected = stop.id === selectedId;
+        element.className = buttonVariants({
+          variant: selected ? 'default' : 'outline',
+          size: 'sm',
+        });
+        element.setAttribute('aria-pressed', String(selected));
+        if (cluster) {
+          element.textContent = String(group.length);
+          element.setAttribute('aria-label', `展开 ${group.length} 个邻近地点`);
+          element.addEventListener('click', () => {
+            if (instance!.getZoom() >= 18) {
+              latest.current.onSelect(stop.id);
+              return;
+            }
+            const bounds = mapBounds(group);
+            if (bounds)
+              instance!.fitBounds(bounds, {
+                padding: 70,
+                maxZoom: Math.min(instance!.getZoom() + 3, 19),
+                duration: 0,
+              });
+          });
+        } else {
+          element.innerHTML = renderToStaticMarkup(<StopIcon kind={stop.kind} />);
+          element.append(document.createTextNode(String(stop.number)));
+          element.dataset.stopId = stop.id;
+          element.setAttribute(
+            'aria-label',
+            t('地图地点 {number} {name}', { number: stop.number, name: stop.location!.name }),
+          );
+          element.title =
+            stop.location!.name +
+            (stop.optional || stop.optionGroup || stop.recommendation ? ' · 候选' : '');
+          element.addEventListener('click', () => latest.current.onSelect(stop.id));
+        }
+        const marker = new Marker({ element })
+          .setLngLat(coordinate(stop.location!))
+          .addTo(instance!);
+        markers.current.push(marker);
+      }
     }
-    const bounds = mapBounds(stops);
-    if (bounds) instance.fitBounds(bounds, { padding: 50, maxZoom: 14, duration: 0 });
-  }, [stops, readyMap]);
+    drawMarkers();
+    instance.on('moveend', drawMarkers);
+    return () => {
+      instance.off('moveend', drawMarkers);
+    };
+  }, [stops, contextStops, selectedId, readyMap]);
 
+  const previousSelection = useRef(selectedId);
   useEffect(() => {
-    for (const marker of markers.current) {
-      const element = marker.getElement();
-      const selected = element.dataset.stopId === selectedId;
-      element.setAttribute('aria-pressed', String(selected));
-      element.className = `maplibregl-marker ${buttonVariants({ variant: selected ? 'default' : 'outline', size: 'icon-sm' })}`;
-    }
-    const location = stops.find((s) => s.id === selectedId)?.location;
+    if (previousSelection.current === selectedId) return;
+    previousSelection.current = selectedId;
+    const location = stops.find((stop) => stop.id === selectedId)?.location;
     if (location && ready) map.current?.easeTo({ center: coordinate(location), duration: 0 });
-  }, [selectedId, stops, readyMap]);
+  }, [selectedId, stops, ready]);
 
   return (
     <div className={expanded ? 'flex min-h-0 flex-1 flex-col' : ''}>

@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { Storage } from '../../src/main/storage';
 import { demoPlan } from '../../src/shared/demo';
 
-test('行程先展示每日总览，选择日期后只读当天，详情按需展开', async () => {
+test('连续行程可切换辅助总览，日期跳转和详情按需展开', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'vitrip-review-'));
   const store = new Storage(dir, { encrypt: (s) => Buffer.from(s), decrypt: (b) => b.toString() });
   const trip = store.create();
@@ -17,15 +17,19 @@ test('行程先展示每日总览，选择日期后只读当天，详情按需�
   });
   try {
     const page = await app.firstWindow();
+    await expect(page.getByRole('article', { name: '行程活动 1', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: '每日总览', exact: true }).click();
     await expect(page.getByRole('table', { name: '每日总览' })).toBeVisible();
     await expect(page.getByLabel('行程交互地图', { exact: true })).toHaveCount(0);
     await page.getByRole('button', { name: '查看第 2 天' }).click();
-    await expect(page.getByRole('region', { name: '当天安排' })).toContainText('早一点抵达岚山');
-    await expect(page.getByRole('region', { name: '当天安排' })).not.toContainText(
+    await expect(page.getByRole('region', { name: '第 2 天', exact: true })).toContainText(
+      '早一点抵达岚山',
+    );
+    await expect(page.getByRole('region', { name: '第 2 天', exact: true })).not.toContainText(
       '从清水寺走进东山',
     );
     await expect(
-      page.getByRole('article', { name: '行程活动 4', exact: true }).locator('details'),
+      page.getByRole('article', { name: '行程活动 4', exact: true }).locator('details').first(),
     ).not.toHaveAttribute('open', '');
     await page.screenshot({ path: 'test-results/itinerary-review-day.png' });
   } finally {
@@ -47,6 +51,7 @@ test('普吉岛原攻略：总览住宿、互斥备选、来源、准备清单�
   let app = await electron.launch({ args: ['.'], env: { ...process.env, VITRIP_TEST_DATA: dir } });
   try {
     let page = await app.firstWindow();
+    await page.getByRole('button', { name: '每日总览', exact: true }).click();
     const table = page.getByRole('table', { name: '每日总览' });
     await expect(table.getByRole('row')).toHaveCount(7);
     await expect(table.getByRole('row').filter({ hasText: '10月2日' })).toContainText(
@@ -55,13 +60,13 @@ test('普吉岛原攻略：总览住宿、互斥备选、来源、准备清单�
     await expect(table.getByRole('row').last()).toBeInViewport();
     await page.screenshot({ path: 'test-results/phuket-overview.png' });
     await page.getByRole('button', { name: '查看第 5 天', exact: true }).click();
-    const day = page.getByRole('region', { name: '当天安排' });
+    const day = page.getByRole('region', { name: '第 5 天', exact: true });
     await expect(day).toContainText('Hotel Clover Patong');
     await expect(day.getByText('择一', { exact: true })).toHaveCount(2);
     await expect(day.getByText('AI 建议', { exact: true })).toBeVisible();
     await expect(day.getByLabel('当天待确认')).toBeVisible();
     await page.screenshot({ path: 'test-results/phuket-day-compact.png' });
-    await day.locator('summary').first().click();
+    await day.getByText('详情与来源', { exact: true }).first().click();
     await day.getByText('原文摘录', { exact: true }).click();
     await expect(day.locator('blockquote')).toContainText('看天气、体力和兴致');
     await expect(day.getByRole('button', { name: '查看原文' })).toBeVisible();
@@ -87,6 +92,7 @@ test('普吉岛原攻略：总览住宿、互斥备选、来源、准备清单�
     await app.close();
     app = await electron.launch({ args: ['.'], env: { ...process.env, VITRIP_TEST_DATA: dir } });
     page = await app.firstWindow();
+    await page.getByRole('button', { name: '每日总览', exact: true }).click();
     await expect(page.getByRole('table', { name: '每日总览' })).toContainText(
       'Hotel Clover Patong',
     );

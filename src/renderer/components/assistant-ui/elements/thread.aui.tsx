@@ -1,5 +1,6 @@
+'use client';
+
 import { t } from '~/i18n';
-('use client');
 
 import {
   ComposerAddAttachment,
@@ -60,8 +61,6 @@ import {
   PhoneIcon,
   RefreshCwIcon,
   SquareIcon,
-  ThumbsDownIcon,
-  ThumbsUpIcon,
 } from 'lucide-react';
 import {
   createContext,
@@ -85,8 +84,12 @@ export type ThreadGroupPart = MessagePrimitive.GroupedParts.GroupPart;
 export type ThreadComponents = {
   ComposerQuote?: ComponentType;
   ComposerTools?: ComponentType;
+  ComposerInterrupt?: ComponentType;
   MessageHeader?: ComponentType;
+  MessageActions?: ComponentType;
+  MessageMenuActions?: ComponentType;
   Footer?: ComponentType;
+  Navigation?: ComponentType;
   Selection?: ComponentType;
   AssistantMessage?: ComponentType | undefined;
   Welcome?: ComponentType | undefined;
@@ -172,7 +175,12 @@ export const Thread: FC<ThreadProps> = ({ components = EMPTY_COMPONENTS, autoFoc
 };
 
 const ThreadRoot: FC<{ isEmpty: boolean; autoFocus: boolean }> = ({ isEmpty, autoFocus }) => {
-  const { Welcome = ThreadWelcome, Footer, Selection } = useContext(ThreadComponentsContext);
+  const {
+    Welcome = ThreadWelcome,
+    Footer,
+    Selection,
+    Navigation,
+  } = useContext(ThreadComponentsContext);
 
   return (
     <ThreadPrimitive.Root
@@ -189,10 +197,11 @@ const ThreadRoot: FC<{ isEmpty: boolean; autoFocus: boolean }> = ({ isEmpty, aut
         data-slot="aui_thread-viewport"
         className="relative flex flex-1 flex-col overflow-x-auto overflow-y-scroll scroll-smooth"
       >
+        {!isEmpty && Navigation && <Navigation />}
         <div
           className={cn(
             'mx-auto flex w-full max-w-(--thread-max-width) flex-1 flex-col px-4 pt-4',
-            isEmpty && 'justify-center',
+            isEmpty ? 'justify-center' : '@min-[420px]:pl-12',
           )}
         >
           <AuiIf condition={isNewChatView}>
@@ -405,8 +414,11 @@ const Composer: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
           {ComposerQuote && <ComposerQuote />}
           <ComposerAttachments />
           <ComposerPrimitive.Input
-            placeholder={t('想去哪、玩几天，或者只是一个模糊的想法…')}
-            disabled={isRunning}
+            placeholder={t(
+              isRunning
+                ? '补充要求，打断当前任务并继续…'
+                : '想去哪、玩几天，或者只是一个模糊的想法…',
+            )}
             className="aui-composer-input caret-primary placeholder:text-muted-foreground/60 max-h-48 min-h-10 w-full resize-none bg-transparent px-2.5 py-1 text-base leading-6 outline-none"
             rows={1}
             autoFocus={autoFocus}
@@ -421,7 +433,7 @@ const Composer: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
 };
 
 const ComposerAction: FC = () => {
-  const { ComposerTools } = useContext(ThreadComponentsContext);
+  const { ComposerTools, ComposerInterrupt } = useContext(ThreadComponentsContext);
   // The stop control only cancels the send while no run it could stop is going.
   const isSending = useAuiState(
     (s) =>
@@ -430,8 +442,12 @@ const ComposerAction: FC = () => {
 
   return (
     <div className="aui-composer-action-wrapper relative flex items-center justify-between">
-      {ComposerTools ? <ComposerTools /> : <ComposerAddAttachment />}
+      <div className="flex items-center gap-1">
+        <ComposerAddAttachment />
+        {ComposerTools && <ComposerTools />}
+      </div>
       <div className="flex items-center gap-1.5">
+        {ComposerInterrupt && <ComposerInterrupt />}
         <AuiIf condition={(s) => s.thread.capabilities.dictation}>
           <AuiIf condition={(s) => s.composer.dictation == null}>
             <ComposerPrimitive.Dictate asChild>
@@ -535,6 +551,7 @@ const AssistantMessage: FC = () => {
   return (
     <MessagePrimitive.Root
       id={'message-' + id}
+      data-message-id={id}
       tabIndex={-1}
       data-slot="aui_assistant-message-root"
       data-role="assistant"
@@ -631,6 +648,7 @@ const AssistantMessage: FC = () => {
 };
 
 const AssistantActionBar: FC = () => {
+  const { MessageMenuActions } = useContext(ThreadComponentsContext);
   return (
     <ActionBarPrimitive.Root
       hideWhenRunning
@@ -647,24 +665,6 @@ const AssistantActionBar: FC = () => {
           </AuiIf>
         </TooltipIconButton>
       </ActionBarPrimitive.Copy>
-      <AuiIf condition={(s) => s.thread.capabilities.feedback}>
-        <ActionBarPrimitive.FeedbackPositive asChild>
-          <TooltipIconButton
-            tooltip={t('有帮助')}
-            className="data-[submitted=true]:bg-accent data-[submitted=true]:text-accent-foreground"
-          >
-            <ThumbsUpIcon />
-          </TooltipIconButton>
-        </ActionBarPrimitive.FeedbackPositive>
-        <ActionBarPrimitive.FeedbackNegative asChild>
-          <TooltipIconButton
-            tooltip={t('没有帮助')}
-            className="data-[submitted=true]:bg-accent data-[submitted=true]:text-accent-foreground"
-          >
-            <ThumbsDownIcon />
-          </TooltipIconButton>
-        </ActionBarPrimitive.FeedbackNegative>
-      </AuiIf>
       <ActionBarPrimitive.Reload asChild>
         <TooltipIconButton tooltip={t('重新生成')}>
           <RefreshCwIcon />
@@ -682,6 +682,7 @@ const AssistantActionBar: FC = () => {
           sideOffset={6}
           className="aui-action-bar-more-content bg-popover text-popover-foreground data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:animate-in data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=closed]:animate-out data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 min-w-[8rem] overflow-hidden rounded-xl border p-1.5"
         >
+          {MessageMenuActions && <MessageMenuActions />}
           <ActionBarPrimitive.ExportMarkdown asChild>
             <ActionBarMorePrimitive.Item className="aui-action-bar-more-item hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm outline-none select-none">
               <DownloadIcon className="size-4" />
@@ -712,6 +713,7 @@ const UserMessage: FC = () => {
   return (
     <MessagePrimitive.Root
       id={'message-' + id}
+      data-message-id={id}
       tabIndex={-1}
       data-slot="aui_user-message-root"
       className="fade-in slide-in-from-bottom-1 animate-in grid auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] content-start gap-y-2 px-2 duration-150 [contain-intrinsic-size:auto_200px] [content-visibility:auto] [&:where(>*)]:col-start-2"
@@ -738,12 +740,14 @@ const UserMessage: FC = () => {
 };
 
 const UserActionBar: FC = () => {
+  const { MessageActions } = useContext(ThreadComponentsContext);
   return (
     <ActionBarPrimitive.Root
       hideWhenRunning
       autohide="not-last"
       className="aui-user-action-bar-root flex flex-col items-end"
     >
+      {MessageActions && <MessageActions />}
       <ActionBarPrimitive.Edit asChild>
         <TooltipIconButton tooltip={t('编辑')} className="aui-user-action-edit">
           <PencilIcon />

@@ -1,4 +1,6 @@
+import { backgroundTest } from './test-window-policy';
 import { WebContentsView } from 'electron';
+import type { PhotoCandidate } from '../shared/photos';
 import { z } from 'zod';
 import { allowedURL, needsApproval } from '../shared/policy';
 import type { Bounds, BrowserState } from '../shared/types';
@@ -12,6 +14,7 @@ const targetSchema = z.object({
 export class Browser {
   readonly view = new WebContentsView({
     webPreferences: {
+      backgroundThrottling: !backgroundTest(),
       partition: 'persist:vitrip-browser',
       sandbox: true,
       contextIsolation: true,
@@ -20,6 +23,7 @@ export class Browser {
   });
   private sequence = 0;
   private revision = 0;
+  private photoRefs = new Map<number, { revision: number; candidate: PhotoCandidate }>();
   constructor(
     private changed: (state: BrowserState) => void,
     private error: (text: string) => void,
@@ -52,6 +56,7 @@ export class Browser {
     });
     page.on('did-start-navigation', () => {
       this.revision++;
+      this.photoRefs.clear();
     });
     const broadcast = () => this.changed(this.state());
     page.on('did-navigate', broadcast);
@@ -84,7 +89,20 @@ export class Browser {
     this.view.setVisible(value.visible);
   }
   async navigate(url: string) {
-    await this.view.webContents.loadURL(allowedURL(url));
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        this.view.webContents.loadURL(allowedURL(url)),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => {
+            this.view.webContents.stop();
+            reject(new Error('网页访问超过 15 秒，请换来源或保存待采集事项'));
+          }, 15000);
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
     return '网页已打开。请 observe 读取页面。';
   }
   history(action: 'back' | 'forward' | 'reload') {
@@ -112,6 +130,98 @@ export class Browser {
       return JSON.stringify({url:location.href,title:document.title,text:document.body?.innerText.slice(0,18000)||'',elements});
     })()`);
     return z.string().parse(result);
+  }
+  async photoCandidates(): Promise<PhotoCandidate[]> {
+    this.sequence += 1000;
+    const revision = this.revision;
+    const candidates = z
+      .array(
+        z.object({
+          ref: z.number(),
+          pageUrl: z.string().url(),
+          pageTitle: z.string(),
+          imageUrl: z.string().url(),
+          alt: z.string(),
+          context: z.string(),
+          width: z.number(),
+          height: z.number(),
+        }),
+      )
+      .parse(
+        await this.evaluate(`(() => {
+      const refs=new Map();globalThis.__vitripPhotoRefs=refs;
+      let index=${this.sequence};
+      return [...document.images].filter(el=>{const r=el.getBoundingClientRect();return el.complete&&el.naturalWidth>=80&&el.naturalHeight>=60&&r.width>0&&r.height>0&&getComputedStyle(el).visibility!=='hidden'&&/^https?:/.test(el.currentSrc);}).slice(0,40).map(el=>{
+        const ref=++index;refs.set(ref,el);
+        return {ref,pageUrl:location.href,pageTitle:document.title.slice(0,500),imageUrl:el.currentSrc,alt:el.alt.slice(0,1000),context:(el.closest('figure')?.innerText||el.parentElement?.innerText||'').slice(0,2000),width:el.naturalWidth,height:el.naturalHeight};
+      });
+    })()`),
+      );
+    if (revision !== this.revision) throw new Error('页面已变化，请重新获取照片候选');
+    this.photoRefs.clear();
+    for (const candidate of candidates) this.photoRefs.set(candidate.ref, { revision, candidate });
+    return candidates;
+  }
+  async capturePhoto(
+    ref: number,
+  ): Promise<{ candidate: PhotoCandidate; png: Buffer; width: number; height: number }> {
+    const entry = this.photoRefs.get(ref);
+    if (!entry || entry.revision !== this.revision) throw new Error('图片引用失效，请重新获取候选');
+    const fingerprint = `(() => {const el=globalThis.__vitripPhotoRefs?.get(${ref});return el?.isConnected&&el.complete?JSON.stringify([el.currentSrc,el.alt.slice(0,1000),(el.closest('figure')?.innerText||el.parentElement?.innerText||'').slice(0,2000),location.href]):null;})()`;
+    const current = await this.evaluate(fingerprint);
+    if (
+      current !==
+      JSON.stringify([
+        entry.candidate.imageUrl,
+        entry.candidate.alt,
+        entry.candidate.context,
+        entry.candidate.pageUrl,
+      ])
+    )
+      throw new Error('图片已变化，请重新获取候选');
+    await this.command('Page.enable');
+    const tree = await this.command('Page.getResourceTree');
+    const resource = await this.command('Page.getResourceContent', {
+      frameId: tree.frameTree.frame.id,
+      url: entry.candidate.imageUrl,
+    });
+    if (
+      !resource.base64Encoded ||
+      typeof resource.content !== 'string' ||
+      resource.content.length > 12 * 1024 * 1024
+    )
+      throw new Error('图片资源无效或超过大小限制');
+    // Chromium decodes WebP/AVIF as well as JPEG/PNG. Decode only the bytes
+    // already read from this page, in its isolated world, without another fetch.
+    const image = z
+      .object({
+        data: z.string(),
+        width: z.number().int().positive(),
+        height: z.number().int().positive(),
+      })
+      .parse(
+        await this.evaluate(`(async()=>{
+      const bytes=Uint8Array.from(atob(${JSON.stringify(resource.content)}),c=>c.charCodeAt(0));
+      const bitmap=await createImageBitmap(new Blob([bytes]));
+      try {
+        if(bitmap.width*bitmap.height>24000000)throw new Error('图片分辨率过大');
+        const scale=Math.min(1,1280/bitmap.width,1280/bitmap.height);
+        const width=Math.max(1,Math.round(bitmap.width*scale)),height=Math.max(1,Math.round(bitmap.height*scale));
+        const canvas=new OffscreenCanvas(width,height);
+        canvas.getContext('2d').drawImage(bitmap,0,0,width,height);
+        const blob=await canvas.convertToBlob({type:'image/png'});
+        if(blob.size>8*1024*1024)throw new Error('图片缓存超过大小限制');
+        const buffer=new Uint8Array(await blob.arrayBuffer());
+        let text='';for(let i=0;i<buffer.length;i+=32768)text+=String.fromCharCode(...buffer.subarray(i,i+32768));
+        return {data:btoa(text),width,height};
+      } finally {bitmap.close();}
+    })()`),
+      );
+    const png = Buffer.from(image.data, 'base64');
+    if (png.length > 8 * 1024 * 1024) throw new Error('图片缓存超过大小限制');
+    if (entry.revision !== this.revision || (await this.evaluate(fingerprint)) !== current)
+      throw new Error('图片已变化，请重新获取候选');
+    return { candidate: entry.candidate, png, width: image.width, height: image.height };
   }
   async assertFresh(): Promise<void> {
     await this.evaluate(

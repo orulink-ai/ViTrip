@@ -1,3 +1,6 @@
+import { attachmentSchema } from '../shared/attachments';
+import { photoSchema } from '../shared/photos';
+import { editItinerary, type ItineraryEdit } from '../shared/journey-editing';
 import {
   notebookSchema,
   notebookPatchSchema,
@@ -11,32 +14,43 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { planSchema, journeySchema, journalSchema, nameSchema } from '../shared/schemas';
 import type { Settings, Trip, Journey } from '../shared/types';
+const messageSchema = z.object({
+  id: z.string(),
+  role: z.enum(['user', 'assistant']),
+  content: z.string(),
+  parts: z
+    .array(
+      z.discriminatedUnion('type', [
+        z.object({ type: z.literal('text'), text: z.string() }),
+        z.object({ type: z.literal('tool'), toolId: z.string() }),
+      ]),
+    )
+    .optional(),
+  feedback: z.enum(['positive', 'negative']).optional(),
+  quote: quoteSchema.optional(),
+  attachments: z.array(attachmentSchema).max(8).optional(),
+  activities: z
+    .array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        input: z.string(),
+        output: z.string(),
+        status: z.enum(['active', 'complete', 'error', 'interrupted']),
+        startedAt: z.number(),
+        finishedAt: z.number().optional(),
+      }),
+    )
+    .optional(),
+});
 const tripSchema = z.object({
   id: z.string(),
   journeyId: z.string().default(''),
   customTitle: z.boolean().optional(),
   title: z.string(),
-  messages: z.array(
-    z.object({
-      id: z.string(),
-      role: z.enum(['user', 'assistant']),
-      content: z.string(),
-      quote: quoteSchema.optional(),
-      activities: z
-        .array(
-          z.object({
-            id: z.string(),
-            name: z.string(),
-            input: z.string(),
-            output: z.string(),
-            status: z.enum(['active', 'complete', 'error', 'interrupted']),
-            startedAt: z.number(),
-            finishedAt: z.number().optional(),
-          }),
-        )
-        .optional(),
-    }),
-  ),
+  messages: z.array(messageSchema),
+  branches: z.array(z.array(messageSchema)).optional(),
+  contextKey: z.string().uuid().optional(),
   plan: planSchema.nullable(),
   updatedAt: z.number(),
 });
@@ -95,13 +109,21 @@ export class Storage {
     if (config) {
       const value = z
         .object({
+          runtime: z.enum(['pi', 'codex']).optional(),
+          codexModel: z.string().optional(),
+          codexEffort: z.string().optional(),
           baseURL: z.string(),
           model: z.string(),
+          imageInput: z.boolean().optional(),
           encryptedKey: z.string(),
           encryptedJevKey: z.string().optional(),
         })
         .parse(JSON.parse(config));
       this.settings = {
+        runtime: value.runtime,
+        codexModel: value.codexModel,
+        codexEffort: value.codexEffort,
+        imageInput: value.imageInput,
         jevApiKey: value.encryptedJevKey
           ? cipher.decrypt(Buffer.from(value.encryptedJevKey, 'base64'))
           : '',
@@ -178,6 +200,10 @@ export class Storage {
       ? this.cipher.encrypt(settings.apiKey).toString('base64')
       : '';
     this.write('settings', {
+      runtime: settings.runtime,
+      codexModel: settings.codexModel,
+      codexEffort: settings.codexEffort,
+      imageInput: settings.imageInput,
       baseURL: settings.baseURL,
       model: settings.model,
       encryptedKey,
@@ -216,7 +242,7 @@ export class Storage {
     this.save();
     return trip;
   }
-  renameJourney(id: string, title: string) {
+renameJourney(id: string, title: string) {
     const journey = this.journeys.find((j) => j.id === id);
     if (!journey) throw new Error('旅行文件夹不存在');
     journey.title = nameSchema.parse(title);
@@ -236,9 +262,76 @@ export class Storage {
   updatePlan(journeyId: string, plan: Trip['plan']) {
     const journey = this.journeys.find((j) => j.id === journeyId);
     if (!journey) throw new Error('旅行文件夹不存在');
+    const known = new Set((journey.photos ?? []).map((p) => p.id));
+    const old = journey.plan?.days.flatMap((d) => d.activities) ?? [];
+    const used = new Set<string>();
+    for (const activity of plan?.days.flatMap((d) => d.activities) ?? []) {
+      for (const id of activity.photoIds ?? []) {
+        if (!known.has(id)) throw new Error('照片不属于本旅行');
+        const photo = journey.photos!.find((p) => p.id === id)!;
+        if (
+          ![activity.title, activity.location?.name].some(
+            (name) => name?.toLocaleLowerCase() === photo.subject.toLocaleLowerCase(),
+          )
+        )
+          throw new Error('照片目标与活动名称不一致，请核对分店及地点');
+      }
+      if (!activity.id) {
+        const previous = old.find(
+          (a) =>
+            a.id &&
+            !used.has(a.id) &&
+            a.title === activity.title &&
+            a.location?.name === activity.location?.name,
+        );
+        if (previous?.id) activity.id = previous.id;
+      }
+      if (activity.id) {
+        if (used.has(activity.id)) throw new Error('活动 ID 重复');
+        used.add(activity.id);
+      }
+    }
     journey.plan = plan;
+    journey.revision++;
     journey.updatedAt = Date.now();
     for (const trip of this.trips) if (trip.journeyId === journeyId) trip.plan = plan;
+    this.save();
+    return journey;
+  }
+  editPlan(journeyId: string, revision: number, edit: ItineraryEdit) {
+    const journey = this.journeys.find((j) => j.id === journeyId);
+    if (!journey?.plan) throw new Error('行程不存在');
+    if (journey.revision !== revision) throw new Error('行程已更新，请重新操作');
+    return this.updatePlan(journeyId, editItinerary(journey.plan, edit));
+  }
+  savePhoto(journeyId: string, value: unknown, activityId?: string) {
+    const photo = photoSchema.parse(value);
+    const journey = this.journeys.find((j) => j.id === journeyId);
+    if (!journey) throw new Error('旅行不存在');
+    const photos = journey.photos ?? [];
+    if (photos.length >= 100 && !photos.some((p) => p.id === photo.id))
+      throw new Error('照片数量已达到上限');
+    if (activityId) {
+      let activity: NonNullable<Journey['plan']>['days'][number]['activities'][number] | undefined;
+      journey.plan?.days.forEach((d, di) =>
+        d.activities.forEach((a, ai) => {
+          if ((a.id ?? `vitrip-stop-${di}-${ai}`) === activityId) activity = a;
+        }),
+      );
+      if (!activity) throw new Error('活动不存在');
+      const target = activity;
+      if (
+        ![target.title, target.location?.name].some(
+          (name) => name?.toLocaleLowerCase() === photo.subject.toLocaleLowerCase(),
+        )
+      )
+        throw new Error('照片目标与活动名称不一致，请核对分店及地点');
+      target.photoIds = [...new Set([...(target.photoIds ?? []), photo.id])].slice(0, 8);
+    }
+    journey.photos = [...photos.filter((p) => p.id !== photo.id), photo];
+    journey.revision++;
+    journey.updatedAt = Date.now();
+    for (const trip of this.trips) if (trip.journeyId === journeyId) trip.plan = journey.plan;
     this.save();
     return journey;
   }

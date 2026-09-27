@@ -1,6 +1,19 @@
+import type { CodexModel } from '../shared/codex-models';
+import {
+  ModelSelectorRoot,
+  ModelSelectorTrigger,
+  ModelSelectorContent,
+} from './components/assistant-ui/elements/model-selector';
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from './components/ui/select';
 import { t } from './i18n';
 import { useEffect, useState } from 'react';
-import { Settings2, Check } from 'lucide-react';
+import { Check } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -22,16 +35,48 @@ export function SettingsDialog({
   config: PublicSettings;
   onSave: (value: PublicSettings) => void;
 }) {
+  const [runtime, setRuntime] = useState<'pi' | 'codex'>(config.runtime ?? 'pi');
+  const [codexModel, setCodexModel] = useState(config.codexModel ?? '');
+  const [codexEffort, setCodexEffort] = useState(config.codexEffort ?? '');
+  const [codexModels, setCodexModels] = useState<CodexModel[]>([]);
+  const [catalogError, setCatalogError] = useState('');
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  useEffect(() => {
+    if (!open || runtime !== 'codex') return;
+    let cancelled = false;
+    setCatalogLoading(true);
+    setCatalogError('');
+    void window.vitrip
+      .codexModels()
+      .then((models) => {
+        if (!cancelled) setCodexModels(models);
+      })
+      .catch((e) => {
+        if (!cancelled) setCatalogError(String(e));
+      })
+      .finally(() => {
+        if (!cancelled) setCatalogLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, runtime]);
+  const selectedModel = codexModels.find((m) => m.model === codexModel);
   const [baseURL, setBaseURL] = useState(config.baseURL);
   const [model, setModel] = useState(config.model);
+  const [imageInput, setImageInput] = useState(config.imageInput);
   const [key, setKey] = useState('');
   const [jevKey, setJevKey] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   useEffect(() => {
     if (open) {
+      setRuntime(config.runtime ?? 'pi');
+      setCodexModel(config.codexModel ?? '');
+      setCodexEffort(config.codexEffort ?? '');
       setBaseURL(config.baseURL);
       setModel(config.model);
+      setImageInput(config.imageInput);
       setKey('');
       setJevKey('');
       setError('');
@@ -43,7 +88,7 @@ export function SettingsDialog({
         <DialogHeader>
           <DialogTitle>{t('连接你的旅行助手')}</DialogTitle>
           <DialogDescription>
-            {t('Pi 管理旅行会话，DeepSeek 负责规划，Jev 操控本地浏览器。密钥加密保存在本机。')}
+            选择 Pi 或本机 Codex 规划旅行。Jev 操控本地浏览器，接口密钥加密保存在本机。
           </DialogDescription>
         </DialogHeader>
         <form
@@ -53,8 +98,12 @@ export function SettingsDialog({
             try {
               onSave(
                 await window.vitrip.settings({
+                  runtime,
+                  codexModel,
+                  codexEffort,
                   baseURL,
                   model,
+                  imageInput,
                   ...(key ? { apiKey: key } : {}),
                   ...(jevKey ? { jevApiKey: jevKey } : {}),
                 }),
@@ -67,51 +116,154 @@ export function SettingsDialog({
           }}
         >
           <label>
-            {t('接口地址')}
-            <Input
-              aria-label={t('模型接口地址')}
-              value={baseURL}
-              onChange={(event) => setBaseURL(event.target.value)}
-              required
-              placeholder="https://api.example.com/v1"
-            />
+            执行引擎
+            <Select value={runtime} onValueChange={(value) => setRuntime(value as 'pi' | 'codex')}>
+              <SelectTrigger aria-label="执行引擎">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pi">Pi · 自定义模型接口</SelectItem>
+                <SelectItem value="codex">Codex · 本机登录</SelectItem>
+              </SelectContent>
+            </Select>
           </label>
-          <label>
-            {t('模型名称')}
-            <Input
-              aria-label={t('模型名称')}
-              value={model}
-              onChange={(event) => setModel(event.target.value)}
-              required
-              placeholder={t('填写服务商提供的模型 ID')}
-            />
-          </label>
-          <label>
-            API Key <span>{config.hasKey ? t('已保存，留空则保留') : t('本地模型可留空')}</span>
-            <Input
-              aria-label="API Key"
-              type="password"
-              autoComplete="off"
-              value={key}
-              onChange={(event) => setKey(event.target.value)}
-              placeholder={config.hasKey ? t('••••••••（已加密保存）') : t('输入 API Key')}
-            />
-          </label>
-          {config.hasKey && (
-            <Button
-              variant="ghost"
-              type="button"
-              className="clear-key"
-              onClick={async () => {
-                try {
-                  onSave(await window.vitrip.settings({ baseURL, model, apiKey: '' }));
-                } catch (e) {
-                  setError(String(e));
-                }
-              }}
-            >
-              {t('清除已保存的密钥')}
-            </Button>
+          {runtime === 'codex' && (
+            <>
+              <p className="settings-note">
+                使用本机 Codex CLI 的登录与配置。首次使用请安装 Codex CLI，并在终端运行 codex
+                login。无需在这里填写 Codex 密钥。
+              </p>
+              <label>
+                Codex 模型
+                <ModelSelectorRoot
+                  models={[
+                    { id: '__default__', name: '跟随本机 Codex 配置' },
+                    ...codexModels.map((m) => ({
+                      id: m.model,
+                      name: m.displayName,
+                      description: m.description,
+                    })),
+                    ...(!selectedModel && codexModel ? [{ id: codexModel, name: codexModel }] : []),
+                  ]}
+                  value={codexModel || '__default__'}
+                  onValueChange={(value) => {
+                    setCodexModel(value === '__default__' ? '' : value);
+                    setCodexEffort(
+                      codexModels.find((m) => m.model === value)?.defaultReasoningEffort ?? '',
+                    );
+                  }}
+                >
+                  <ModelSelectorTrigger
+                    type="button"
+                    aria-label="Codex 模型"
+                    disabled={catalogLoading}
+                  />
+                  <ModelSelectorContent />
+                </ModelSelectorRoot>
+              </label>
+              {catalogLoading && <p role="status">正在读取可用模型…</p>}
+              {catalogError && <p role="alert">{catalogError}</p>}
+              <label>
+                思考强度
+                <Select
+                  value={codexEffort || '__default__'}
+                  onValueChange={(value) =>
+                    setCodexEffort(
+                      value === '__default__'
+                        ? (selectedModel?.defaultReasoningEffort ?? '')
+                        : value,
+                    )
+                  }
+                  disabled={!selectedModel || catalogLoading}
+                >
+                  <SelectTrigger aria-label="Codex 思考强度">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__default__">
+                      默认
+                      {selectedModel
+                        ? ` · ${selectedModel.defaultReasoningEffort}`
+                        : '（先选择模型）'}
+                    </SelectItem>
+                    {selectedModel?.supportedReasoningEfforts.map((effort) => (
+                      <SelectItem key={effort.reasoningEffort} value={effort.reasoningEffort}>
+                        {effort.reasoningEffort}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </label>
+            </>
+          )}
+          {runtime === 'pi' && (
+            <>
+              <label>
+                {t('接口地址')}
+                <Input
+                  aria-label={t('模型接口地址')}
+                  value={baseURL}
+                  onChange={(event) => setBaseURL(event.target.value)}
+                  required
+                  placeholder="https://api.example.com/v1"
+                />
+              </label>
+              <label>
+                {t('模型名称')}
+                <Input
+                  aria-label={t('模型名称')}
+                  value={model}
+                  onChange={(event) => setModel(event.target.value)}
+                  required
+                  placeholder={t('填写服务商提供的模型 ID')}
+                />
+              </label>
+              <label>
+                图片输入能力
+                <Select
+                  value={imageInput === undefined ? 'auto' : String(imageInput)}
+                  onValueChange={(value) =>
+                    setImageInput(value === 'auto' ? undefined : value === 'true')
+                  }
+                >
+                  <SelectTrigger aria-label="图片输入能力">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">自动识别服务商支持</SelectItem>
+                    <SelectItem value="true">已确认接口支持图片</SelectItem>
+                    <SelectItem value="false">仅文本</SelectItem>
+                  </SelectContent>
+                </Select>
+              </label>
+              <label>
+                API Key <span>{config.hasKey ? t('已保存，留空则保留') : t('本地模型可留空')}</span>
+                <Input
+                  aria-label="API Key"
+                  type="password"
+                  autoComplete="off"
+                  value={key}
+                  onChange={(event) => setKey(event.target.value)}
+                  placeholder={config.hasKey ? t('••••••••（已加密保存）') : t('输入 API Key')}
+                />
+              </label>
+              {config.hasKey && (
+                <Button
+                  variant="ghost"
+                  type="button"
+                  className="clear-key"
+                  onClick={async () => {
+                    try {
+                      onSave(await window.vitrip.settings({ baseURL, model, apiKey: '' }));
+                    } catch (e) {
+                      setError(String(e));
+                    }
+                  }}
+                >
+                  {t('清除已保存的密钥')}
+                </Button>
+              )}
+            </>
           )}
           <label>
             Jev · OpenRouter Key{' '}

@@ -28,6 +28,9 @@ export interface ItineraryStop {
   location?: ItineraryLocation;
   optional?: boolean;
   optionGroup?: string;
+  kind?: 'transport' | 'activity' | 'meal' | 'stay';
+  photoIds?: string[];
+  recommendation?: { reason: string; preferences: string[] };
 }
 export type Coordinate = [longitude: number, latitude: number];
 
@@ -37,7 +40,7 @@ export function itineraryStops(plan: Plan | null, dayIndex?: number): ItineraryS
     .flatMap((day, d) =>
       day.activities.map((activity, a) => ({
         ...activity,
-        id: `vitrip-stop-${d}-${a}`,
+        id: activity.id ?? `vitrip-stop-${d}-${a}`,
         number: ++number,
         dayIndex: d,
         dayTitle: day.title,
@@ -56,7 +59,7 @@ export function routeSegments(stops: ItineraryStop[]): Coordinate[][] {
   const segments: Coordinate[][] = [];
   let previous: ItineraryStop | undefined;
   for (const stop of stops) {
-    if (stop.optional || stop.optionGroup) {
+    if (stop.optional || stop.optionGroup || stop.recommendation) {
       previous = undefined;
       continue;
     }
@@ -70,7 +73,7 @@ export function routeSegments(stops: ItineraryStop[]): Coordinate[][] {
       const end = coordinate(stop.location);
       while (end[0] - start[0] > 180) end[0] -= 360;
       while (end[0] - start[0] < -180) end[0] += 360;
-      segments.push([start, end]);
+      if (start[0] !== end[0] || start[1] !== end[1]) segments.push([start, end]);
     }
     previous = stop;
   }

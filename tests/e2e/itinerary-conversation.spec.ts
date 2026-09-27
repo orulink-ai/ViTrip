@@ -133,9 +133,9 @@ test('source itinerary survives conversation follow-up, revision and restart', a
       expect(failures).toEqual([]);
     };
     await send('按原攻略整理', '已根据原攻略整理六天行程，住宿为计划，预订待确认。');
-    await expect(page.getByRole('table', { name: '每日总览' })).toBeVisible();
+    await expect(page.getByRole('region', { name: '交互行程正文' })).toBeVisible();
     await page.getByRole('button', { name: '查看第 5 天', exact: true }).click();
-    await expect(page.getByRole('region', { name: '当天安排', exact: true })).toContainText(
+    await expect(page.getByRole('region', { name: '第 5 天', exact: true })).toContainText(
       'Hotel Clover Patong',
     );
     await send(
@@ -152,7 +152,7 @@ test('source itinerary survives conversation follow-up, revision and restart', a
     app = await launch();
     page = await app.firstWindow();
     await page.getByRole('button', { name: '查看第 5 天', exact: true }).click();
-    const day = page.getByRole('region', { name: '当天安排', exact: true });
+    const day = page.getByRole('region', { name: '第 5 天', exact: true });
     await expect(day.getByRole('heading', { name: '10月2日 · 休息', exact: true })).toBeVisible();
     await expect(day).toContainText('Hotel Clover Patong');
     await day.getByText('详情与来源', { exact: true }).click();

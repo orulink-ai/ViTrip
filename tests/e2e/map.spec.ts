@@ -118,7 +118,19 @@ test('底图失败仍可筛选地点，未知坐标不落点，新旅行不会�
     );
     await expect(page.getByRole('button', { name: '重试底图' })).toHaveCount(0);
     await expect(page.getByLabel('选中地点')).toContainText('待定位');
-    await expect(page.getByRole('button', { name: /^地图地点 / })).toHaveCount(5);
+    // At compact widths nearby stops share a cluster; all five known stops remain represented.
+    await expect
+      .poll(() =>
+        page.locator('.maplibregl-marker button, button.maplibregl-marker').evaluateAll((buttons) =>
+          buttons.reduce((count, button) => {
+            const label = button.getAttribute('aria-label') ?? '';
+            if (label.startsWith('地图地点 ')) return count + 1;
+            const cluster = label.match(/^展开 (\d+) 个邻近地点$/);
+            return count + (cluster ? Number(cluster[1]) : 0);
+          }, 0),
+        ),
+      )
+      .toBe(5);
     await page.getByRole('button', { name: '创建新的旅行', exact: true }).click();
     await page.getByLabel('名称', { exact: true }).fill('新的旅行地图');
     await page.getByRole('button', { name: '保存', exact: true }).click();
