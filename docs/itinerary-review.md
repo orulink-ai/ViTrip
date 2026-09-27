@@ -106,3 +106,12 @@
 真实模型曾有两次可恢复的工具校验错误（journal 使用 planned、plan 遗漏顶层字段），随后自行重试成功，未把失败操作计作成功保存。基于这些证据，补充了工具说明：明确 journal 的三种状态和 plan 必填顶层字段；酒店晚数不计返程；issues 不重复已决定内容与住宿状态。四轮对话运行于补充规则前的安装包，第四轮用户澄清验证了模型能正确清理；补充规则后的代码另跑完整回归，不能将此记作新规则消除了所有模型错误。
 
 原始结果保存在本机 `artifacts/itinerary-review/live-first-turn.json`、`live-followup.json`、`live-revision.json`、`live-final.json` 与 `live-metrics.json`。比较前后数据库：原有旅行与会话的业务内容、笔记及设置保留；原有普吉岛行程有 5 处来源摘录末尾的单个空格被 schema 的 trim 规范化，同样映射到所属会话的 plan，除此之外无变化。测试旅行新增并保留供复查，未删改原有会话。
+
+### 最终完成核对
+
+- 补充整理规则后，重新执行 40 项单元测试、构建及完整 17 项 Electron E2E，全部通过。日志：`/tmp/vitrip-live-final-unit.log`、`/tmp/vitrip-live-final-build.log`、`/tmp/vitrip-live-final-e2e.log`。17 项已包含真实 180 秒期限耗尽测试。
+- 新安装包打包成功，`npm run test:package` 通过应用启动、示例行程、真实 HTTPS 页面及远程页面隔离验证。日志：`/tmp/vitrip-live-final-package.log`、`/tmp/vitrip-live-final-smoke.log`。
+- 用四轮真实对话最终保存的数据建立无密钥副本，在新版安装包中重启。六天总览、休息日、原酒店、可展开原文、已解决事项移出待确认、无坐标空状态均通过；人工实看 `live-restored-overview.png` 和 `live-restored-day.png`。日志：`/tmp/vitrip-raw-restore.log`。这是实际生成数据的重启回放，不是预设行程 fixture。
+- 安装包的 Playwright 连接曾超时，但直接连接页面 CDP 后页面响应与全部断言正常，原有安装包冒烟测试也通过。无密钥副本同样触发过启动器连接超时，因此此前仅凭该超时推断钥匙串阻塞证据不足；系统锁屏则有明确工具返回。最终没有绕过系统授权或读取密钥。
+
+本轮固定场景的 UI 呈现与 UX 行为验收均达到检查表要求，维持 **10/10**；真实模型四轮交互、数据保留与安装包重启证据已补齐。本分数不扩展为真实模型每次都能无误理解任意攻略的承诺：两次校验错误及首次晚数/待确认分类错误已如实保留在上面的迭代记录。
