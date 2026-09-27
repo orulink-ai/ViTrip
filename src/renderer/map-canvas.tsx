@@ -1,55 +1,29 @@
-import { renderToStaticMarkup } from 'react-dom/server';
-import { StopIcon } from './stop-icon';
+import { createPortal } from 'react-dom';
+import { MapStopMarker } from './map-stop-marker';
 import { clusterStops } from '../shared/map-clusters';
+import { mapFocusCamera } from '../shared/map-focus';
 import { t, useLocale } from './i18n';
 import { useEffect, useRef, useState } from 'react';
-import {
-  Map,
-  Marker,
-  NavigationControl,
-  setWorkerUrl,
-  type GeoJSONSource,
-  type StyleSpecification,
-} from 'maplibre-gl';
+import { Map, Marker, NavigationControl, setWorkerUrl, type GeoJSONSource } from 'maplibre-gl';
 import workerURL from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { Button, buttonVariants } from './components/ui/button';
 import { coordinate, mapBounds, routeSegments, type ItineraryStop } from '../shared/itinerary-map';
 
-setWorkerUrl(workerURL);
+import { loadMapStyle, streetStyle, withItineraryLayers } from './map-styles';
+import { MapAppearancePicker } from './map-appearance-picker';
+import {
+  readMapAppearance,
+  saveMapAppearance,
+  saveDefaultMapAppearance,
+  type MapAppearance,
+} from '../shared/map-appearance';
 
-const mapStyle = (): StyleSpecification => ({
-  version: 8,
-  sources: {
-    basemap: {
-      type: 'raster',
-      tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-      tileSize: 256,
-      maxzoom: 19,
-    },
-    contextStops: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
-    itinerary: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
-  },
-  layers: [
-    { id: 'background', type: 'background', paint: { 'background-color': '#f5f5f5' } },
-    { id: 'basemap', type: 'raster', source: 'basemap' },
-    {
-      id: 'context-stops',
-      type: 'circle',
-      source: 'contextStops',
-      paint: { 'circle-radius': 4, 'circle-color': '#737373', 'circle-opacity': 0.35 },
-    },
-    {
-      id: 'itinerary',
-      type: 'line',
-      source: 'itinerary',
-      paint: { 'line-color': '#171717', 'line-width': 2, 'line-dasharray': [3, 3] },
-    },
-  ],
-});
+setWorkerUrl(workerURL);
 
 export default function MapCanvas({
   stops,
+  journeyId,
   contextStops = [],
   viewportKey,
   selectedId,
@@ -58,6 +32,7 @@ export default function MapCanvas({
   expanded,
 }: {
   stops: ItineraryStop[];
+  journeyId?: string;
   viewportKey?: string;
   contextStops?: ItineraryStop[];
   selectedId?: string;
@@ -66,23 +41,52 @@ export default function MapCanvas({
   expanded: boolean;
 }) {
   const locale = useLocale();
+  const [appearance, setAppearance] = useState(() => readMapAppearance(localStorage, journeyId));
+  const previousView = useRef(appearance.view);
+  useEffect(() => {
+    if (journeyId)
+      setSaveProblem(!saveMapAppearance(localStorage, journeyId, appearanceRef.current));
+  }, [journeyId]);
+  const appearanceRef = useRef(appearance);
+  appearanceRef.current = appearance;
+  const [appliedStyle, setAppliedStyle] = useState('street');
+  const [styleRevision, setStyleRevision] = useState(0);
+  const [projection, setProjection] = useState('mercator');
+  const fetchingStyle = useRef(false);
+  const styleFailed = useRef(false);
+  const loadingTimer = useRef<number | undefined>(undefined);
+  const [saveProblem, setSaveProblem] = useState(false);
+  const changeAppearance = (value: MapAppearance) => {
+    setAppearance(value);
+    if (journeyId) setSaveProblem(!saveMapAppearance(localStorage, journeyId, value));
+  };
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<Map | null>(null);
   const markers = useRef<Marker[]>([]);
+  // Keep portal containers stable so camera movement does not reset pinned references.
+  const stopElements = useRef(new globalThis.Map<string, HTMLDivElement>());
   const latest = useRef({ onSelect, stops, selectedId });
   latest.current = { onSelect, stops, selectedId };
   const [readyMap, setReadyMap] = useState<Map | null>(null);
   const ready = readyMap !== null && readyMap === map.current;
   const [problem, setProblem] = useState('');
+  const [loadingTiles, setLoadingTiles] = useState(true);
+  const [tilted, setTilted] = useState(false);
   const [retry, setRetry] = useState(0);
+  const [markerSlots, setMarkerSlots] = useState<
+    { stop: ItineraryStop; element: HTMLDivElement }[]
+  >([]);
 
   useEffect(() => {
     if (!container.current) return;
     setReadyMap(null);
     setProblem('');
+    setLoadingTiles(true);
+    setAppliedStyle('street');
     let instance: Map;
     try {
-      let viewport: { center: [number, number]; zoom: number } | undefined;
+      let viewport:
+        { center: [number, number]; zoom: number; pitch?: number; bearing?: number } | undefined;
       try {
         const value = JSON.parse(localStorage.getItem(viewportKey ?? '') ?? 'null');
         if (
@@ -99,52 +103,108 @@ export default function MapCanvas({
       }
       instance = new Map({
         container: container.current,
-        style: mapStyle(),
+        style: withItineraryLayers(streetStyle()),
         attributionControl: false,
-        center: viewport?.center ?? [0, 0],
-        zoom: viewport?.zoom ?? 1,
+        center:
+          viewport?.center ??
+          (latest.current.stops.find((stop) => stop.location)?.location
+            ? coordinate(latest.current.stops.find((stop) => stop.location)!.location!)
+            : [0, 0]),
+        zoom: viewport?.zoom ?? (appearanceRef.current.view === 'globe' ? 1.5 : 1),
+        pitch: Number.isFinite(viewport?.pitch)
+          ? Math.max(0, Math.min(45, viewport!.pitch!))
+          : appearanceRef.current.view === 'tilted'
+            ? 45
+            : 0,
+        bearing: Number.isFinite(viewport?.bearing) ? viewport!.bearing : 0,
+        maxPitch: 45,
         maxZoom: 19,
         locale: {
           'NavigationControl.ZoomIn': t('放大地图'),
           'NavigationControl.ZoomOut': t('缩小地图'),
         },
-        bounds: viewport ? undefined : (mapBounds(latest.current.stops) ?? undefined),
-        fitBoundsOptions: { padding: 50, maxZoom: 14, duration: 0 },
+        bounds:
+          viewport || appearanceRef.current.view === 'globe'
+            ? undefined
+            : (mapBounds(latest.current.stops) ?? undefined),
+        fitBoundsOptions: { padding: 90, maxZoom: 14, duration: 0 },
       });
     } catch {
       setProblem('地图无法启动，仍可查看下方地点。');
       return;
     }
     map.current = instance;
+    setTilted(instance.getPitch() > 0);
     instance.on('moveend', () => {
+      setTilted(instance.getPitch() > 0);
       if (viewportKey) {
         try {
           localStorage.setItem(
             viewportKey,
-            JSON.stringify({ center: instance.getCenter().toArray(), zoom: instance.getZoom() }),
+            JSON.stringify({
+              center: instance.getCenter().toArray(),
+              zoom: instance.getZoom(),
+              pitch: instance.getPitch(),
+              bearing: instance.getBearing(),
+            }),
           );
         } catch {
           /* View persistence is optional. */
         }
       }
     });
-    instance.addControl(new NavigationControl({ showCompass: false }), 'top-right');
-    const timer = window.setTimeout(() => setProblem('底图加载较慢，地点和顺序仍可查看。'), 12000);
+    instance.addControl(new NavigationControl({ showCompass: true }), 'top-right');
+    loadingTimer.current = window.setTimeout(
+      () => setProblem('底图加载较慢，地点和顺序仍可查看。'),
+      12000,
+    );
     instance.on('error', () => {
-      window.clearTimeout(timer);
+      window.clearTimeout(loadingTimer.current);
+      setLoadingTiles(false);
       setProblem('底图加载失败，地点和顺序仍可查看。');
     });
-    instance.on('style.load', () => setReadyMap(instance));
+    instance.on('style.load', () => {
+      instance.setProjection({
+        type: appearanceRef.current.view === 'globe' ? 'globe' : 'mercator',
+      });
+      setProjection(instance.getProjection().type as string);
+      setReadyMap(instance);
+      setStyleRevision((n) => n + 1);
+      if (
+        !Object.keys(instance.getStyle().sources).some(
+          (id) => !['contextStops', 'itinerary'].includes(id),
+        )
+      ) {
+        window.clearTimeout(loadingTimer.current);
+        setLoadingTiles(false);
+      }
+    });
+    instance.on('idle', () => {
+      if (!fetchingStyle.current && !styleFailed.current && instance.areTilesLoaded()) {
+        window.clearTimeout(loadingTimer.current);
+        setLoadingTiles(false);
+        setProblem('');
+      }
+    });
     instance.on('sourcedata', (event) => {
-      if (event.sourceId === 'basemap' && event.sourceDataType === 'content') {
-        window.clearTimeout(timer);
+      if (
+        !fetchingStyle.current &&
+        !styleFailed.current &&
+        !['contextStops', 'itinerary'].includes(event.sourceId) &&
+        event.sourceDataType === 'content' &&
+        'tile' in event &&
+        event.tile &&
+        instance.areTilesLoaded()
+      ) {
+        window.clearTimeout(loadingTimer.current);
+        setLoadingTiles(false);
         setProblem('');
       }
     });
     const observer = new ResizeObserver(() => instance.resize());
     observer.observe(container.current);
     return () => {
-      window.clearTimeout(timer);
+      window.clearTimeout(loadingTimer.current);
       observer.disconnect();
       markers.current.forEach((marker) => marker.remove());
       markers.current = [];
@@ -155,9 +215,58 @@ export default function MapCanvas({
 
   useEffect(() => {
     const instance = map.current;
+    if (!readyMap || instance !== readyMap) return;
+    if (appearance.style === 'street' && instance.getSource('basemap')) return;
+    const controller = new AbortController();
+    fetchingStyle.current = true;
+    styleFailed.current = false;
+    setProblem('');
+    setLoadingTiles(true);
+    window.clearTimeout(loadingTimer.current);
+    loadingTimer.current = window.setTimeout(() => {
+      setProblem('底图加载较慢，地点和顺序仍可查看。');
+    }, 12000);
+    loadMapStyle(appearance.style, controller.signal)
+      .then((style) => {
+        if (controller.signal.aborted) return;
+        fetchingStyle.current = false;
+        instance.setStyle(style, { diff: false });
+        setAppliedStyle(appearance.style);
+      })
+      .catch(() => {
+        if (controller.signal.aborted) return;
+        fetchingStyle.current = false;
+        window.clearTimeout(loadingTimer.current);
+        setLoadingTiles(false);
+        styleFailed.current = true;
+        setProblem('地图样式加载失败，已保留原底图。');
+      });
+    return () => {
+      controller.abort();
+      fetchingStyle.current = false;
+    };
+  }, [appearance.style, readyMap]);
+
+  useEffect(() => {
+    const instance = map.current;
+    if (!readyMap || instance !== readyMap) return;
+    instance.setProjection({ type: appearance.view === 'globe' ? 'globe' : 'mercator' });
+    setProjection(instance.getProjection().type as string);
+    if (previousView.current === appearance.view) return;
+    previousView.current = appearance.view;
+    instance.easeTo({
+      pitch: appearance.view === 'tilted' ? 45 : 0,
+      ...(appearance.view === 'globe' ? { zoom: 1.5, bearing: 0 } : {}),
+      duration: 0,
+    });
+  }, [appearance.view, readyMap]);
+
+  useEffect(() => {
+    const instance = map.current;
     if (!readyMap || !instance || readyMap !== instance) return;
     markers.current.forEach((marker) => marker.remove());
     markers.current = [];
+    if (!instance.getSource('contextStops') || !instance.getSource('itinerary')) return;
     (instance.getSource('contextStops') as GeoJSONSource).setData({
       type: 'FeatureCollection',
       features: contextStops
@@ -170,16 +279,22 @@ export default function MapCanvas({
     });
     (instance.getSource('itinerary') as GeoJSONSource).setData({
       type: 'FeatureCollection',
-      features: routeSegments(stops).map((coordinates) => ({
-        type: 'Feature',
-        properties: {},
-        geometry: { type: 'LineString', coordinates },
-      })),
+      features: [...new Set(stops.map((stop) => stop.dayIndex))].flatMap((day) =>
+        routeSegments(stops.filter((stop) => stop.dayIndex === day)).map((coordinates) => ({
+          type: 'Feature' as const,
+          properties: { color: '#737373' },
+          geometry: { type: 'LineString' as const, coordinates },
+        })),
+      ),
     });
     function drawMarkers() {
       markers.current.forEach((marker) => marker.remove());
       markers.current = [];
-      const groups = clusterStops(stops, (point) => instance!.project(point), selectedId);
+      const slots: { stop: ItineraryStop; element: HTMLDivElement }[] = [];
+      const groups = clusterStops(stops, (point) => instance!.project(point), selectedId, {
+        width: 184,
+        height: 44,
+      });
       for (const group of groups) {
         const stop = group[0];
         const element = document.createElement('button');
@@ -191,8 +306,14 @@ export default function MapCanvas({
           size: 'sm',
         });
         element.setAttribute('aria-pressed', String(selected));
+        const color = '#475569';
+        element.style.maxWidth = '176px';
+        element.style.borderColor = color;
+        element.style.color = selected ? '#ffffff' : color;
+        element.style.backgroundColor = selected ? color : '#ffffff';
+        element.style.zIndex = selected ? '2' : '1';
         if (cluster) {
-          element.textContent = String(group.length);
+          element.textContent = `${group.length} ${t('个地点')}`;
           element.setAttribute('aria-label', `展开 ${group.length} 个邻近地点`);
           element.addEventListener('click', () => {
             if (instance!.getZoom() >= 18) {
@@ -208,45 +329,142 @@ export default function MapCanvas({
               });
           });
         } else {
-          element.innerHTML = renderToStaticMarkup(<StopIcon kind={stop.kind} />);
-          element.append(document.createTextNode(String(stop.number)));
-          element.dataset.stopId = stop.id;
-          element.setAttribute(
-            'aria-label',
-            t('地图地点 {number} {name}', { number: stop.number, name: stop.location!.name }),
+          const slot = stopElements.current.get(stop.id) ?? document.createElement('div');
+          stopElements.current.set(stop.id, slot);
+          slot.style.zIndex = selected ? '2' : '1';
+          slots.push({ stop, element: slot });
+          markers.current.push(
+            new Marker({ element: slot }).setLngLat(coordinate(stop.location!)).addTo(instance!),
           );
-          element.title =
-            stop.location!.name +
-            (stop.optional || stop.optionGroup || stop.recommendation ? ' · 候选' : '');
-          element.addEventListener('click', () => latest.current.onSelect(stop.id));
+          continue;
         }
         const marker = new Marker({ element })
           .setLngLat(coordinate(stop.location!))
           .addTo(instance!);
         markers.current.push(marker);
       }
+      const visibleIds = new Set(slots.map(({ stop }) => stop.id));
+      for (const id of stopElements.current.keys()) {
+        if (!visibleIds.has(id)) stopElements.current.delete(id);
+      }
+      setMarkerSlots(slots);
     }
     drawMarkers();
     instance.on('moveend', drawMarkers);
     return () => {
       instance.off('moveend', drawMarkers);
     };
-  }, [stops, contextStops, selectedId, readyMap]);
+  }, [stops, contextStops, selectedId, readyMap, styleRevision]);
 
   const previousSelection = useRef(selectedId);
+  const focusStop = (id: string | undefined) => {
+    const instance = map.current;
+    const location = latest.current.stops.find((stop) => stop.id === id)?.location;
+    if (!instance || !location) return;
+    instance.easeTo(
+      mapFocusCamera(
+        location,
+        instance.getZoom(),
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+      ),
+    );
+  };
   useEffect(() => {
-    if (previousSelection.current === selectedId) return;
+    if (!ready || previousSelection.current === selectedId) return;
     previousSelection.current = selectedId;
-    const location = stops.find((stop) => stop.id === selectedId)?.location;
-    if (location && ready) map.current?.easeTo({ center: coordinate(location), duration: 0 });
+    focusStop(selectedId);
   }, [selectedId, stops, ready]);
 
   return (
-    <div className={expanded ? 'flex min-h-0 flex-1 flex-col' : ''}>
+    <div className={expanded ? 'relative flex min-h-0 flex-1 flex-col' : ''}>
+      {markerSlots.map(({ stop, element }) =>
+        createPortal(
+          <MapStopMarker
+            stop={stop}
+            journeyKey={viewportKey?.replace(/:(all|\d+)$/, '') ?? 'temporary'}
+            selected={stop.id === selectedId}
+            onSelect={() => {
+              previousSelection.current = stop.id;
+              focusStop(stop.id);
+              onSelect(stop.id);
+            }}
+            onBrowse={onBrowse}
+          />,
+          element,
+          stop.id,
+        ),
+      )}
+      <p
+        className="absolute bottom-16 right-3 z-10 flex flex-wrap gap-3 rounded-md border bg-background px-3 py-2 text-xs shadow-sm"
+        aria-label="地图安排状态"
+      >
+        <span style={{ color: '#15803d' }}>● 已确定</span>
+        <span style={{ color: '#a16207' }}>● 待确定</span>
+        <span className="text-muted-foreground">悬浮查看引用 · 点击固定</span>
+      </p>
+      <div className="absolute bottom-7 right-3 z-10 flex flex-wrap items-center gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={!ready}
+          onClick={() => {
+            changeAppearance({ ...appearance, view: 'flat' });
+            const bounds = mapBounds(stops);
+            if (bounds)
+              map.current?.fitBounds(bounds, {
+                padding: 90,
+                maxZoom: 14,
+                pitch: 0,
+                bearing: 0,
+                duration: 0,
+              });
+          }}
+        >
+          {t('查看全部地点')}
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={!ready}
+          aria-pressed={tilted}
+          onClick={() => {
+            changeAppearance({ ...appearance, view: tilted ? 'flat' : 'tilted' });
+          }}
+        >
+          {t(tilted ? '平面视角' : '倾斜视角')}
+        </Button>
+        <MapAppearancePicker
+          value={appearance}
+          onChange={changeAppearance}
+          onDefault={() => saveDefaultMapAppearance(localStorage, appearance)}
+        />
+        {saveProblem && (
+          <span role="status" className="text-xs text-muted-foreground">
+            {t('外观暂时无法保存')}
+          </span>
+        )}
+        {tilted && (
+          <span className="text-xs text-muted-foreground">
+            {t(
+              appliedStyle === 'street'
+                ? '倾斜预览 · 不含建筑高度'
+                : '建筑立体效果取决于底图与缩放级别',
+            )}
+          </span>
+        )}
+      </div>
+      {loadingTiles && !problem && (
+        <p
+          role="status"
+          className="absolute bottom-28 right-3 z-10 rounded-md border bg-background px-3 py-2 text-xs text-muted-foreground"
+        >
+          {t('正在加载地图底图…')}
+        </p>
+      )}
       {problem && (
         <div
           role="status"
-          className="flex items-center justify-between gap-2 px-3 py-2 text-xs text-muted-foreground"
+          className="absolute bottom-28 right-3 z-10 flex max-w-[calc(100%-1.5rem)] items-center justify-between gap-2 rounded-md border bg-background px-3 py-2 text-xs text-muted-foreground"
         >
           <span>{t(problem)}</span>
           <Button size="xs" variant="outline" onClick={() => setRetry((n) => n + 1)}>
@@ -258,10 +476,25 @@ export default function MapCanvas({
         ref={container}
         aria-label="行程交互地图"
         data-map-ready={ready}
-        className={`maplibregl-map ${expanded ? 'min-h-56 flex-1' : 'h-60'}`}
+        data-map-style={appliedStyle}
+        data-tiles-loading={loadingTiles}
+        data-projection={projection}
+        data-perspective={tilted ? 'tilted' : 'flat'}
+        className={`maplibregl-map ${expanded ? 'min-h-56 flex-1' : 'h-72'}`}
       />
-      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-1 text-xs text-muted-foreground">
+      <div className="absolute inset-x-0 bottom-0 z-10 flex flex-wrap items-center justify-between gap-2 bg-background/90 px-3 py-1 text-xs text-muted-foreground">
         <span>{t('虚线仅示意行程顺序，不代表导航路线')}</span>
+        {appliedStyle !== 'street' && (
+          <a
+            href="https://www.openmaptiles.org/"
+            onClick={(event) => {
+              event.preventDefault();
+              onBrowse(event.currentTarget.href);
+            }}
+          >
+            © OpenMapTiles · OpenFreeMap
+          </a>
+        )}
         <a
           href="https://www.openstreetmap.org/copyright"
           onClick={(event) => {

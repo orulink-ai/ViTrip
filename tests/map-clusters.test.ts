@@ -19,3 +19,24 @@ it('preferences filter candidates only, never remove confirmed itinerary stops',
   );
   expect(filterCandidates(stops, '')).toEqual(stops);
 });
+
+it('groups overlapping name labels even across old grid boundaries', () => {
+  const stops = [0, 1].map((i) => ({
+    id: String(i),
+    number: i + 1,
+    dayIndex: 0,
+    dayTitle: '',
+    activityIndex: i,
+    title: '',
+    time: '',
+    detail: '',
+    location: { name: '', latitude: 0, longitude: i, precision: 'place' as const },
+  }));
+  const groups = clusterStops(
+    stops,
+    (_point, i) => ({ x: 150 + i * 10, y: 43 + i * 2 }),
+    undefined,
+    { width: 184, height: 44 },
+  );
+  expect(groups).toHaveLength(1);
+});

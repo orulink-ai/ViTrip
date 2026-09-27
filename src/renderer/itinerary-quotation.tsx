@@ -19,15 +19,22 @@ export function ItineraryQuotation({
   onQuote: (quote: Quote) => void;
 }) {
   const [within, setWithin] = useState(false);
+  const selectionWithinJourney = (selection: Selection | null) => {
+    if (!selection || selection.isCollapsed) return false;
+    if (root.current?.contains(selection.anchorNode) && root.current.contains(selection.focusNode))
+      return true;
+    const element = (node: Node | null) => (node instanceof Element ? node : node?.parentElement);
+    const popup = element(selection.anchorNode)?.closest('[data-map-journey]');
+    return (
+      !!popup &&
+      popup.getAttribute('data-map-journey') === journey.id &&
+      popup === element(selection.focusNode)?.closest('[data-map-journey]')
+    );
+  };
   useEffect(() => {
     const check = () => {
       const selection = window.getSelection();
-      setWithin(
-        !!selection &&
-          !selection.isCollapsed &&
-          !!root.current?.contains(selection.anchorNode) &&
-          !!root.current?.contains(selection.focusNode),
-      );
+      setWithin(selectionWithinJourney(selection));
     };
     document.addEventListener('selectionchange', check);
     document.addEventListener('mouseup', check);
@@ -35,11 +42,12 @@ export function ItineraryQuotation({
       document.removeEventListener('selectionchange', check);
       document.removeEventListener('mouseup', check);
     };
-  }, [root]);
+  }, [root, journey.id]);
   return (
     <SelectionToolbar.Root
       role="toolbar"
       aria-label="行程选中文字操作"
+      data-itinerary-quote-journey={journey.id}
       style={within ? undefined : { display: 'none' }}
     >
       <Button
@@ -48,13 +56,7 @@ export function ItineraryQuotation({
         onClick={() => {
           const selection = window.getSelection();
           const text = selection?.toString().trim();
-          if (
-            !text ||
-            !selection ||
-            !root.current?.contains(selection.anchorNode) ||
-            !root.current.contains(selection.focusNode)
-          )
-            return;
+          if (!text || !selection || !selectionWithinJourney(selection)) return;
           const anchor =
             selection.anchorNode instanceof Element
               ? selection.anchorNode

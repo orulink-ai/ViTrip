@@ -38,6 +38,7 @@ export interface Message {
   content: string;
 }
 export interface ItinerarySource {
+  title?: string;
   url?: string;
   excerpt: string;
 }
@@ -64,6 +65,7 @@ export interface Day {
     optionGroup?: string;
     optional?: boolean;
     source?: ItinerarySource;
+    sources?: ItinerarySource[];
   }[];
 }
 export interface Plan {

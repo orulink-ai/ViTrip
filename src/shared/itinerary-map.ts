@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { Plan } from './types';
+import type { Plan, ItinerarySource } from './types';
 
 export const locationSchema = z.object({
   name: z.string().trim().min(1).max(200),
@@ -30,6 +30,8 @@ export interface ItineraryStop {
   optionGroup?: string;
   kind?: 'transport' | 'activity' | 'meal' | 'stay';
   photoIds?: string[];
+  source?: ItinerarySource;
+  sources?: ItinerarySource[];
   recommendation?: { reason: string; preferences: string[] };
 }
 export type Coordinate = [longitude: number, latitude: number];
