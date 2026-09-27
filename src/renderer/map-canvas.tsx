@@ -8,6 +8,7 @@ import { Map, Marker, NavigationControl, setWorkerUrl, type GeoJSONSource } from
 import workerURL from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { Button, buttonVariants } from './components/ui/button';
+import { Badge } from './components/ui/badge';
 import { coordinate, mapBounds, routeSegments, type ItineraryStop } from '../shared/itinerary-map';
 
 import { loadMapStyle, streetStyle, withItineraryLayers } from './map-styles';
@@ -186,20 +187,15 @@ export default function MapCanvas({
         setProblem('');
       }
     });
-    instance.on('sourcedata', (event) => {
-      if (
-        !fetchingStyle.current &&
-        !styleFailed.current &&
-        !['contextStops', 'itinerary'].includes(event.sourceId) &&
-        event.sourceDataType === 'content' &&
-        'tile' in event &&
-        event.tile &&
-        instance.areTilesLoaded()
-      ) {
-        window.clearTimeout(loadingTimer.current);
-        setLoadingTiles(false);
-        setProblem('');
-      }
+    instance.on('movestart', () => {
+      if (styleFailed.current) return;
+      setLoadingTiles(true);
+      setProblem('');
+      window.clearTimeout(loadingTimer.current);
+      loadingTimer.current = window.setTimeout(
+        () => setProblem('底图加载较慢，地点和顺序仍可查看。'),
+        12000,
+      );
     });
     const observer = new ResizeObserver(() => instance.resize());
     observer.observe(container.current);
@@ -256,7 +252,11 @@ export default function MapCanvas({
     previousView.current = appearance.view;
     instance.easeTo({
       pitch: appearance.view === 'tilted' ? 45 : 0,
-      ...(appearance.view === 'globe' ? { zoom: 1.5, bearing: 0 } : {}),
+      ...(appearance.view === 'globe'
+        ? { zoom: 1.5, bearing: 0 }
+        : appearance.view === 'tilted'
+          ? { zoom: Math.max(15, instance.getZoom()) }
+          : {}),
       duration: 0,
     });
   }, [appearance.view, readyMap]);
@@ -408,7 +408,7 @@ export default function MapCanvas({
           variant="outline"
           disabled={!ready}
           onClick={() => {
-            changeAppearance({ ...appearance, view: 'flat' });
+            changeAppearance({ style: 'liberty', view: 'flat' });
             const bounds = mapBounds(stops);
             if (bounds)
               map.current?.fitBounds(bounds, {
@@ -422,17 +422,6 @@ export default function MapCanvas({
         >
           {t('查看全部地点')}
         </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={!ready}
-          aria-pressed={tilted}
-          onClick={() => {
-            changeAppearance({ ...appearance, view: tilted ? 'flat' : 'tilted' });
-          }}
-        >
-          {t(tilted ? '平面视角' : '倾斜视角')}
-        </Button>
         <MapAppearancePicker
           value={appearance}
           onChange={changeAppearance}
@@ -444,13 +433,13 @@ export default function MapCanvas({
           </span>
         )}
         {tilted && (
-          <span className="text-xs text-muted-foreground">
+          <Badge variant="secondary">
             {t(
-              appliedStyle === 'street'
-                ? '倾斜预览 · 不含建筑高度'
-                : '建筑立体效果取决于底图与缩放级别',
+              appliedStyle === 'liberty'
+                ? '支持立体建筑，放大至街区查看'
+                : '倾斜预览 · 不含建筑高度',
             )}
-          </span>
+          </Badge>
         )}
       </div>
       {loadingTiles && !problem && (

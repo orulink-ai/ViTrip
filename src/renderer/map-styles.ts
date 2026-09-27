@@ -1,15 +1,6 @@
 import type { StyleSpecification } from 'maplibre-gl';
 import type { MapStyleId } from '../shared/map-appearance';
 
-export const mapStyleLabels: Record<MapStyleId, string> = {
-  street: '经典街道 · OpenStreetMap',
-  liberty: '自然 · Liberty',
-  bright: '明亮 · Bright',
-  positron: '简洁 · Positron',
-  dark: '深色 · Dark',
-  fiord: '冷色 · Fiord',
-};
-
 export function streetStyle(): StyleSpecification {
   return {
     version: 8,

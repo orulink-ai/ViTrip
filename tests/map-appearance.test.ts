@@ -19,7 +19,7 @@ function storage() {
 describe('旅行地图外观偏好', () => {
   it('同一旅行共享外观，不影响其他旅行', () => {
     const store = storage();
-    const chosen = { style: 'dark', view: 'globe' } as const;
+    const chosen = { style: 'liberty', view: 'globe' } as const;
     saveMapAppearance(store, 'kyoto', chosen);
     expect(readMapAppearance(store, 'kyoto')).toEqual(chosen);
     expect(readMapAppearance(store, 'tokyo')).toEqual(DEFAULT_MAP_APPEARANCE);
@@ -28,7 +28,7 @@ describe('旅行地图外观偏好', () => {
   it('设为默认仅影响尚未保存偏好的旅行', () => {
     const store = storage();
     saveMapAppearance(store, 'kyoto', DEFAULT_MAP_APPEARANCE);
-    const chosen = { style: 'dark', view: 'globe' } as const;
+    const chosen = { style: 'liberty', view: 'globe' } as const;
     saveDefaultMapAppearance(store, chosen);
     expect(readMapAppearance(store, 'new')).toEqual(chosen);
     expect(readMapAppearance(store, 'kyoto')).toEqual(DEFAULT_MAP_APPEARANCE);
@@ -52,4 +52,18 @@ describe('旅行地图外观偏好', () => {
     expect(saveMapAppearance(unavailable, 'kyoto', DEFAULT_MAP_APPEARANCE)).toBe(false);
     expect(saveDefaultMapAppearance(unavailable, DEFAULT_MAP_APPEARANCE)).toBe(false);
   });
+});
+
+it('旧风格按视角迁移为四种保留模式', () => {
+  const store = storage();
+  for (const style of ['street', 'positron', 'dark', 'fiord', 'bright']) {
+    for (const view of ['flat', 'tilted', 'globe']) {
+      store.setItem('vitrip-map-appearance:old', JSON.stringify({ style, view }));
+      expect(readMapAppearance(store, 'old')).toEqual({
+        style: view === 'tilted' ? 'bright' : 'liberty',
+        view,
+      });
+    }
+  }
+  expect(DEFAULT_MAP_APPEARANCE).toEqual({ style: 'liberty', view: 'flat' });
 });

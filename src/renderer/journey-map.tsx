@@ -80,7 +80,7 @@ export function JourneyMap({
     >
       <div
         className={
-          expanded ? 'absolute inset-x-3 top-3 z-10 flex items-start gap-2 pr-10' : 'flex gap-2 p-3'
+          expanded ? 'absolute left-3 right-14 top-3 z-10 flex items-start gap-2' : 'flex gap-2 p-3'
         }
       >
         <Button

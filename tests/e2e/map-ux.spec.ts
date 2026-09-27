@@ -31,7 +31,9 @@ test('地图直接标注地点，可切日期、倾斜与回到全貌，列表�
     await expect(marker).toContainText('清水寺');
     await expect(page.getByLabel('选中地点')).toContainText('从清水寺走进东山');
     await expect(page.getByText('底图加载失败，地点和顺序仍可查看。')).toBeVisible();
-    await page.getByRole('button', { name: '倾斜视角', exact: true }).click();
+    await page.getByRole('button', { name: '地图外观', exact: true }).click();
+    await page.getByRole('button', { name: '倾斜立体', exact: true }).click();
+    await page.keyboard.press('Escape');
     await expect(page.getByLabel('行程交互地图', { exact: true })).toHaveAttribute(
       'data-perspective',
       'tilted',

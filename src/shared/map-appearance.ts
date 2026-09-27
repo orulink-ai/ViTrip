@@ -5,7 +5,14 @@ export interface MapAppearance {
   style: MapStyleId;
   view: MapView;
 }
-export const DEFAULT_MAP_APPEARANCE: MapAppearance = { style: 'street', view: 'flat' };
+export const DEFAULT_MAP_APPEARANCE: MapAppearance = { style: 'liberty', view: 'flat' };
+export const MAP_MODES = [
+  { label: '平面', style: 'liberty', view: 'flat' },
+  { label: '倾斜', style: 'bright', view: 'tilted' },
+  { label: '倾斜立体', style: 'liberty', view: 'tilted' },
+  { label: '3D', style: 'liberty', view: 'globe' },
+] as const satisfies readonly (MapAppearance & { label: string })[];
+
 const prefix = 'vitrip-map-appearance:';
 const defaultKey = `${prefix}default`;
 type PreferenceStorage = Pick<Storage, 'getItem' | 'setItem'>;
@@ -18,7 +25,10 @@ function parse(value: string | null): MapAppearance | undefined {
       MAP_STYLES.includes(candidate.style) &&
       ['flat', 'tilted', 'globe'].includes(candidate.view)
     ) {
-      return { style: candidate.style, view: candidate.view };
+      return {
+        style: candidate.view === 'tilted' && candidate.style !== 'liberty' ? 'bright' : 'liberty',
+        view: candidate.view,
+      };
     }
   } catch {
     /* Old or malformed preferences fall back to defaults. */

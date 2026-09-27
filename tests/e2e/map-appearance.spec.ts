@@ -34,8 +34,14 @@ test('地图外观即时切换、地球可拖动，按旅行保存并跨日期�
     const map = page.getByLabel('行程交互地图', { exact: true });
     await expect(map).toHaveAttribute('data-map-ready', 'true');
     await page.getByRole('button', { name: '地图外观', exact: true }).click();
-    await page.getByRole('button', { name: '深色 · Dark', exact: true }).click();
-    await expect(map).toHaveAttribute('data-map-style', 'dark');
+    await expect(
+      page.getByRole('button', { name: /自然 ·|明亮 ·|深色 ·|冷色 ·|简洁 ·|经典街道 ·/ }),
+    ).toHaveCount(0);
+    for (const name of ['平面', '倾斜', '倾斜立体', '3D']) {
+      await expect(page.getByRole('button', { name, exact: true })).toBeVisible();
+    }
+    await page.getByRole('button', { name: '倾斜立体', exact: true }).click();
+    await expect(map).toHaveAttribute('data-map-style', 'liberty');
     await expect(page.getByLabel('选中地点')).toContainText('从清水寺走进东山');
     await expect(
       page.getByRole('button', { name: '地图地点 1 清水寺', exact: true }),
@@ -43,15 +49,15 @@ test('地图外观即时切换、地球可拖动，按旅行保存并跨日期�
     await page.route('https://tiles.openfreemap.org/styles/bright', (route) =>
       route.fulfill({ status: 503, body: 'unavailable' }),
     );
-    await page.getByRole('button', { name: '明亮 · Bright', exact: true }).click();
+    await page.getByRole('button', { name: '倾斜', exact: true }).click();
     await expect(page.getByText('地图样式加载失败，已保留原底图。', { exact: true })).toBeVisible();
-    await expect(map).toHaveAttribute('data-map-style', 'dark');
+    await expect(map).toHaveAttribute('data-map-style', 'liberty');
     await expect(page.getByLabel('选中地点')).toContainText('从清水寺走进东山');
-    await page.getByRole('button', { name: '深色 · Dark', exact: true }).click();
-    await page.getByRole('button', { name: '地球', exact: true }).click();
+    await page.getByRole('button', { name: '倾斜立体', exact: true }).click();
+    await page.getByRole('button', { name: '3D', exact: true }).click();
     await expect(map).toHaveAttribute('data-projection', 'globe');
     await page.keyboard.press('Escape');
-    await page.getByRole('button', {name:'收起地点列表', exact:true}).click();
+    await page.getByRole('button', { name: '收起地点列表', exact: true }).click();
     const snapshot = await page.evaluate(() => window.vitrip.init());
     const viewportKey = `vitrip-map:${snapshot.trips[0].journeyId}:0`;
     const beforeDrag = await page.evaluate((key) => localStorage.getItem(key), viewportKey);
@@ -67,7 +73,7 @@ test('地图外观即时切换、地球可拖动，按旅行保存并跨日期�
       .not.toBe(beforeDrag);
     await expect(map.locator('canvas')).toBeVisible();
     await page.getByRole('button', { name: '地图第 2 天', exact: true }).click();
-    await expect(map).toHaveAttribute('data-map-style', 'dark');
+    await expect(map).toHaveAttribute('data-map-style', 'liberty');
     await expect(map).toHaveAttribute('data-projection', 'globe');
     await page.screenshot({ path: 'test-results/map-appearance-globe.png' });
     expect(errors).toEqual([]);
@@ -78,7 +84,7 @@ test('地图外观即时切换、地球可拖动，按旅行保存并跨日期�
     await page.getByRole('tab', { name: '行程地图', exact: true }).click();
     await expect(page.getByLabel('行程交互地图', { exact: true })).toHaveAttribute(
       'data-map-style',
-      'dark',
+      'liberty',
     );
     await expect(page.getByLabel('行程交互地图', { exact: true })).toHaveAttribute(
       'data-projection',
