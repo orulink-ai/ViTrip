@@ -410,7 +410,8 @@
   height: 640px;
   left: -45px;
   top: -65px;
-  opacity: 0.65;
+  opacity: 0;
+  transition: opacity 400ms ease;
   mask-image: linear-gradient(135deg, transparent, black 35%);
 }
 .home-globe-action {
@@ -431,5 +432,25 @@
   .home-globe-corner {
     height: 170px;
     width: 270px;
+  }
+}
+
+.home-globe-preview[data-ready='true'] {
+  opacity: 0.65;
+}
+.home-globe-map {
+  opacity: 0;
+  transition: opacity 400ms ease;
+}
+.home-globe-map[data-ready='true'] {
+  opacity: 1;
+}
+.home-globe-corner:has(.home-globe-preview:not([data-ready='true'])) .home-globe-action > span {
+  visibility: hidden;
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-globe-preview,
+  .home-globe-map {
+    transition: none;
   }
 }

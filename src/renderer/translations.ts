@@ -1,4 +1,5 @@
 export const translations: Record<string, string> = {
+  '地球正在准备中…': 'Preparing the globe…',
   旅行地球: 'Travel globe',
   旅行地球入口: 'Travel globe entry',
   展开旅行地球: 'Explore travel globe',
