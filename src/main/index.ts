@@ -1,3 +1,4 @@
+import { backgroundTest } from './test-window-policy';
 import { RequestOutcome } from './request-outcome';
 import { messagePrompt, quoteSchema, type Quote } from '../shared/notebook';
 import { app, BrowserWindow, ipcMain, safeStorage, dialog, Menu } from 'electron';
@@ -26,6 +27,8 @@ import { demoPlan } from '../shared/demo';
 import type { Event, Trip } from '../shared/types';
 
 app.setName('ViTrip');
+const backgroundTesting = backgroundTest();
+if (backgroundTesting && process.platform === 'darwin') app.setActivationPolicy('accessory');
 if (process.env.VITRIP_TEST_DATA) app.setPath('userData', process.env.VITRIP_TEST_DATA);
 let window: BrowserWindow | null = null;
 app
@@ -70,6 +73,9 @@ app
     let pending: { id: string; resolve: (allow: boolean) => void } | null = null;
     const entry = path.join(__dirname, 'renderer/index.html');
     window = new BrowserWindow({
+      show: !backgroundTesting,
+      focusable: !backgroundTesting,
+      skipTaskbar: backgroundTesting,
       width: 1480,
       height: 960,
       minWidth: 1040,
@@ -79,6 +85,7 @@ app
       titleBarStyle: 'hiddenInset',
       trafficLightPosition: { x: 20, y: 20 },
       webPreferences: {
+        backgroundThrottling: !backgroundTesting,
         preload: path.join(__dirname, 'preload.cjs'),
         contextIsolation: true,
         nodeIntegration: false,

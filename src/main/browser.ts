@@ -1,3 +1,4 @@
+import { backgroundTest } from './test-window-policy';
 import { WebContentsView } from 'electron';
 import { z } from 'zod';
 import { allowedURL, needsApproval } from '../shared/policy';
@@ -12,6 +13,7 @@ const targetSchema = z.object({
 export class Browser {
   readonly view = new WebContentsView({
     webPreferences: {
+      backgroundThrottling: !backgroundTest(),
       partition: 'persist:vitrip-browser',
       sandbox: true,
       contextIsolation: true,
