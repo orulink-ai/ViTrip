@@ -1,6 +1,11 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { API, Event } from '../shared/types';
 const api: API = {
+  editItinerary: (id, revision, edit) =>
+    ipcRenderer.invoke('vitrip:editItinerary', id, revision, edit),
+  photo: (id, photoId) => ipcRenderer.invoke('vitrip:photo', id, photoId),
+  copyLink: (target) => ipcRenderer.invoke('vitrip:copyLink', target),
+  openLink: (url) => ipcRenderer.invoke('vitrip:openLink', url),
   init: () => ipcRenderer.invoke('vitrip:init'),
   create: (id) => ipcRenderer.invoke('vitrip:create', id),
   createJourney: (title) => ipcRenderer.invoke('vitrip:createJourney', title),

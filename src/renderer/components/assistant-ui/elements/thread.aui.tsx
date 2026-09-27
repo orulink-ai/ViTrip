@@ -86,6 +86,7 @@ export type ThreadComponents = {
   ComposerQuote?: ComponentType;
   ComposerTools?: ComponentType;
   MessageHeader?: ComponentType;
+  MessageActions?: ComponentType;
   Footer?: ComponentType;
   Selection?: ComponentType;
   AssistantMessage?: ComponentType | undefined;
@@ -631,12 +632,14 @@ const AssistantMessage: FC = () => {
 };
 
 const AssistantActionBar: FC = () => {
+  const { MessageActions } = useContext(ThreadComponentsContext);
   return (
     <ActionBarPrimitive.Root
       hideWhenRunning
       autohide="not-last"
       className="aui-assistant-action-bar-root text-muted-foreground animate-in fade-in col-start-3 row-start-2 -ms-1 flex gap-1 duration-200"
     >
+      {MessageActions && <MessageActions />}
       <ActionBarPrimitive.Copy asChild>
         <TooltipIconButton tooltip={t('复制')}>
           <AuiIf condition={(s) => s.message.isCopied}>
@@ -738,12 +741,14 @@ const UserMessage: FC = () => {
 };
 
 const UserActionBar: FC = () => {
+  const { MessageActions } = useContext(ThreadComponentsContext);
   return (
     <ActionBarPrimitive.Root
       hideWhenRunning
       autohide="not-last"
       className="aui-user-action-bar-root flex flex-col items-end"
     >
+      {MessageActions && <MessageActions />}
       <ActionBarPrimitive.Edit asChild>
         <TooltipIconButton tooltip={t('编辑')} className="aui-user-action-edit">
           <PencilIcon />

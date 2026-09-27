@@ -1,13 +1,8 @@
 import { t } from '../i18n';
 import type { ToolActivity } from '../../shared/types';
-import { CircleCheck, CircleX, LoaderCircle, PauseCircle } from 'lucide-react';
-import {
-  ChainOfThought,
-  ChainOfThoughtHeader,
-  ChainOfThoughtContent,
-  ChainOfThoughtStep,
-} from './ai-elements/chain-of-thought';
-import { Tool, ToolHeader, ToolContent } from './ai-elements/tool';
+import { ToolGroup } from './assistant-ui/elements/tool-group.aui';
+import { ToolFallback } from './assistant-ui/elements/tool-fallback.aui';
+import type { ToolCallMessagePartStatus } from '@assistant-ui/react';
 
 const labels: Record<string, string> = {
   bash: '执行本机命令',
@@ -27,63 +22,53 @@ const labels: Record<string, string> = {
   scroll: '浏览页面',
   plan: '更新行程',
   journal: '整理旅行手册',
+  photo_candidates: '读取来源照片',
+  save_photo: '保存来源照片',
+  inspect_photo: '查看已存照片',
 };
 const statuses = { active: '进行中', complete: '已完成', error: '失败', interrupted: '已中断' };
-const icons = {
-  active: LoaderCircle,
-  complete: CircleCheck,
-  error: CircleX,
-  interrupted: PauseCircle,
-};
 export function AgentActivity({ steps }: { steps: ToolActivity[] }) {
   return (
-    <ChainOfThought defaultOpen data-testid="agent-activity">
-      <ChainOfThoughtHeader>
-        {t('执行过程 ·')}
-        {steps.length}
-        {t('步')}
-      </ChainOfThoughtHeader>
-      <ChainOfThoughtContent>
-        {steps.map((step) => (
-          <ChainOfThoughtStep
-            key={step.id}
-            icon={icons[step.status]}
-            label={t(labels[step.name] ?? step.name)}
-            status={step.status === 'active' ? 'active' : 'complete'}
-            description={`${t(statuses[step.status])}${step.finishedAt ? ` · ${((step.finishedAt - step.startedAt) / 1000).toFixed(1)} ${t('秒')}` : ''}`}
-          >
-            <Tool>
-              <ToolHeader
-                type="dynamic-tool"
-                toolName={step.name}
-                title={`${step.name} · ${t('查看详情')}`}
-                state={
-                  step.status === 'active'
-                    ? 'input-available'
-                    : step.status === 'complete'
-                      ? 'output-available'
-                      : 'output-error'
-                }
-              />
-              <ToolContent>
-                <div>
-                  <p className="text-xs text-muted-foreground">{t('调用参数')}</p>
-                  <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all text-xs">
-                    {step.input}
-                  </pre>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">{t('执行结果')}</p>
-                  <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all text-xs">
-                    {step.output ||
-                      (step.status === 'active' ? t('等待工具返回…') : t('未返回结果'))}
-                  </pre>
-                </div>
-              </ToolContent>
-            </Tool>
-          </ChainOfThoughtStep>
-        ))}
-      </ChainOfThoughtContent>
-    </ChainOfThought>
+    <ToolGroup.Root defaultOpen data-testid="agent-activity">
+      <ToolGroup.Trigger
+        count={steps.length}
+        active={steps.some((step) => step.status === 'active')}
+        aria-label={`${t('执行过程 ·')}${steps.length}${t('步')}`}
+      />
+      <ToolGroup.Content>
+        {steps.map((step) => {
+          const status: ToolCallMessagePartStatus =
+            step.status === 'active'
+              ? { type: 'running' }
+              : step.status === 'complete'
+                ? { type: 'complete' }
+                : {
+                    type: 'incomplete',
+                    reason: step.status === 'interrupted' ? 'cancelled' : 'error',
+                    error: step.output,
+                  };
+          return (
+            <ToolFallback.Root key={step.id}>
+              <p className="text-sm">{t(labels[step.name] ?? step.name)}</p>
+              <p className="text-xs text-muted-foreground">
+                {t(statuses[step.status])}
+                {step.finishedAt
+                  ? ` · ${((step.finishedAt - step.startedAt) / 1000).toFixed(1)} ${t('秒')}`
+                  : ''}
+              </p>
+              <ToolFallback.Trigger toolName={`${step.name} · ${t('查看详情')}`} status={status} />
+              <ToolFallback.Content>
+                <ToolFallback.Args argsText={step.input} />
+                <ToolFallback.Result
+                  result={
+                    step.output || (step.status === 'active' ? t('等待工具返回…') : t('未返回结果'))
+                  }
+                />
+              </ToolFallback.Content>
+            </ToolFallback.Root>
+          );
+        })}
+      </ToolGroup.Content>
+    </ToolGroup.Root>
   );
 }

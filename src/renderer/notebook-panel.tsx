@@ -1,3 +1,5 @@
+import { referenceRehypePlugins } from './reference-markdown';
+import { referenceUrlTransform } from './link-url';
 import { t } from './i18n';
 import { NotebookTodos } from './notebook-todos';
 import { lazy, Suspense, useLayoutEffect, useRef, useState } from 'react';
@@ -87,6 +89,8 @@ export function NotebookPanel({
         )}
         {preview ? (
           <MessageResponse
+            urlTransform={referenceUrlTransform}
+            rehypePlugins={referenceRehypePlugins}
             components={{
               a: ({ href, children }) => (
                 <a

@@ -1,3 +1,4 @@
+import { photoSchema } from './photos';
 import { z } from 'zod';
 import { locationSchema } from './itinerary-map';
 const sourceUrlSchema = z
@@ -33,6 +34,17 @@ export const planSchema = z.object({
         activities: z
           .array(
             z.object({
+              id: z.string().min(1).max(100).optional(),
+              photoIds: z
+                .array(z.string().regex(/^[a-f0-9]{64}$/))
+                .max(8)
+                .optional(),
+              recommendation: z
+                .object({
+                  reason: z.string().trim().min(1).max(600),
+                  preferences: z.array(z.string().max(150)).max(10),
+                })
+                .optional(),
               time: z.string().max(60),
               title: z.string().max(200),
               detail: z.string().max(2000),
@@ -64,6 +76,7 @@ export const journalSchema = z.object({
   entries: z.array(knowledgeSchema).max(40),
 });
 export const journeySchema = z.object({
+  photos: z.array(photoSchema).max(100).optional(),
   id: z.string(),
   title: z.string(),
   plan: planSchema.nullable(),
@@ -74,6 +87,9 @@ export const journeySchema = z.object({
 });
 export const nameSchema = z.string().trim().min(1).max(80);
 export const settingsSchema = z.object({
+  runtime: z.enum(['pi', 'codex']).optional(),
+  codexModel: z.string().trim().max(200).optional(),
+  imageInput: z.boolean().optional(),
   baseURL: z.string().url(),
   model: z.string().min(1).max(200),
   apiKey: z.string().max(10000).optional(),
@@ -87,6 +103,16 @@ export const boundsSchema = z.object({
   visible: z.boolean(),
 });
 export const toolsSchema = {
+  photo_candidates: z.object({
+    url: z.string().url().optional(),
+    subject: z.string().trim().min(1).max(200),
+  }),
+  save_photo: z.object({
+    ref: z.number().int().positive(),
+    subject: z.string().trim().min(1).max(200),
+    activityId: z.string().max(100).optional(),
+  }),
+  inspect_photo: z.object({ id: z.string().regex(/^[a-f0-9]{64}$/) }),
   journal: journalSchema,
   computer_use: z.object({ goal: z.string().min(1).max(4000) }),
   navigate: z.object({ url: z.string().max(4000) }),

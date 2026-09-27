@@ -7,7 +7,7 @@ export function toThreadMessages(
   draft: string,
   running: boolean,
 ): ThreadMessageLike[] {
-  const rows: ThreadMessageLike[] = messages.map((message) => ({
+  const rows: ThreadMessageLike[] = messages.map((message): ThreadMessageLike => ({
     id: message.id,
     role: message.role,
     content: [{ type: 'text', text: message.content }],
@@ -29,6 +29,8 @@ export function resolveQuote(
   fallback?: Quote,
 ): Quote | undefined {
   if (!quote) return undefined;
+  if (fallback?.messageId === quote.messageId && fallback.source?.kind === 'itinerary')
+    return { ...fallback, text: quote.text };
   const source = trips.find((trip) =>
     trip.messages.some((message) => message.id === quote.messageId),
   );

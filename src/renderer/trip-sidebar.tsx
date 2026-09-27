@@ -28,6 +28,7 @@ import {
   DropdownMenuSeparator,
 } from './components/ui/dropdown-menu';
 import {
+  Link2,
   FolderOpen,
   ChevronRight,
   Plus,
@@ -201,6 +202,16 @@ export function TripSidebar({
                                       {t('移动会话')}
                                     </DropdownMenuItem>
                                   )}
+                                  <DropdownMenuItem
+                                    onSelect={() =>
+                                      void run(() =>
+                                        window.vitrip.copyLink({ kind: 'trip', id: item.id }),
+                                      )
+                                    }
+                                  >
+                                    <Link2 />
+                                    {t('复制本机链接')}
+                                  </DropdownMenuItem>
                                   <DropdownMenuSeparator />
                                   <DropdownMenuItem
                                     onSelect={() =>

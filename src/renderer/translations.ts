@@ -1,4 +1,15 @@
 export const translations: Record<string, string> = {
+  回到行程: 'Back to itinerary',
+  '来源行程已删除，引用原文仍保留。':
+    'The source itinerary was deleted. The quoted text is still available.',
+  复制本机链接: 'Copy local link',
+  复制链接: 'Copy link',
+  打开本机链接: 'Open local link',
+  本机链接: 'Local link',
+  打开记录: 'Open record',
+  '粘贴 ViTrip 链接，定位到这台设备上的记录。':
+    'Paste a ViTrip link to find a record on this device.',
+
   执行本机命令: 'Run local command',
   '执行 PowerShell': 'Run PowerShell',
   读取文件: 'Read file',

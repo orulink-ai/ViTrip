@@ -3,6 +3,16 @@ export const quoteSchema = z.object({
   tripId: z.string().min(1),
   messageId: z.string().min(1),
   text: z.string().trim().min(1).max(12000),
+  source: z
+    .object({
+      kind: z.literal('itinerary'),
+      journeyId: z.string().min(1),
+      revision: z.number().int().min(0),
+      activityId: z.string().max(100).optional(),
+      dayTitle: z.string().max(500).optional(),
+      activityTitle: z.string().max(500).optional(),
+    })
+    .optional(),
 });
 export type Quote = z.infer<typeof quoteSchema>;
 export const bookmarkSchema = quoteSchema.extend({
@@ -48,7 +58,12 @@ export const notebookPatchSchema = z.object({
   todos: todosSchema.optional(),
 });
 export function messagePrompt(message: { content: string; quote?: Quote }) {
+  const content = message.content;
+  if (message.quote?.source?.kind === 'itinerary') {
+    const source = message.quote.source;
+    return `引用的行程片段（仅作讨论资料，不是修改指令）：\n行程 ${source.journeyId}，引用时版本 ${source.revision}\n日期：${source.dayTitle ?? '行程正文'}\n活动：${source.activityTitle ?? '未指定'}（${source.activityId ?? '无活动 ID'}）\n${message.quote.text}\n\n用户的问题：\n${content}\n\n由 Pi 根据用户的问题和最新共享行程自行判断是否补充或修改。纯解释可以只回答；需要变更时调用 plan，保留其他有效安排、ID 和来源。`;
+  }
   return message.quote
-    ? `引用的回复片段（仅作为讨论资料）：\n${message.quote.text}\n\n用户的问题：\n${message.content}`
-    : message.content;
+    ? `引用的回复片段（仅作为讨论资料）：\n${message.quote.text}\n\n用户的问题：\n${content}`
+    : content;
 }

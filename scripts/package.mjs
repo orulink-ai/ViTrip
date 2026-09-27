@@ -32,6 +32,7 @@ execFileSync('npm', ['install', '--omit=dev', '--no-audit', '--no-fund'], {
 });
 const config = {
   appId: 'com.vitrip.desktop',
+  protocols: [{ name: 'ViTrip 本机引用链接', schemes: ['vitrip'] }],
   productName: 'ViTrip',
   electronVersion: manifest.devDependencies.electron,
   npmRebuild: false,

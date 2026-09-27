@@ -1,3 +1,5 @@
+import { AgentSelector } from './agent-selector';
+import { CopyLink } from './copy-link';
 import { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react';
 import {
   AssistantRuntimeProvider,
@@ -14,10 +16,10 @@ import {
 } from './components/assistant-ui/elements/quote.aui';
 import { Button } from './components/ui/button';
 import { AgentActivity } from './components/agent-activity';
-import { ArrowRight, ChevronRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { t } from './i18n';
 import { toThreadMessages, resolveQuote } from './thread-adapter';
-import type { Trip, ToolActivity } from '../shared/types';
+import type { Trip, ToolActivity, PublicSettings } from '../shared/types';
 import type { Quote } from '../shared/notebook';
 
 type Props = {
@@ -27,7 +29,8 @@ type Props = {
   draft: string;
   running: boolean;
   quoteRequest?: Quote;
-  model: string;
+  config: PublicSettings;
+  onRuntimeChange: (runtime: 'pi' | 'codex') => Promise<void>;
   footer: ReactNode;
   onSend: (text: string, quote?: Quote) => Promise<void>;
   onStop: () => Promise<void>;
@@ -136,12 +139,14 @@ function Welcome() {
   );
 }
 function Tools() {
-  const { model, onSettings } = useTravel();
+  const { config, running, disabled, onRuntimeChange, onSettings } = useTravel();
   return (
-    <Button variant="ghost" size="sm" className="composer-model" onClick={onSettings}>
-      {model || t('连接模型')}
-      <ChevronRight size={12} />
-    </Button>
+    <AgentSelector
+      config={config}
+      disabled={running || !!disabled}
+      onChange={onRuntimeChange}
+      onSettings={onSettings}
+    />
   );
 }
 function Preview() {
@@ -155,7 +160,7 @@ function Preview() {
         type="button"
         className="min-w-0 flex-1 text-left"
         onClick={() => local && onSource(local)}
-        title={t('回到原对话')}
+        title={t(local?.source?.kind === 'itinerary' ? '回到行程' : '回到原对话')}
       >
         <ComposerQuotePreview.Text />
       </button>
@@ -166,6 +171,12 @@ function Preview() {
       </ComposerQuotePreview.Dismiss>
     </ComposerQuotePreview.Root>
   );
+}
+function MessageActions() {
+  const { trip } = useTravel();
+  const messageId = useAuiState((s) => s.message.id);
+  if (!trip?.messages.some((message) => message.id === messageId)) return null;
+  return <CopyLink compact target={{ kind: 'message', id: trip.id, messageId }} />;
 }
 function Header() {
   const { onSource } = useTravel();
@@ -179,7 +190,7 @@ function Header() {
         <button
           type="button"
           className="message-quote block w-full text-left"
-          title={t('回到原对话')}
+          title={t(quote.source?.kind === 'itinerary' ? '回到行程' : '回到原对话')}
           onClick={() => onSource(quote)}
         >
           <QuoteBlock text={quote.text} messageId={quote.messageId} />
@@ -226,6 +237,7 @@ const components: ThreadComponents = {
   ComposerTools: Tools,
   ComposerQuote: Preview,
   MessageHeader: Header,
+  MessageActions,
   Selection,
   Footer,
 };

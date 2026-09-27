@@ -4,7 +4,7 @@
 
 产品未来方向、分阶段议题与创始人原话见本文末尾的[产品愿景与路线图](#产品愿景与路线图讨论稿)。规划中的能力不代表当前已实现。
 
-**AI Elements + Pi Agent SDK + Jev + Electron + React + TypeScript + SQLite**。不以 LibreChat 为运行依赖。AI Elements 由官方 CLI 安装，其依赖的基础 UI 组件一并保留。
+**AI Elements / assistant-ui + Pi / Codex + Jev + Electron + React + TypeScript + SQLite**。不以 LibreChat 为运行依赖。AI Elements 由官方 CLI 安装，其依赖的基础 UI 组件一并保留。
 
 ## 打开与使用
 
@@ -22,10 +22,24 @@
 - 个人笔记和画板独立保存，不由 AI 自动改写，也不自动发送到模型。当前画板为单人本地使用，不含多人协作；HTML 行程导出暂不包含笔记和画板。
 - 「查看示例行程」明确标注为静态示例，不代表实时查询。
 
+## 切换 Pi / Codex
+
+输入框下方的 Agent 选择器使用 assistant-ui Elements 官方 [Model selector](https://www.assistant-ui.com/elements/model-selector)，可以直接切换 Pi 与 Codex；草稿不丢失，运行中禁止切换。设置作用于后续请求，Pi 的接口、模型和密钥独立保留。
+
+Codex 使用本机 `codex app-server`，无需 Docker 或 HarnessRouter。先安装 Codex CLI 并运行 `codex login`；macOS 也会检测 `/Applications` 和 `~/Applications` 下 Codex / ChatGPT 桌面应用的内置可执行文件，并优先使用版本较新的可用程序。ViTrip 不复制或读取 Codex 登录令牌，登录与密钥存储由 Codex 管理。
+
+在「模型设置」选择 Codex 后，可填写 Codex 模型 ID；留空沿用本机 Codex 配置。此字段独立于 Pi 模型，避免把 DeepSeek 等模型 ID 误传给 Codex。未安装、未登录、模型不兼容或进程异常都会显示实际错误。
+
+两种引擎使用相同的旅行数据与本地浏览器工具。Codex 支持流式回复、工具执行记录、图片结果、命令/文件审批、停止、接管和会话恢复。每个对话的 `codex-thread.json` 仅记录 Codex thread ID；Pi 原生会话文件独立保留。切换引擎时传入应用对话记录与共享旅行资料，不迁移原生工具历史。后台手册整理使用独立临时 Codex 会话，仅开放旅行工具中的 journal / plan。
+
+接入依赖 Codex 的实验性 dynamic tools 协议。已实测 `codex-cli 0.155.0-alpha.9.2` 的真实工具调用和跨进程会话恢复；旧版本若提示模型要求更新 CLI，请升级或选择该版本支持的模型。原生命令遵循 workspace-write 沙箱和逐次请求审批策略，未知交互请求不会自动批准。
+
+开发验证：`npm test`、`npm run build`、`npm run test:e2e`。端到端测试使用协议替身驱动真实 Electron 浏览器；`VITRIP_LIVE_CODEX=1 npx vitest run tests/codex-live.test.ts` 会使用本机已登录账号执行真实模型请求，验证 journal 调用与会话恢复。
+
 ## 架构与能力
 
 - **Pi 0.87.1** 管理流式对话、工具调用、压缩与持久会话。每个旅行独立保存完整工具记录。普通对话开放 Pi 内置 read、bash、edit、write、grep、find、ls、powershell 工具，并保留旅行工具；powershell 需要本机已安装对应运行时。后台自动整理手册只开放 journal。
-- **DeepSeek** 负责旅行规划、回答和填写字段所需的文字。
+- **AgentRuntime** 将旅行执行接口与 Pi / Codex 适配器分离；Pi 默认使用 DeepSeek，Codex 使用自身模型配置。
 - **Jev** 从当前 DOM 快照选择操作和元素；执行前校验候选、概率和页面是否变化。一次最多12步，连续三次无进展停止。DONE 仍需要核实页面证据。
 - **Electron WebContentsView** 显示真正的本机 Chromium 网页，CDP 执行鼠标点击、键盘输入。不是网页 iframe，也不依赖云端浏览器。
 - 表单提交、Enter 和识别出的预订/支付等敏感点击需要逐次确认。密码和支付等敏感字段不进入快照，不允许 AI 填写。
@@ -270,3 +284,11 @@ OK，我现在想请你帮我创建几个衣修。然后我们可以交流一下
 plan 的可选 source、packing、每日 stay/issues 及活动 origin/optionGroup/optional/source 字段保留攻略出处、住宿预订状态和备选关系，旧数据兼容。准备清单由用户选择加入笔记本待办，保留已有完成状态。成功保存后遇到后续超时，会明确说明已保存的结果。
 
 本轮原数据、模拟对话、截图与评分证据见 [行程验收记录](docs/itinerary-review.md)。测试中的模型替身不代表真实模型的理解能力。
+
+## 本机引用链接
+
+会话菜单和每条已保存消息提供「复制本机链接」；右侧行程与笔记本也可复制链接。链接使用稳定记录 ID，重命名不会改变链接。行程和笔记本链接指向旅行共享页面，不指向某个活动或段落。
+
+在侧栏「打开本机链接」中粘贴即可跳转；聊天及笔记 Markdown 中的 ViTrip 链接也可点击。打包版注册 `vitrip://` 协议，可由系统唤起应用；消息链接会滚动并聚焦原消息。记录已删除或不在本机时会显示失效提示，不会跳到其他记录。
+
+这些链接仅定位本机已有数据，不会上传记录或授予他人访问权限。当前不提供公开分享页面或跨设备同步。

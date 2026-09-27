@@ -1,3 +1,7 @@
+import { ItineraryQuotation } from './itinerary-quotation';
+import type { Quote } from '../shared/notebook';
+import { itineraryStops } from '../shared/itinerary-map';
+import { PhotoGallery } from './photo-gallery';
 import { t } from './i18n';
 import { PackingList } from './packing-list';
 import type { Todo } from '../shared/notebook';
@@ -12,6 +16,9 @@ import { LegacyJournal } from './legacy-journal';
 import { ItineraryDocument } from './itinerary-document';
 export function JournalPanel({
   journey,
+  tripId,
+  onQuote,
+  quoteTarget,
   onBrowse,
   onBuildPlan,
   building,
@@ -19,6 +26,9 @@ export function JournalPanel({
   onTodos,
 }: {
   journey: Journey;
+  tripId?: string;
+  onQuote?: (quote: Quote) => void;
+  quoteTarget?: Quote['source'];
   onBrowse: (url: string) => void;
   onBuildPlan: () => void;
   building: boolean;
@@ -29,7 +39,15 @@ export function JournalPanel({
   const planKey = JSON.stringify(journey.plan);
   const plan = useMemo(() => journey.plan, [planKey]);
   const [mode, setMode] = useState<'page' | 'notes' | 'map'>('page');
-  const [selection, setSelection] = useState<MapSelection>({});
+  const [selection, setSelectionState] = useState<MapSelection>({});
+  function setSelection(value: MapSelection) {
+    setSelectionState(value);
+    try {
+      localStorage.setItem(`vitrip-selection:${journey.id}`, JSON.stringify(value));
+    } catch {
+      /* Optional view state. */
+    }
+  }
   const [query, setQuery] = useState('');
   const reading = useRef<HTMLDivElement>(null);
   const pendingStop = useRef<string | undefined>(undefined);
@@ -39,8 +57,30 @@ export function JournalPanel({
     setQuery('');
   }, [journey.id]);
   useEffect(() => {
-    setSelection({});
+    try {
+      const saved = JSON.parse(localStorage.getItem(`vitrip-selection:${journey.id}`) ?? '{}');
+      const stop = itineraryStops(journey.plan).find((stop) => stop.id === saved.stopId);
+      setSelectionState({
+        day:
+          stop?.dayIndex ??
+          (Number.isInteger(saved.day) &&
+          saved.day >= 0 &&
+          saved.day < (journey.plan?.days.length ?? 0)
+            ? saved.day
+            : undefined),
+        stopId: stop?.id,
+      });
+    } catch {
+      setSelectionState({});
+    }
     pendingStop.current = undefined;
+  }, [journey.id]);
+  useEffect(() => {
+    if (!selection.stopId) return;
+    const stop = itineraryStops(plan).find((stop) => stop.id === selection.stopId);
+    if (!stop) setSelection({ day: selection.day });
+    else if (selection.day !== undefined && selection.day !== stop.dayIndex)
+      setSelection({ ...selection, day: stop.dayIndex });
   }, [plan]);
   useEffect(() => {
     if (mode !== 'page' || !plan || !pendingStop.current) return;
@@ -63,12 +103,24 @@ export function JournalPanel({
       pendingStop.current = undefined;
     }
   }
+  useEffect(() => {
+    if (quoteTarget?.journeyId !== journey.id) return;
+    setMode('page');
+    const stop = itineraryStops(plan).find((stop) => stop.id === quoteTarget.activityId);
+    if (stop) {
+      setSelection({ stopId: stop.id, day: stop.dayIndex });
+      readStop(stop.id);
+    } else reading.current?.scrollTo({ top: 0 });
+  }, [quoteTarget]);
   const travelEntries = journey.entries.filter((e) => !e.id.startsWith('capability-'));
   const entries = travelEntries.filter((e) =>
     (e.category + ' ' + e.question + ' ' + e.answer).toLowerCase().includes(query.toLowerCase()),
   );
   return (
     <div className="journal-panel">
+      {tripId && onQuote && (
+        <ItineraryQuotation root={reading} journey={journey} tripId={tripId} onQuote={onQuote} />
+      )}
       <div className="journal-toolbar">
         <Tabs value={mode} onValueChange={(value) => setMode(value as typeof mode)}>
           <TabsList>
@@ -96,6 +148,8 @@ export function JournalPanel({
         >
           {mode === 'map' && (
             <JourneyMap
+              journeyId={journey.id}
+              photos={journey.photos}
               plan={plan}
               selection={selection}
               onSelection={setSelection}
@@ -107,6 +161,11 @@ export function JournalPanel({
           )}
           {mode === 'page' && plan && (
             <ItineraryDocument
+              journeyId={journey.id}
+              photos={journey.photos}
+              onEdit={async (edit) => {
+                await window.vitrip.editItinerary(journey.id, journey.revision, edit);
+              }}
               plan={plan}
               selectedId={selection.stopId}
               onBrowse={onBrowse}
@@ -116,6 +175,14 @@ export function JournalPanel({
                 setMode('map');
               }}
             />
+          )}
+          {mode === 'page' && !!journey.photos?.length && (
+            <details className="mx-5 py-3">
+              <summary className="cursor-pointer text-sm">
+                旅行照片 · {journey.photos.length}
+              </summary>
+              <PhotoGallery journeyId={journey.id} photos={journey.photos} onBrowse={onBrowse} />
+            </details>
           )}
           {mode === 'page' && !!plan?.packing?.length && todos && onTodos && (
             <PackingList items={plan.packing} todos={todos} onChange={onTodos} />

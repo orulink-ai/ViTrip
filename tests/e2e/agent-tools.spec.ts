@@ -24,7 +24,13 @@ test('Pi 内置工具实际读写文件、读取飞书技能并通过 bash 执�
   });
   const actions = [
     ['write', { path: 'travel-note.txt', content: 'first draft' }],
-    ['edit', { path: 'travel-note.txt', oldText: 'first draft', newText: 'verified itinerary' }],
+    [
+      'edit',
+      {
+        path: 'travel-note.txt',
+        edits: [{ oldText: 'first draft', newText: 'verified itinerary' }],
+      },
+    ],
     ['read', { path: 'travel-note.txt' }],
     ['ls', { path: '.' }],
     ['find', { pattern: '*.txt', path: '.' }],

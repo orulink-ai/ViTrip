@@ -1,12 +1,21 @@
+import type { TravelPhoto } from './photos';
+import type { ItineraryEdit } from './journey-editing';
+import type { LinkTarget } from './deep-link';
 import type { Notebook, Quote } from './notebook';
 import type { ItineraryLocation } from './itinerary-map';
 export interface Settings {
+  runtime?: 'pi' | 'codex';
+  codexModel?: string;
+  imageInput?: boolean;
   baseURL: string;
   model: string;
   apiKey: string;
   jevApiKey?: string;
 }
 export interface PublicSettings {
+  runtime?: 'pi' | 'codex';
+  codexModel?: string;
+  imageInput?: boolean;
   baseURL: string;
   model: string;
   hasKey: boolean;
@@ -42,6 +51,9 @@ export interface Day {
   };
   issues?: string[];
   activities: {
+    id?: string;
+    photoIds?: string[];
+    recommendation?: { reason: string; preferences: string[] };
     time: string;
     title: string;
     detail: string;
@@ -71,6 +83,7 @@ export interface KnowledgeEntry {
   sources: string[];
 }
 export interface Journey {
+  photos?: TravelPhoto[];
   id: string;
   title: string;
   plan: Plan | null;
@@ -96,7 +109,17 @@ export interface BrowserState {
   canForward: boolean;
 }
 export interface Event {
-  type: 'browser' | 'trip' | 'status' | 'approval' | 'settings' | 'delta' | 'workspace' | 'journey';
+  type:
+    | 'link'
+    | 'browser'
+    | 'trip'
+    | 'status'
+    | 'approval'
+    | 'settings'
+    | 'delta'
+    | 'workspace'
+    | 'journey';
+  link?: string;
   workspace?: 'browser' | 'plan';
   browser?: BrowserState;
   trip?: Trip;
@@ -114,7 +137,12 @@ export interface Bounds {
   visible: boolean;
 }
 export interface API {
+  copyLink(target: LinkTarget): Promise<void>;
+  openLink(url: string): Promise<{ target: LinkTarget; trip: Trip }>;
+  editItinerary(journeyId: string, revision: number, edit: ItineraryEdit): Promise<Journey>;
+  photo(journeyId: string, photoId: string): Promise<string | null>;
   init(): Promise<{
+    link?: string;
     trips: Trip[];
     journeys: Journey[];
     settings: PublicSettings;
@@ -138,6 +166,9 @@ export interface API {
   addBookmark(journeyId: string, quote: Quote): Promise<Notebook>;
   removeBookmark(journeyId: string, id: string): Promise<Notebook>;
   settings(value: {
+    runtime?: 'pi' | 'codex';
+    codexModel?: string;
+    imageInput?: boolean;
     baseURL: string;
     model: string;
     apiKey?: string;

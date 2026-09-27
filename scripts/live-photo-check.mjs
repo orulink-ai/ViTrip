@@ -19,6 +19,10 @@ const report = { startedAt: new Date().toISOString(), turns: [], checks: {}, scr
 const saveReport = () =>
   writeFile(path.join(output, 'report.json'), JSON.stringify(report, null, 2), { mode: 0o600 });
 const launch = async () => {
+  await writeFile(
+    path.resolve('dist/live-photo-main.mjs'),
+    "import {app} from 'electron';\napp.commandLine.removeSwitch('use-mock-keychain');\nawait import('./main.mjs');\n",
+  );
   const instance = await electron.launch({
     args: [path.resolve('dist/live-photo-main.mjs')],
     timeout: 30000,
@@ -92,7 +96,7 @@ try {
   console.log(JSON.stringify({ model: report.model, output }));
   const state = await turn(
     page,
-    '请为普吉岛行程整理 Hotel Clover Patong 酒店和 Wat Chalong 查龙寺的真实照片候选，每处至少一张。请实际查找原始页面，核对对应地点；酒店别混用其他分店或房型。保留图片地址（实际能取得时）、原页面链接、图片说明及尚不能确认的部分，把结果保存到本旅行共享资料，方便新会话继续。也尝试找一篇相关小红书原帖，访问不了就如实说明。无需预订或对外提交。',
+    '请使用行程整理 skill 和 photo_candidates / save_photo 为 Hotel Clover Patong Phuket 和 Wat Chalong 各采集并缓存一张真实照片。酒店直接用官网图库 https://patongphuket.hotelclover.com/gallery/ ，查龙寺直接用普吉府政府页面 https://www.phuket.go.th/eng/Historical-Chalong%20Temple.php ，备用 https://www.thailandtourismdirectory.go.th/en/attraction/1996 。先为每个地点各保存一张再进一步扩展，每处最多花5次工具调用，不要只处理酒店。不要选 logo、奖章、品牌图标；核对网页文字和收到的图片，保持待核对状态并保存来源。成功后简要总结。两个地点都处理后可尝试一次小红书搜索，访问不了则保存限制，不重复重试。无需预订或对外提交。',
   );
   const activities = state.trips.flatMap((trip) =>
     trip.messages.flatMap((message) => message.activities ?? []),
@@ -109,9 +113,21 @@ try {
       step.status === 'complete' &&
       step.input.includes('references/photos.md'),
   );
-  report.checks.journalWritten = activities.some(
-    (step) => step.name === 'journal' && step.status === 'complete',
+  report.checks.journalWritten = state.journeys.some((journey) => journey.entries.length > 0);
+  const savedPhotos = state.journeys.flatMap((journey) => journey.photos ?? []);
+  report.checks.hotelPhotoSaved = savedPhotos.some((photo) => /clover/i.test(photo.subject));
+  report.checks.attractionPhotoSaved = savedPhotos.some((photo) =>
+    /chalong|查龙/i.test(photo.subject),
   );
+  report.checks.photoPixelsReadable = savedPhotos.length > 0;
+  for (const journey of state.journeys)
+    for (const photo of journey.photos ?? []) {
+      const src = await page.evaluate(({ journeyId, id }) => window.vitrip.photo(journeyId, id), {
+        journeyId: journey.id,
+        id: photo.id,
+      });
+      report.checks.photoPixelsReadable &&= !!src?.startsWith('data:image/png;base64,');
+    }
   const journey = state.journeys.find((item) => item.entries.length > 0);
   report.checks.hasSourcedRecords = !!journey?.entries.some((entry) => entry.sources.length > 0);
   try {
@@ -128,7 +144,9 @@ try {
   report.checks.persistedAfterRestart =
     !!journey &&
     JSON.stringify(restored.journeys.find((item) => item.id === journey.id)?.entries) ===
-      JSON.stringify(journey.entries);
+      JSON.stringify(journey.entries) &&
+    JSON.stringify(restored.journeys.find((item) => item.id === journey.id)?.photos) ===
+      JSON.stringify(journey.photos);
   if (journey) {
     await page.evaluate((id) => window.vitrip.create(id), journey.id);
     await turn(
@@ -148,4 +166,5 @@ try {
 } finally {
   await app?.close();
   await rm(directory, { recursive: true, force: true });
+  await rm(path.resolve('dist/live-photo-main.mjs'), { force: true });
 }

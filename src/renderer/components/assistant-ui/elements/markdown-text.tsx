@@ -1,3 +1,4 @@
+import { referenceUrlTransform } from '~/link-url';
 import { t } from '~/i18n';
 ('use client');
 
@@ -48,6 +49,7 @@ const MarkdownTextImpl: FC<MarkdownTextProps> = ({ components }) => {
 
   return (
     <MarkdownTextPrimitive
+      urlTransform={referenceUrlTransform}
       remarkPlugins={[remarkGfm]}
       className="aui-md"
       components={markdownComponents}
