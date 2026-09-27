@@ -128,6 +128,7 @@ test('拖入文本与图片后 Pi 收到正文和实际图片输入', async () =
         }),
       address.port,
     );
+    await expect(page.getByRole('button', { name: '上传文件', exact: true })).toBeEnabled();
     const transfer = await page.evaluateHandle(() => {
       const data = new DataTransfer();
       data.items.add(
