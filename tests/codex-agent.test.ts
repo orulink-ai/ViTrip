@@ -97,3 +97,25 @@ it('forwards photo images to Codex without copying binary content into visible a
     expect.objectContaining({ name: 'inspect_photo', output: '真实照片', status: 'complete' }),
   );
 });
+
+it('sends uploaded image pixels in the Codex turn input', async () => {
+  const { options, command } = fixture();
+  options.images = [{ type: 'image', data: 'cGl4ZWxz', mimeType: 'image/png' }];
+  await runCodexAgent(options, command);
+  const input = JSON.parse(readFileSync(path.join(options.sessionDir, 'turn-input.json'), 'utf8'));
+  expect(input).toContainEqual({ type: 'image', url: 'data:image/png;base64,cGl4ZWxz' });
+});
+it('passes the selected model and reasoning effort on every resumed turn', async () => {
+  const { options, command } = fixture();
+  options.settings.codexModel = 'test-codex';
+  options.settings.codexEffort = 'high';
+  await runCodexAgent(options, command);
+  expect(
+    JSON.parse(readFileSync(path.join(options.sessionDir, 'turn-settings.json'), 'utf8')),
+  ).toEqual({ model: 'test-codex', effort: 'high' });
+  options.settings.codexEffort = 'medium';
+  await runCodexAgent(options, command);
+  expect(
+    JSON.parse(readFileSync(path.join(options.sessionDir, 'turn-settings.json'), 'utf8')).effort,
+  ).toBe('medium');
+});

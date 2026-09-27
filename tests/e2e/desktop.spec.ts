@@ -244,12 +244,16 @@ test('local desktop: real browser tools, itinerary, approval and takeover', asyn
   ).toBeVisible();
   const activity = page.getByTestId('agent-activity').first();
   await expect(activity).toBeVisible();
-  await expect(activity.getByText('打开网页', { exact: true })).toBeVisible();
-  await activity
+  await expect(activity.getByRole('button', { name: /打开网页/ })).toBeVisible();
+  const observation = page
+    .getByTestId('agent-activity')
+    .filter({ has: page.getByRole('button', { name: /observe/ }) })
+    .first();
+  await observation
     .getByRole('button', { name: /observe/ })
     .first()
     .click();
-  await expect(activity.getByText(/旅行资料测试页/).first()).toBeVisible();
+  await expect(observation.getByText(/旅行资料测试页/).first()).toBeVisible();
   await page.screenshot({ path: 'test-results/vitrip-plan.png' });
   await page.getByRole('tab', { name: '浏览器', exact: true }).click();
   const guest = app
@@ -385,7 +389,10 @@ test('travel folders, rename, cross-session memory and searchable HTML journal',
   await page.getByRole('button', { name: recorded.title, exact: true }).click();
   await expect(page.getByTestId('agent-activity').first()).toBeVisible();
   await expect(
-    page.getByTestId('agent-activity').first().getByText('打开网页', { exact: true }),
+    page
+      .getByTestId('agent-activity')
+      .first()
+      .getByRole('button', { name: /打开网页/ }),
   ).toBeVisible();
   expect(restored.journeys.find((j) => j.id === folder.id)?.entries).toHaveLength(2);
   expect(restored.journeys.find((j) => j.id === folder.id)?.html).toContain('普吉岛旅行手册');

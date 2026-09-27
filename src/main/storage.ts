@@ -1,3 +1,4 @@
+import { attachmentSchema } from '../shared/attachments';
 import { photoSchema } from '../shared/photos';
 import { editItinerary, type ItineraryEdit } from '../shared/journey-editing';
 import {
@@ -13,32 +14,43 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { planSchema, journeySchema, journalSchema, nameSchema } from '../shared/schemas';
 import type { Settings, Trip, Journey } from '../shared/types';
+const messageSchema = z.object({
+  id: z.string(),
+  role: z.enum(['user', 'assistant']),
+  content: z.string(),
+  parts: z
+    .array(
+      z.discriminatedUnion('type', [
+        z.object({ type: z.literal('text'), text: z.string() }),
+        z.object({ type: z.literal('tool'), toolId: z.string() }),
+      ]),
+    )
+    .optional(),
+  feedback: z.enum(['positive', 'negative']).optional(),
+  quote: quoteSchema.optional(),
+  attachments: z.array(attachmentSchema).max(8).optional(),
+  activities: z
+    .array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        input: z.string(),
+        output: z.string(),
+        status: z.enum(['active', 'complete', 'error', 'interrupted']),
+        startedAt: z.number(),
+        finishedAt: z.number().optional(),
+      }),
+    )
+    .optional(),
+});
 const tripSchema = z.object({
   id: z.string(),
   journeyId: z.string().default(''),
   customTitle: z.boolean().optional(),
   title: z.string(),
-  messages: z.array(
-    z.object({
-      id: z.string(),
-      role: z.enum(['user', 'assistant']),
-      content: z.string(),
-      quote: quoteSchema.optional(),
-      activities: z
-        .array(
-          z.object({
-            id: z.string(),
-            name: z.string(),
-            input: z.string(),
-            output: z.string(),
-            status: z.enum(['active', 'complete', 'error', 'interrupted']),
-            startedAt: z.number(),
-            finishedAt: z.number().optional(),
-          }),
-        )
-        .optional(),
-    }),
-  ),
+  messages: z.array(messageSchema),
+  branches: z.array(z.array(messageSchema)).optional(),
+  contextKey: z.string().uuid().optional(),
   plan: planSchema.nullable(),
   updatedAt: z.number(),
 });
@@ -99,6 +111,7 @@ export class Storage {
         .object({
           runtime: z.enum(['pi', 'codex']).optional(),
           codexModel: z.string().optional(),
+          codexEffort: z.string().optional(),
           baseURL: z.string(),
           model: z.string(),
           imageInput: z.boolean().optional(),
@@ -109,6 +122,7 @@ export class Storage {
       this.settings = {
         runtime: value.runtime,
         codexModel: value.codexModel,
+        codexEffort: value.codexEffort,
         imageInput: value.imageInput,
         jevApiKey: value.encryptedJevKey
           ? cipher.decrypt(Buffer.from(value.encryptedJevKey, 'base64'))
@@ -188,6 +202,7 @@ export class Storage {
     this.write('settings', {
       runtime: settings.runtime,
       codexModel: settings.codexModel,
+      codexEffort: settings.codexEffort,
       imageInput: settings.imageInput,
       baseURL: settings.baseURL,
       model: settings.model,
@@ -227,7 +242,7 @@ export class Storage {
     this.save();
     return trip;
   }
-  renameJourney(id: string, title: string) {
+renameJourney(id: string, title: string) {
     const journey = this.journeys.find((j) => j.id === id);
     if (!journey) throw new Error('旅行文件夹不存在');
     journey.title = nameSchema.parse(title);

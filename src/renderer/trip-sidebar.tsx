@@ -170,7 +170,12 @@ export function TripSidebar({
                                 isActive={active?.id === item.id}
                                 aria-current={active?.id === item.id ? 'page' : undefined}
                                 title={item.title}
-                                onClick={() => void run(() => onSelect(item.id))}
+                                onClick={() => {
+                                  if (active?.id !== item.id) void run(() => onSelect(item.id));
+                                }}
+                                onDoubleClick={() =>
+                                  edit({ kind: 'trip', id: item.id, title: item.title })
+                                }
                               >
                                 <span>{item.title}</span>
                               </SidebarMenuButton>

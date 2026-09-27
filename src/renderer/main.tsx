@@ -1,3 +1,4 @@
+import { RunStatus } from './run-status';
 import { CopyLink } from './copy-link';
 import {
   Dialog,
@@ -13,7 +14,7 @@ import { Sidebar, SidebarProvider, SidebarFooter } from './components/ui/sidebar
 import { Tabs, TabsList, TabsTrigger } from './components/ui/tabs';
 import { Badge } from './components/ui/badge';
 import { Alert } from './components/ui/alert';
-import { NotebookPanel } from './notebook-panel';
+import { NotebookWorkspace } from './notebook-workspace';
 import { useNotebook } from './use-notebook';
 import type { Quote } from '../shared/notebook';
 import React, { useEffect, useRef, useState } from 'react';
@@ -183,7 +184,13 @@ function App() {
       const initial = await window.vitrip.init();
       setTrips(initial.trips);
       setJourneys(initial.journeys);
-      setTrip(initial.trips[0] || null);
+      setTrip(
+        initial.trips.find((trip) => trip.id === initial.activeTripId) || initial.trips[0] || null,
+      );
+      setRunning(initial.running);
+      setPaused(initial.paused);
+      setStatus(initial.status);
+      setApproval(initial.approval);
       setConfig(initial.settings);
       setBrowser(initial.browser);
       if (initial.link) await openLink(initial.link);
@@ -243,15 +250,15 @@ function App() {
       window.removeEventListener('resize', sync);
     };
   }, [tab, settingsOpen, organizeOpen, linkOpen, browser.url, panel]);
-  async function send(text: string, quoted?: Quote) {
-    if (!text.trim() || running) return;
+  async function send(text: string, quoted?: Quote, attachmentIds: string[] = []) {
+    if (!text.trim() && !attachmentIds.length) return;
     if (config.runtime !== 'codex' && !config.model) {
       setSettingsOpen(true);
       setNotice(t('先连接一个支持工具调用的模型，就可以开始规划。'));
       throw new Error(t('连接模型'));
     }
     try {
-      await window.vitrip.send(text, quoted);
+      await window.vitrip.send(text, quoted, attachmentIds);
       setQuote(undefined);
     } catch (error) {
       setNotice(String(error));
@@ -375,6 +382,7 @@ function App() {
                   }
                 }}
                 onSend={send}
+                onError={setNotice}
                 onStop={() => window.vitrip.stop()}
                 onSource={(value) => void perform(() => showSource(value))}
                 onBookmark={(value) => void notebook.add(value).then(() => setTab('notebook'))}
@@ -383,12 +391,30 @@ function App() {
                 onBrowse={(url) => void browse(url)}
                 footer={
                   <>
+                    {!running && trip?.messages.at(-1)?.role === 'user' && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <span>{t('这条消息尚未收到回复')}</span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            void perform(() => window.vitrip.regenerate(trip.messages.at(-1)!.id))
+                          }
+                        >
+                          {t('继续回复')}
+                        </Button>
+                      </div>
+                    )}
                     {running && (
-                      <p role="status" className="text-sm text-muted-foreground">
-                        {/^正在使用 (.+)…$/.test(status)
-                          ? t('正在使用 {tool}…', { tool: status.slice(5, -1) })
-                          : t(status)}
-                      </p>
+                      <RunStatus
+                        label={
+                          approval
+                            ? t('需要你确认')
+                            : /^正在使用 (.+)…$/.test(status)
+                              ? t('正在使用 {tool}…', { tool: status.slice(5, -1) })
+                              : t(status)
+                        }
+                      />
                     )}
                     {approval && (
                       <ApprovalCard
@@ -481,8 +507,9 @@ function App() {
                   <Badge variant="secondary">{t('本地浏览器')}</Badge>
                 )}
               </div>
-              {tab === 'notebook' ? (
-                <NotebookPanel
+              {tab === 'notebook' && trip ? (
+                <NotebookWorkspace
+                  journeyId={trip.journeyId}
                   key={trip?.journeyId}
                   notebook={notebook}
                   title={journey?.title || t('新的旅行')}

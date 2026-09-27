@@ -33,6 +33,7 @@ test('引用保留草稿，单页笔记与画板在重启后恢复', async () =>
     await expect(page.getByRole('button', { name: /标记过的内容/ })).toBeVisible();
     await page.getByRole('button', { name: /标记过的内容/ }).click();
     await expect(page.locator('.bookmark-card')).toHaveCount(1);
+    await page.getByRole('button', { name: '编辑 Markdown', exact: true }).click();
     await page.getByLabel('我的笔记 Markdown').fill('# 出发清单\n\n- [ ] 护照\n\n自己的记录');
     await page.getByRole('button', { name: '预览', exact: true }).click();
     await expect(page.getByRole('heading', { name: '出发清单' })).toBeVisible();
@@ -75,7 +76,7 @@ test('引用保留草稿，单页笔记与画板在重启后恢复', async () =>
     app = await electron.launch({ args: ['.'], env: { ...process.env, VITRIP_TEST_DATA: dir } });
     page = await app.firstWindow();
     await page.getByRole('tab', { name: '笔记本', exact: true }).click();
-    await expect(page.getByLabel('我的笔记 Markdown')).toHaveValue(/自己的记录/);
+    await expect(page.getByRole('article', { name: '旅行笔记页面' })).toContainText('自己的记录');
     await expect(page.locator('.bookmark-card')).toHaveCount(0);
     await page.getByRole('button', { name: '画板', exact: true }).click();
     await expect(page.locator('.excalidraw')).toBeVisible();
@@ -152,6 +153,7 @@ test('引用发送给模型并保留来源，跨会话共享笔记且不混入�
     }, address.port);
     await selectReply(page);
     await page.getByRole('button', { name: '标记到笔记本', exact: true }).click();
+    await page.getByRole('button', { name: '编辑 Markdown', exact: true }).click();
     await page.getByLabel('我的笔记 Markdown').fill('私人笔记不要自动发给模型');
     await selectReply(page);
     await page.getByRole('button', { name: '标记到笔记本', exact: true }).click();
@@ -166,7 +168,9 @@ test('引用发送给模型并保留来源，跨会话共享笔记且不混入�
     }, original.journeyId);
     await page.reload();
     await page.getByRole('tab', { name: '笔记本', exact: true }).click();
-    await expect(page.getByLabel('我的笔记 Markdown')).toHaveValue('私人笔记不要自动发给模型');
+    await expect(page.getByRole('article', { name: '旅行笔记页面' })).toContainText(
+      '私人笔记不要自动发给模型',
+    );
     await page.getByRole('button', { name: /标记过的内容/ }).click();
     await page.getByRole('button', { name: '继续提问', exact: true }).click();
     await page.getByLabel('旅行需求', { exact: true }).fill('这个方案带行李方便吗？');
@@ -192,7 +196,10 @@ test('引用发送给模型并保留来源，跨会话共享笔记且不混入�
     });
     await page.reload();
     await page.getByRole('tab', { name: '笔记本', exact: true }).click();
-    await expect(page.getByLabel('我的笔记 Markdown')).toHaveValue('');
+    await expect(page.getByRole('article', { name: '旅行笔记页面' })).toContainText(
+      '写下旅途中的想法…',
+    );
+    await expect(page.getByLabel('我的笔记 Markdown')).toHaveCount(0);
     await expect(page.locator('.bookmark-card')).toHaveCount(0);
     expect(errors).toEqual([]);
   } finally {
@@ -261,6 +268,7 @@ test('笔记正文与折叠内容共用一页，正文增长后仍可编辑', as
       'false',
     );
     const text = Array.from({ length: 25 }, (_, i) => `第 ${i + 1} 天的旅行记录`).join('\n');
+    await page.getByRole('button', { name: '编辑 Markdown', exact: true }).click();
     await page.getByLabel('我的笔记 Markdown').fill(text);
     expect(
       await page

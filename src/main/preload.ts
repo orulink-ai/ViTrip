@@ -1,6 +1,10 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { API, Event } from '../shared/types';
 const api: API = {
+  codexModels: () => ipcRenderer.invoke('vitrip:codexModels'),
+  listDocuments: (id) => ipcRenderer.invoke('vitrip:listDocuments', id),
+  readDocument: (id, name) => ipcRenderer.invoke('vitrip:readDocument', id, name),
+  writeDocument: (id, input) => ipcRenderer.invoke('vitrip:writeDocument', id, input),
   editItinerary: (id, revision, edit) =>
     ipcRenderer.invoke('vitrip:editItinerary', id, revision, edit),
   photo: (id, photoId) => ipcRenderer.invoke('vitrip:photo', id, photoId),
@@ -16,7 +20,14 @@ const api: API = {
   demo: () => ipcRenderer.invoke('vitrip:demo'),
   select: (id) => ipcRenderer.invoke('vitrip:select', id),
   remove: (id) => ipcRenderer.invoke('vitrip:remove', id),
-  send: (text, quote) => ipcRenderer.invoke('vitrip:send', text, quote),
+  regenerate: (parentId) => ipcRenderer.invoke('vitrip:regenerate', parentId),
+  selectBranch: (headId) => ipcRenderer.invoke('vitrip:selectBranch', headId),
+  feedback: (id, value) => ipcRenderer.invoke('vitrip:feedback', id, value),
+  uploadAttachment: (tripId, id, name, bytes) =>
+    ipcRenderer.invoke('vitrip:uploadAttachment', tripId, id, name, bytes),
+  removeAttachment: (tripId, id) => ipcRenderer.invoke('vitrip:removeAttachment', tripId, id),
+  send: (text, quote, attachmentIds) =>
+    ipcRenderer.invoke('vitrip:send', text, quote, attachmentIds),
   notebook: (id) => ipcRenderer.invoke('vitrip:notebook', id),
   updateNotebook: (id, patch) => ipcRenderer.invoke('vitrip:updateNotebook', id, patch),
   addBookmark: (id, quote) => ipcRenderer.invoke('vitrip:addBookmark', id, quote),

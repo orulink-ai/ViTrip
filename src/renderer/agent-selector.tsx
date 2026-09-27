@@ -48,6 +48,21 @@ export function AgentSelector({
         />
         <ModelSelectorContent searchable={false} side="top" />
       </ModelSelectorRoot>
+      {config.runtime === 'codex' && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={disabled}
+          onClick={onSettings}
+          aria-label="选择 Codex 模型和思考强度"
+          className="max-w-40"
+        >
+          <span className="truncate">
+            {config.codexModel || '默认模型'} · {config.codexEffort || '默认强度'}
+          </span>
+        </Button>
+      )}
       <Button
         type="button"
         variant="ghost"

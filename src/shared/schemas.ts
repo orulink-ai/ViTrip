@@ -1,3 +1,4 @@
+import { notebookToolSchema } from './notebook-documents';
 import { photoSchema } from './photos';
 import { z } from 'zod';
 import { locationSchema } from './itinerary-map';
@@ -89,6 +90,11 @@ export const nameSchema = z.string().trim().min(1).max(80);
 export const settingsSchema = z.object({
   runtime: z.enum(['pi', 'codex']).optional(),
   codexModel: z.string().trim().max(200).optional(),
+  codexEffort: z
+    .string()
+    .regex(/^[a-z]*$/)
+    .max(30)
+    .optional(),
   imageInput: z.boolean().optional(),
   baseURL: z.string().url(),
   model: z.string().min(1).max(200),
@@ -103,6 +109,7 @@ export const boundsSchema = z.object({
   visible: z.boolean(),
 });
 export const toolsSchema = {
+  notebook: notebookToolSchema,
   photo_candidates: z.object({
     url: z.string().url().optional(),
     subject: z.string().trim().min(1).max(200),

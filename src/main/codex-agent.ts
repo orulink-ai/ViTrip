@@ -218,13 +218,34 @@ export async function runCodexAgent(options: AgentRunOptions, commandOverride?: 
         ['commandExecution', 'fileChange', 'mcpToolCall', 'webSearch'].includes(value.type)
       ) {
         const previous = activities.get(value.id);
+        const label = (
+          {
+            commandExecution: '执行本机命令',
+            fileChange: '修改文件',
+            mcpToolCall: '调用外部工具',
+            webSearch: '搜索网页',
+          } as Record<string, string>
+        )[value.type];
+        options.onStatus(completed ? '工具已返回，正在继续分析…' : `正在${label}…`);
         publish({
           id: value.id,
           name: String(value.tool ?? value.type),
-          input: previous?.input ?? safe(value.command ?? value.changes ?? value.arguments ?? ''),
+          input:
+            previous?.input ??
+            safe(
+              value.command ??
+                value.changes ??
+                value.arguments ??
+                value.action ??
+                value.query ??
+                '',
+            ),
           output: safe(value.aggregatedOutput ?? value.result ?? value.error ?? ''),
           status: completed
-            ? value.status === 'failed' || value.status === 'declined' || value.error
+            ? value.status === 'failed' ||
+              value.status === 'declined' ||
+              value.error ||
+              (typeof value.exitCode === 'number' && value.exitCode !== 0)
               ? 'error'
               : 'complete'
             : 'active',
@@ -232,6 +253,17 @@ export async function runCodexAgent(options: AgentRunOptions, commandOverride?: 
           ...(completed ? { finishedAt: Date.now() } : {}),
         });
       }
+    } else if (
+      message.method === 'item/commandExecution/outputDelta' &&
+      typeof params.itemId === 'string' &&
+      typeof params.delta === 'string'
+    ) {
+      const previous = activities.get(params.itemId);
+      if (previous) publish({ ...previous, output: safe(previous.output + params.delta) });
+    } else if (message.method === 'error') {
+      const error = z.object({ message: z.string() }).safeParse(params.error);
+      if (params.willRetry === true) options.onStatus('Codex 连接中断，正在重试…');
+      else fail(new Error(error.success ? safe(error.data.message) : 'Codex 请求失败'));
     } else if (message.method === 'turn/completed') {
       const turn = z
         .object({
@@ -280,7 +312,10 @@ export async function runCodexAgent(options: AgentRunOptions, commandOverride?: 
       .parse(await rpc.request('account/read', {}));
     if (!account.account && account.requiresOpenaiAuth)
       throw new Error('Codex 尚未登录。请在终端运行 codex login 后重试。');
-    const file = path.join(options.sessionDir, 'codex-thread.json');
+    const file = path.join(
+      options.sessionDir,
+      options.contextKey ? `codex-thread-${options.contextKey}.json` : 'codex-thread.json',
+    );
     // A restricted background sync must not change the interactive thread's tool catalog.
     const ephemeral = !!options.toolNames;
     let saved: { threadId: string } | undefined;
@@ -328,12 +363,18 @@ export async function runCodexAgent(options: AgentRunOptions, commandOverride?: 
     const startedTurn = z.object({ turn: z.object({ id: z.string() }) }).parse(
       await rpc.request('turn/start', {
         threadId,
+        ...(options.settings.codexModel ? { model: options.settings.codexModel } : {}),
+        ...(options.settings.codexEffort ? { effort: options.settings.codexEffort } : {}),
         input: [
           {
             type: 'text',
             text: (options.initialContext ? options.initialContext + '\n\n' : '') + options.prompt,
             text_elements: [],
           },
+          ...(options.images ?? []).map((image) => ({
+            type: 'image',
+            url: `data:${image.mimeType};base64,${image.data}`,
+          })),
         ],
       }),
     );
