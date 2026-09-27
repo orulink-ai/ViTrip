@@ -393,28 +393,43 @@
   }
 }
 
-/* The globe extends beyond the viewport; only its upper-left portion is visible. */
-.home-globe-corner {
+/* Floating chat remains mounted; its official modal portals out of this pane. */
+.workspace[data-floating-chat='true'] > .chat-panel,
+.workspace[data-floating-chat='true'] > .resize-handle {
+  display: none;
+}
+
+/* Static city texture: crop source controls outside the viewport and soften the top/left edges. */
+.home-map-corner {
   position: absolute;
   right: 0;
   bottom: 0;
-  width: min(38%, 480px);
-  height: min(40%, 380px);
+  width: min(42%, 540px);
+  height: min(43%, 400px);
   overflow: hidden;
   pointer-events: none;
   z-index: 2;
 }
-.home-globe-preview {
+.home-map-preview {
   position: absolute;
-  width: 640px;
-  height: 640px;
-  left: -45px;
-  top: -65px;
+  inset: 0;
+  overflow: hidden;
+  border-top-left-radius: 80%;
   opacity: 0;
   transition: opacity 400ms ease;
-  mask-image: linear-gradient(135deg, transparent, black 35%);
+  mask-image: radial-gradient(ellipse 90% 100% at 100% 100%, black 25%, #000b 48%, transparent 90%);
 }
-.home-globe-action {
+.home-map-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 45%;
+  filter: grayscale(1);
+}
+.home-map-preview[data-ready='true'] {
+  opacity: 0.6;
+}
+.home-map-action {
   position: absolute;
   right: 16px;
   bottom: 12px;
@@ -424,33 +439,28 @@
   gap: 6px;
   pointer-events: auto;
 }
-.home-globe-map {
+.home-map-action > span {
+  max-width: 330px;
+  text-align: right;
+}
+.home-map-interactive {
   width: 100%;
   height: min(65vh, 640px);
+  opacity: 0;
+  transition: opacity 400ms ease;
+}
+.home-map-interactive[data-ready='true'] {
+  opacity: 1;
 }
 @media (max-height: 760px) {
-  .home-globe-corner {
+  .home-map-corner {
     height: 170px;
     width: 270px;
   }
 }
-
-.home-globe-preview[data-ready='true'] {
-  opacity: 0.65;
-}
-.home-globe-map {
-  opacity: 0;
-  transition: opacity 400ms ease;
-}
-.home-globe-map[data-ready='true'] {
-  opacity: 1;
-}
-.home-globe-corner:has(.home-globe-preview:not([data-ready='true'])) .home-globe-action > span {
-  visibility: hidden;
-}
 @media (prefers-reduced-motion: reduce) {
-  .home-globe-preview,
-  .home-globe-map {
+  .home-map-preview,
+  .home-map-interactive {
     transition: none;
   }
 }

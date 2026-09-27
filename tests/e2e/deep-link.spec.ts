@@ -15,8 +15,9 @@ test('复制链接可跨会话定位消息和旅行页面，支持系统唤起�
     const message = trip.messages[0];
     await page
       .locator(`[id="message-${message.id}"]`)
-      .getByRole('button', { name: '复制本机链接' })
+      .getByRole('button', { name: '更多', exact: true })
       .click();
+    await page.getByRole('menuitem', { name: '复制本机链接' }).click();
     const url = await app.evaluate(({ clipboard }) => clipboard.readText());
     expect(url).toBe(`vitrip://message/${trip.id}/${message.id}`);
     await page.getByRole('button', { name: '会话操作 ' + trip.title }).click();
@@ -58,8 +59,7 @@ test('复制链接可跨会话定位消息和旅行页面，支持系统唤起�
     await page.getByRole('button', { name: '打开本机链接' }).click();
     await page.getByLabel('本机链接', { exact: true }).fill(notebook);
     await page.getByRole('button', { name: '打开记录' }).click();
-    await expect(page.getByLabel('我的笔记 Markdown')).toHaveValue(`[回到消息](${url})`);
-    await page.getByRole('button', { name: '预览', exact: true }).click();
+    await expect(page.getByLabel('我的笔记 Markdown')).toHaveCount(0);
     await expect(page.getByRole('link', { name: '回到消息' })).toHaveAttribute('href', url);
     await page.getByRole('link', { name: '回到消息' }).click();
     await expect(page.locator(`[id="message-${message.id}"]`)).toBeFocused();

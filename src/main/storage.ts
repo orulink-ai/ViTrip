@@ -1,3 +1,4 @@
+import { attachmentSchema } from '../shared/attachments';
 import { photoSchema } from '../shared/photos';
 import { editItinerary, type ItineraryEdit } from '../shared/journey-editing';
 import {
@@ -9,36 +10,48 @@ import {
 import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { randomUUID } from 'node:crypto';
+import { prepareToolSchema, mergePreparation } from '../shared/prepare';
+import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { planSchema, journeySchema, journalSchema, nameSchema } from '../shared/schemas';
 import type { Settings, Trip, Journey } from '../shared/types';
+const messageSchema = z.object({
+  id: z.string(),
+  role: z.enum(['user', 'assistant']),
+  content: z.string(),
+  parts: z
+    .array(
+      z.discriminatedUnion('type', [
+        z.object({ type: z.literal('text'), text: z.string() }),
+        z.object({ type: z.literal('tool'), toolId: z.string() }),
+      ]),
+    )
+    .optional(),
+  feedback: z.enum(['positive', 'negative']).optional(),
+  quote: quoteSchema.optional(),
+  attachments: z.array(attachmentSchema).max(8).optional(),
+  activities: z
+    .array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        input: z.string(),
+        output: z.string(),
+        status: z.enum(['active', 'complete', 'error', 'interrupted']),
+        startedAt: z.number(),
+        finishedAt: z.number().optional(),
+      }),
+    )
+    .optional(),
+});
 const tripSchema = z.object({
   id: z.string(),
   journeyId: z.string().default(''),
   customTitle: z.boolean().optional(),
   title: z.string(),
-  messages: z.array(
-    z.object({
-      id: z.string(),
-      role: z.enum(['user', 'assistant']),
-      content: z.string(),
-      quote: quoteSchema.optional(),
-      activities: z
-        .array(
-          z.object({
-            id: z.string(),
-            name: z.string(),
-            input: z.string(),
-            output: z.string(),
-            status: z.enum(['active', 'complete', 'error', 'interrupted']),
-            startedAt: z.number(),
-            finishedAt: z.number().optional(),
-          }),
-        )
-        .optional(),
-    }),
-  ),
+  messages: z.array(messageSchema),
+  branches: z.array(z.array(messageSchema)).optional(),
+  contextKey: z.string().uuid().optional(),
   plan: planSchema.nullable(),
   updatedAt: z.number(),
 });
@@ -99,6 +112,7 @@ export class Storage {
         .object({
           runtime: z.enum(['pi', 'codex']).optional(),
           codexModel: z.string().optional(),
+          codexEffort: z.string().optional(),
           baseURL: z.string(),
           model: z.string(),
           imageInput: z.boolean().optional(),
@@ -109,6 +123,7 @@ export class Storage {
       this.settings = {
         runtime: value.runtime,
         codexModel: value.codexModel,
+        codexEffort: value.codexEffort,
         imageInput: value.imageInput,
         jevApiKey: value.encryptedJevKey
           ? cipher.decrypt(Buffer.from(value.encryptedJevKey, 'base64'))
@@ -147,6 +162,18 @@ export class Storage {
     this.notebooks[journeyId] = notebook;
     this.write('notebooks-v1', this.notebooks);
     return notebook;
+  }
+  prepare(journeyId: string) {
+    const items = this.notebook(journeyId).todos;
+    return { revision: createHash('sha256').update(JSON.stringify(items)).digest('hex'), items };
+  }
+  updatePrepare(journeyId: string, raw: unknown) {
+    const input = prepareToolSchema.parse(raw);
+    if (input.action !== 'update') throw new Error('需要 update 操作');
+    const current = this.prepare(journeyId);
+    if (input.revision !== current.revision) throw new Error('准备待办已改变，请重新读取后合并');
+    this.updateNotebook(journeyId, { todos: mergePreparation(current.items, input.items) });
+    return this.prepare(journeyId);
   }
   updateNotebook(journeyId: string, patch: unknown) {
     const current = this.notebook(journeyId);
@@ -188,6 +215,7 @@ export class Storage {
     this.write('settings', {
       runtime: settings.runtime,
       codexModel: settings.codexModel,
+      codexEffort: settings.codexEffort,
       imageInput: settings.imageInput,
       baseURL: settings.baseURL,
       model: settings.model,
@@ -215,6 +243,28 @@ export class Storage {
     const journey = this.journeys.find((j) => j.id === trip.journeyId);
     if (!journey) throw new Error('旅行文件夹不存在');
     return journey;
+  }
+  removeJourney(id: string): string[] {
+    if (!this.journeys.some((journey) => journey.id === id)) throw new Error('旅行文件夹不存在');
+    const removed = this.trips.filter((trip) => trip.journeyId === id).map((trip) => trip.id);
+    const journeys = this.journeys.filter((journey) => journey.id !== id);
+    const trips = this.trips.filter((trip) => trip.journeyId !== id);
+    const notebooks = { ...this.notebooks };
+    delete notebooks[id];
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      this.write('workspace-v2', { trips, journeys });
+      this.write('notebooks-v1', notebooks);
+      this.db.prepare('DELETE FROM state WHERE name=?').run('trips');
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+    this.trips = trips;
+    this.journeys = journeys;
+    this.notebooks = notebooks;
+    return removed;
   }
   createJourney(title: string) {
     return this.create(this.newJourney(title).id);

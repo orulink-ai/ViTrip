@@ -237,19 +237,27 @@ test('local desktop: real browser tools, itinerary, approval and takeover', asyn
   await page.getByLabel('旅行需求', { exact: true }).fill('测试规划');
   await page.getByRole('button', { name: '发送', exact: true }).click();
   await expect(page.getByText('已在真实浏览器中搜索京都，并生成测试行程。')).toBeVisible();
-  await expect(
-    page
-      .getByRole('region', { name: '交互行程正文' })
-      .getByRole('heading', { name: '测试行程 · 京都', exact: true }),
-  ).toBeVisible();
+  await page.getByRole('tab', { name: '行程', exact: true }).click();
+  await expect(page.getByLabel('行程交互地图', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '展开地点列表', exact: true }).click();
+  await expect(page.getByLabel('地图地点列表')).toContainText('清水寺');
+  expect(
+    (await page.evaluate(() => window.vitrip.init())).journeys.some(
+      (j) => j.plan?.title === '测试行程 · 京都',
+    ),
+  ).toBe(true);
   const activity = page.getByTestId('agent-activity').first();
   await expect(activity).toBeVisible();
-  await expect(activity.getByText('打开网页', { exact: true })).toBeVisible();
-  await activity
+  await expect(activity.getByRole('button', { name: /打开网页/ })).toBeVisible();
+  const observation = page
+    .getByTestId('agent-activity')
+    .filter({ has: page.getByRole('button', { name: /observe/ }) })
+    .first();
+  await observation
     .getByRole('button', { name: /observe/ })
     .first()
     .click();
-  await expect(activity.getByText(/旅行资料测试页/).first()).toBeVisible();
+  await expect(observation.getByText(/旅行资料测试页/).first()).toBeVisible();
   await page.screenshot({ path: 'test-results/vitrip-plan.png' });
   await page.getByRole('tab', { name: '浏览器', exact: true }).click();
   const guest = app
@@ -305,18 +313,22 @@ test('restores conversation and itinerary after restarting', async () => {
     env: { ...process.env, VITRIP_TEST_DATA: directory },
   });
   page = await app.firstWindow();
-  await expect(
-    page
-      .getByRole('region', { name: '交互行程正文' })
-      .getByRole('heading', { name: '测试行程 · 京都', exact: true }),
-  ).toBeVisible();
+  await page.getByRole('tab', { name: '行程', exact: true }).click();
+  await expect(page.getByLabel('行程交互地图', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '展开地点列表', exact: true }).click();
+  await expect(page.getByLabel('地图地点列表')).toContainText('清水寺');
+  expect(
+    (await page.evaluate(() => window.vitrip.init())).journeys.some(
+      (j) => j.plan?.title === '测试行程 · 京都',
+    ),
+  ).toBe(true);
   await expect(page.getByText('我已重新观察当前页面，接管后的内容已保留。')).toBeVisible();
   const state = await page.evaluate(() => window.vitrip.init());
   expect(state.settings.model).toBe('test-model');
   expect(state.trips[0].messages.filter((message) => message.role === 'user')).toHaveLength(4);
 });
 
-test('travel folders, rename, cross-session memory and searchable HTML journal', async () => {
+test('旅行文件夹重命名、跨会话共享资料与旧手册保留', async () => {
   await page.getByRole('button', { name: '创建新的旅行', exact: true }).click();
   await page.getByLabel('名称', { exact: true }).fill('普吉岛');
   await page.getByRole('button', { name: '保存', exact: true }).click();
@@ -331,9 +343,10 @@ test('travel folders, rename, cross-session memory and searchable HTML journal',
   await page.getByRole('button', { name: '发送', exact: true }).click();
   await expect(page.getByText('住宿决定已整理到共享手册。')).toBeVisible();
   await expect(page.getByRole('button', { name: '住宿问题', exact: true })).toBeVisible();
-  const journal = page.frameLocator('iframe[title="旅行手册"]');
-  await expect(journal.getByRole('heading', { name: '普吉岛旅行手册', exact: true })).toBeVisible();
-  await expect(journal.getByText('已决定住卡塔海滩，喜欢安静')).toBeVisible();
+  const saved = await page.evaluate(() => window.vitrip.init());
+  expect(saved.journeys.find((j) => j.title === '普吉岛')?.entries).toEqual(
+    expect.arrayContaining([expect.objectContaining({ answer: '已决定住卡塔海滩，喜欢安静' })]),
+  );
   await page.getByRole('button', { name: '旅行操作 普吉岛', exact: true }).click();
   await page.getByRole('menuitem', { name: '新建会话', exact: true }).click();
   await page.getByRole('button', { name: '新的会话', exact: true }).hover();
@@ -344,12 +357,12 @@ test('travel folders, rename, cross-session memory and searchable HTML journal',
   await page.getByLabel('旅行需求', { exact: true }).fill('共享记忆测试：出海要注意什么？');
   await page.getByRole('button', { name: '发送', exact: true }).click();
   await expect(page.getByText('已沿用卡塔海滩的住宿决定，并补充出海提醒。')).toBeVisible();
-  await page.getByRole('tab', { name: '参考资料', exact: true }).click();
-  await expect(page.getByText('已决定住卡塔海滩，喜欢安静')).toBeVisible();
-  await expect(page.getByText('确认天气和返程安排')).toBeVisible();
-  await page.getByLabel('搜索已整理信息').fill('卡塔');
-  await expect(page.getByText('已决定住卡塔海滩，喜欢安静')).toBeVisible();
-  await expect(page.getByText('确认天气和返程安排')).not.toBeVisible();
+  const shared = (await page.evaluate(() => window.vitrip.init())).journeys.find(
+    (j) => j.title === '普吉岛',
+  )!;
+  expect(shared.entries.map((e) => e.answer)).toEqual(
+    expect.arrayContaining(['已决定住卡塔海滩，喜欢安静', '确认天气和返程安排']),
+  );
   await page.getByRole('button', { name: '旅行操作 普吉岛', exact: true }).click();
   await page.getByRole('menuitem', { name: '重命名旅行', exact: true }).click();
   await page.getByLabel('名称', { exact: true }).fill('普吉岛七日游');
@@ -363,12 +376,10 @@ test('travel folders, rename, cross-session memory and searchable HTML journal',
       .sort(),
   ).toEqual(['住宿问题', '出海问题']);
   expect(folder.entries).toHaveLength(2);
-  await page.getByRole('tab', { name: '总览', exact: true }).click();
-  await expect(
-    page
-      .frameLocator('iframe[title="旅行手册"]')
-      .getByRole('heading', { name: '普吉岛旅行手册', exact: true }),
-  ).toBeVisible();
+  await page.getByRole('tab', { name: '行程', exact: true }).click();
+  await expect(page.getByRole('tab', { name: '行程地图', exact: true })).toBeVisible();
+  await expect(page.getByRole('tab', { name: '准备待办', exact: true })).toBeVisible();
+  expect(folder.html).toContain('普吉岛旅行手册');
   await page.screenshot({ path: 'test-results/vitrip-folders-journal.png' });
   await app.close();
   app = await electron.launch({
@@ -388,7 +399,10 @@ test('travel folders, rename, cross-session memory and searchable HTML journal',
   await page.getByRole('button', { name: recorded.title, exact: true }).click();
   await expect(page.getByTestId('agent-activity').first()).toBeVisible();
   await expect(
-    page.getByTestId('agent-activity').first().getByText('打开网页', { exact: true }),
+    page
+      .getByTestId('agent-activity')
+      .first()
+      .getByRole('button', { name: /打开网页/ }),
   ).toBeVisible();
   expect(restored.journeys.find((j) => j.id === folder.id)?.entries).toHaveLength(2);
   expect(restored.journeys.find((j) => j.id === folder.id)?.html).toContain('普吉岛旅行手册');

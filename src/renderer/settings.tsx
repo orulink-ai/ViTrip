@@ -1,3 +1,9 @@
+import type { CodexModel } from '../shared/codex-models';
+import {
+  ModelSelectorRoot,
+  ModelSelectorTrigger,
+  ModelSelectorContent,
+} from './components/assistant-ui/elements/model-selector';
 import {
   Select,
   SelectTrigger,
@@ -31,6 +37,31 @@ export function SettingsDialog({
 }) {
   const [runtime, setRuntime] = useState<'pi' | 'codex'>(config.runtime ?? 'pi');
   const [codexModel, setCodexModel] = useState(config.codexModel ?? '');
+  const [codexEffort, setCodexEffort] = useState(config.codexEffort ?? '');
+  const [codexModels, setCodexModels] = useState<CodexModel[]>([]);
+  const [catalogError, setCatalogError] = useState('');
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  useEffect(() => {
+    if (!open || runtime !== 'codex') return;
+    let cancelled = false;
+    setCatalogLoading(true);
+    setCatalogError('');
+    void window.vitrip
+      .codexModels()
+      .then((models) => {
+        if (!cancelled) setCodexModels(models);
+      })
+      .catch((e) => {
+        if (!cancelled) setCatalogError(String(e));
+      })
+      .finally(() => {
+        if (!cancelled) setCatalogLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, runtime]);
+  const selectedModel = codexModels.find((m) => m.model === codexModel);
   const [baseURL, setBaseURL] = useState(config.baseURL);
   const [model, setModel] = useState(config.model);
   const [imageInput, setImageInput] = useState(config.imageInput);
@@ -42,6 +73,7 @@ export function SettingsDialog({
     if (open) {
       setRuntime(config.runtime ?? 'pi');
       setCodexModel(config.codexModel ?? '');
+      setCodexEffort(config.codexEffort ?? '');
       setBaseURL(config.baseURL);
       setModel(config.model);
       setImageInput(config.imageInput);
@@ -68,6 +100,7 @@ export function SettingsDialog({
                 await window.vitrip.settings({
                   runtime,
                   codexModel,
+                  codexEffort,
                   baseURL,
                   model,
                   imageInput,
@@ -101,13 +134,65 @@ export function SettingsDialog({
                 login。无需在这里填写 Codex 密钥。
               </p>
               <label>
-                Codex 模型（可选）
-                <Input
-                  aria-label="Codex 模型"
-                  value={codexModel}
-                  onChange={(event) => setCodexModel(event.target.value)}
-                  placeholder="留空使用 Codex 默认模型"
-                />
+                Codex 模型
+                <ModelSelectorRoot
+                  models={[
+                    { id: '__default__', name: '跟随本机 Codex 配置' },
+                    ...codexModels.map((m) => ({
+                      id: m.model,
+                      name: m.displayName,
+                      description: m.description,
+                    })),
+                    ...(!selectedModel && codexModel ? [{ id: codexModel, name: codexModel }] : []),
+                  ]}
+                  value={codexModel || '__default__'}
+                  onValueChange={(value) => {
+                    setCodexModel(value === '__default__' ? '' : value);
+                    setCodexEffort(
+                      codexModels.find((m) => m.model === value)?.defaultReasoningEffort ?? '',
+                    );
+                  }}
+                >
+                  <ModelSelectorTrigger
+                    type="button"
+                    aria-label="Codex 模型"
+                    disabled={catalogLoading}
+                  />
+                  <ModelSelectorContent />
+                </ModelSelectorRoot>
+              </label>
+              {catalogLoading && <p role="status">正在读取可用模型…</p>}
+              {catalogError && <p role="alert">{catalogError}</p>}
+              <label>
+                思考强度
+                <Select
+                  value={codexEffort || '__default__'}
+                  onValueChange={(value) =>
+                    setCodexEffort(
+                      value === '__default__'
+                        ? (selectedModel?.defaultReasoningEffort ?? '')
+                        : value,
+                    )
+                  }
+                  disabled={!selectedModel || catalogLoading}
+                >
+                  <SelectTrigger aria-label="Codex 思考强度">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__default__">
+                      默认
+                      {selectedModel
+                        ? ` · ${selectedModel.defaultReasoningEffort}`
+                        : '（先选择模型）'}
+                    </SelectItem>
+                    {selectedModel?.supportedReasoningEfforts.map((effort) => (
+                      <SelectItem key={effort.reasoningEffort} value={effort.reasoningEffort}>
+                        {effort.reasoningEffort}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </label>
             </>
           )}

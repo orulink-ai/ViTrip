@@ -6,7 +6,7 @@ import http from 'node:http';
 import { Storage } from '../../src/main/storage';
 import { demoPlan } from '../../src/shared/demo';
 
-test('真实浏览器照片经模型工具缓存，图像传入接口，行程和地图共用且重启可读', async () => {
+test('真实浏览器照片经模型工具缓存，图像传入接口，地图地点详情展示且重启可读', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'vitrip-photo-flow-'));
   const store = new Storage(dir, { encrypt: (s) => Buffer.from(s), decrypt: (b) => b.toString() });
   const trip = store.create();
@@ -110,13 +110,20 @@ test('真实浏览器照片经模型工具缓存，图像传入接口，行程�
       .toBe(1);
     await expect.poll(() => visualInput).toBe(true);
     await page.getByRole('tab', { name: '行程', exact: true }).click();
-    const activity = page.getByRole('article', { name: '行程活动 1', exact: true });
+    await page.getByRole('button', { name: '展开地点列表', exact: true }).click();
+    await page
+      .getByLabel('地图地点列表')
+      .getByRole('button', { name: /^1\. 清水寺/ })
+      .click();
+    const activity = page.getByLabel('选中地点');
     await activity.getByRole('button', { name: /^Open image: 清水寺/ }).click();
     await expect(page.getByRole('dialog').locator('img')).toHaveJSProperty('naturalWidth', 160);
     await expect(page.getByRole('dialog')).toContainText('地点、分店与房型待核对');
     await expect(page.getByRole('link', { name: /查看来源页面/ })).toBeVisible();
     await page.keyboard.press('Escape');
-    await activity.getByRole('button', { name: '在地图中查看' }).click();
+    await page.getByRole('tab', { name: '准备待办', exact: true }).click();
+    await page.getByRole('tab', { name: '行程地图', exact: true }).click();
+    await page.getByRole('button', { name: '展开地点列表', exact: true }).click();
     await expect(
       page.getByLabel('选中地点').getByRole('button', { name: /^Open image: 清水寺/ }),
     ).toBeVisible();
@@ -138,9 +145,12 @@ test('真实浏览器照片经模型工具缓存，图像传入接口，行程�
     ).toMatch(/^data:image\/png;base64,/);
     await page.evaluate((id) => window.vitrip.create(id), trip.journeyId);
     await page.getByRole('tab', { name: '行程', exact: true }).click();
-    await expect(
-      page.getByRole('article', { name: '行程活动 1', exact: true }).locator('img'),
-    ).toHaveJSProperty('naturalWidth', 160);
+    await page.getByRole('button', { name: '展开地点列表', exact: true }).click();
+    await page
+      .getByLabel('地图地点列表')
+      .getByRole('button', { name: /^1\. 清水寺/ })
+      .click();
+    await expect(page.getByLabel('选中地点').locator('img')).toHaveJSProperty('naturalWidth', 160);
   } finally {
     await app.close();
     server.closeAllConnections();

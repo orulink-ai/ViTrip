@@ -69,7 +69,12 @@ export function TripSidebar({
   const isFolderOpen = (id: string) => folderOpen.get(id) ?? active?.journeyId === id;
   const [menuOpen, setMenuOpen] = useState(false);
   const [editor, setEditor] = useState<Editor | null>(null);
-  useEffect(() => onOverlay(menuOpen || !!editor), [menuOpen, editor, onOverlay]);
+  const [removing, setRemoving] = useState<Journey | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  useEffect(
+    () => onOverlay(menuOpen || !!editor || !!removing),
+    [menuOpen, editor, removing, onOverlay],
+  );
   const [name, setName] = useState('');
   const [destination, setDestination] = useState('');
   const [saving, setSaving] = useState(false);
@@ -159,6 +164,14 @@ export function TripSidebar({
                           <Pencil />
                           {t('重命名旅行')}
                         </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          variant="destructive"
+                          onSelect={() => setRemoving(journey)}
+                        >
+                          <Trash2 />
+                          {t('删除旅行')}
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                     {isFolderOpen(journey.id) && (
@@ -171,7 +184,12 @@ export function TripSidebar({
                                 isActive={active?.id === item.id}
                                 aria-current={active?.id === item.id ? 'page' : undefined}
                                 title={item.title}
-                                onClick={() => void run(() => onSelect(item.id))}
+                                onClick={() => {
+                                  if (active?.id !== item.id) void run(() => onSelect(item.id));
+                                }}
+                                onDoubleClick={() =>
+                                  edit({ kind: 'trip', id: item.id, title: item.title })
+                                }
                               >
                                 <span>{item.title}</span>
                               </SidebarMenuButton>
@@ -245,6 +263,48 @@ export function TripSidebar({
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+      <Dialog
+        open={!!removing}
+        onOpenChange={(open) => {
+          if (!open && !deleting) setRemoving(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('删除旅行')}</DialogTitle>
+            <DialogDescription>
+              {t('将删除「{title}」及其中的 {count} 个会话、行程、笔记和附件，无法撤销。', {
+                title: removing?.title ?? '',
+                count: trips.filter((trip) => trip.journeyId === removing?.id).length,
+              })}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" disabled={deleting} onClick={() => setRemoving(null)}>
+              {t('取消')}
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deleting}
+              onClick={() =>
+                void run(async () => {
+                  if (!removing) return;
+                  setDeleting(true);
+                  try {
+                    await window.vitrip.removeJourney(removing.id);
+                    await onChange();
+                    setRemoving(null);
+                  } finally {
+                    setDeleting(false);
+                  }
+                })
+              }
+            >
+              {t(deleting ? '正在删除…' : '确认删除')}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
       <Dialog
         open={!!editor}
         onOpenChange={(open) => {

@@ -6,11 +6,18 @@ import http from 'node:http';
 import { Storage } from '../../src/main/storage';
 import { demoPlan } from '../../src/shared/demo';
 async function quoteActivity(page: Page) {
-  const activity = page.getByRole('article', { name: '行程活动 1', exact: true });
-  const details = activity.locator('details').first();
-  if ((await details.getAttribute('open')) === null)
-    await activity.getByText('详情与来源', { exact: true }).click();
-  const text = activity.locator('p.whitespace-pre-wrap');
+  const closeChat = page.getByRole('button', { name: 'Close Assistant', exact: true });
+  if (await closeChat.isVisible()) await closeChat.click();
+  const openList = page.getByRole('button', { name: '展开地点列表', exact: true });
+  if (await openList.isVisible()) await openList.click();
+  await page.getByRole('button', { name: '地图第 1 天', exact: true }).click();
+  await page
+    .getByLabel('地图地点列表')
+    .getByRole('button', { name: /清水寺/ })
+    .click();
+  const text = page
+    .getByLabel('选中地点', { exact: true })
+    .getByText(demoPlan.days[0].activities[0].detail, { exact: true });
   await text.evaluate((el) => {
     const r = document.createRange();
     r.selectNodeContents(el);
@@ -98,6 +105,7 @@ test('引用行程保留草稿与来源，解释不改计划，模型调用 plan
         }),
       address.port,
     );
+    await page.getByRole('tab', { name: '行程', exact: true }).click();
     await page.getByLabel('旅行需求', { exact: true }).fill('解释一下为什么这样安排？');
     await quoteActivity(page);
     await expect(page.getByLabel('旅行需求', { exact: true })).toHaveValue(
@@ -114,9 +122,7 @@ test('引用行程保留草稿与来源，解释不改计划，模型调用 plan
     await quoteActivity(page);
     await page.getByLabel('旅行需求', { exact: true }).fill('改成下午，其他安排保留');
     await page.getByRole('button', { name: '发送', exact: true }).click();
-    await expect(page.getByRole('article', { name: '行程活动 1', exact: true })).toContainText(
-      '下午 14:00',
-    );
+    await expect(page.getByLabel('选中地点', { exact: true })).toContainText('下午 14:00');
     await expect(page.getByLabel('旅行需求', { exact: true })).toBeEnabled();
     await app.close();
     app = await electron.launch({ args: ['.'], env: { ...process.env, VITRIP_TEST_DATA: dir } });
@@ -128,6 +134,7 @@ test('引用行程保留草稿与来源，解释不改计划，模型调用 plan
       kind: 'itinerary',
       activityId: 'temple',
     });
+    await page.getByRole('button', { name: '展开地点列表', exact: true }).click();
     await page.locator('.message-quote').first().click();
     await expect(page.locator('#temple')).toBeInViewport();
   } finally {

@@ -75,9 +75,9 @@ test('保存后真实请求期限耗尽仍显示成功；下一轮失败不沿�
     await page.getByRole('button', { name: '保存设置', exact: true }).click();
     await page.getByLabel('旅行需求', { exact: true }).fill('保存普吉岛行程后等待回复');
     await page.getByRole('button', { name: '发送', exact: true }).click();
-    await expect(page.getByRole('region', { name: '交互行程正文' })).toContainText(
-      'Hotel Clover Patong',
-    );
+    await page.getByRole('tab', { name: '行程', exact: true }).click();
+    await page.getByRole('button', { name: '展开地点列表', exact: true }).click();
+    await expect(page.getByLabel('地图地点列表')).toContainText('Hotel Clover Patong');
     await expect.poll(() => savedToolReturned).toBe(true);
     const savedNotice = '行程已保存，后续回复超时。已保存的内容可在行程中查看。';
     await expect(page.getByText(savedNotice, { exact: true })).toBeVisible({ timeout: 190_000 });
@@ -93,9 +93,9 @@ test('保存后真实请求期限耗尽仍显示成功；下一轮失败不沿�
     app = await launch();
     page = await app.firstWindow();
     await expect(page.getByText(savedNotice, { exact: true })).toBeVisible();
-    await expect(page.getByRole('region', { name: '交互行程正文' })).toContainText(
-      'Hotel Clover Patong',
-    );
+    await page.getByRole('tab', { name: '行程', exact: true }).click();
+    await page.getByRole('button', { name: '展开地点列表', exact: true }).click();
+    await expect(page.getByLabel('地图地点列表')).toContainText('Hotel Clover Patong');
   } finally {
     await app?.close();
     server.closeAllConnections();

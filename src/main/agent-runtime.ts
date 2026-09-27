@@ -1,3 +1,4 @@
+import type { AgentImage } from '../shared/attachments';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { Settings, ToolActivity } from '../shared/types';
@@ -10,7 +11,9 @@ import { runCodexAgent } from './codex-agent';
 export interface AgentRunOptions {
   settings: Settings;
   sessionDir: string;
+  contextKey?: string;
   prompt: string;
+  images?: AgentImage[];
   initialContext?: string;
   toolNames?: ToolName[];
   control: RunControl;

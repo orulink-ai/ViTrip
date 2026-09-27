@@ -5,44 +5,56 @@ import { join } from 'node:path';
 import { Storage } from '../../src/main/storage';
 import { demoPlan } from '../../src/shared/demo';
 
-test('连续行程可新增和跨日移动，重启后保留活动身份', async () => {
+test('行程变更新增和跨日移动会同步地图，重启后保留活动身份', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'vitrip-edit-'));
   const store = new Storage(dir, { encrypt: (s) => Buffer.from(s), decrypt: (b) => b.toString() });
   const trip = store.create();
-  store.updatePlan(trip.journeyId, structuredClone(demoPlan));
+  const plan = structuredClone(demoPlan);
+  plan.days[0].activities[0].id = 'temple';
+  store.updatePlan(trip.journeyId, plan);
   store.close();
   let app = await electron.launch({ args: ['.'], env: { ...process.env, VITRIP_TEST_DATA: dir } });
   try {
     let page = await app.firstWindow();
     await page.getByRole('tab', { name: '行程', exact: true }).click();
-    await expect(page.getByRole('article', { name: '行程活动 1', exact: true })).toBeVisible();
-    await expect(page.getByRole('article', { name: '行程活动 4', exact: true })).toBeVisible();
-    await expect(page.getByRole('table', { name: '每日总览' })).toHaveCount(0);
-    await page.locator('#itinerary-day-0').getByRole('heading', { level: 2 }).click();
-    await expect(page.getByRole('article', { name: '行程活动 1', exact: true })).not.toBeVisible();
-    await expect(page.getByRole('article', { name: '行程活动 4', exact: true })).toBeVisible();
-    await page.getByRole('button', { name: '查看第 1 天', exact: true }).click();
-    const first = page.getByRole('article', { name: '行程活动 1', exact: true });
-    const id = await first.getAttribute('id');
-    await first.getByText('调整活动', { exact: true }).click();
-    await first.getByRole('button', { name: '移到下一天', exact: true }).click();
-    await expect(page.locator('#itinerary-day-1').locator(`[id="${id}"]`)).toContainText(
-      '从清水寺走进东山',
-    );
-    await page.getByRole('textbox', { name: '第 1 天新增活动' }).fill('自由散步');
-    await page
-      .locator('#itinerary-day-0')
-      .getByRole('button', { name: '添加活动', exact: true })
-      .click();
-    await expect(page.locator('#itinerary-day-0')).toContainText('自由散步');
+    await page.getByRole('button', { name: '展开地点列表', exact: true }).click();
+    await page.getByRole('button', { name: '地图第 1 天', exact: true }).click();
+    await expect(page.getByLabel('地图地点列表')).toContainText('清水寺');
+    // Direct editing controls were retired. Exercise the persisted editing command
+    // and verify the same journey event used by agent changes updates the live map.
+    await page.evaluate(async (id) => {
+      const journey = (await window.vitrip.init()).journeys.find((j) => j.id === id)!;
+      const moved = await window.vitrip.editItinerary(id, journey.revision, {
+        type: 'move',
+        activityId: 'temple',
+        day: 1,
+        index: 0,
+      });
+      await window.vitrip.editItinerary(id, moved.revision, {
+        type: 'add',
+        day: 0,
+        title: '自由散步',
+      });
+    }, trip.journeyId);
+    await expect(page.getByLabel('地图地点列表')).not.toContainText('清水寺');
+    await expect(page.getByLabel('地图地点列表')).toContainText('自由散步 · 待定位');
+    await page.getByRole('button', { name: '地图第 2 天', exact: true }).click();
+    const day = page.getByRole('region', { name: '第 2 天', exact: true });
+    await day.getByRole('button', { name: /清水寺/ }).click();
+    await expect(page.locator('#temple')).toContainText('从清水寺走进东山');
+    await expect(day.getByRole('button').first()).toContainText('清水寺');
     await app.close();
     app = await electron.launch({ args: ['.'], env: { ...process.env, VITRIP_TEST_DATA: dir } });
     page = await app.firstWindow();
     await page.getByRole('tab', { name: '行程', exact: true }).click();
-    await expect(page.locator('#itinerary-day-1').locator(`[id="${id}"]`)).toContainText(
-      '从清水寺走进东山',
+    await page.getByRole('button', { name: '展开地点列表', exact: true }).click();
+    await expect(page.locator('#temple')).toContainText('从清水寺走进东山');
+    await expect(page.getByRole('region', { name: '第 2 天', exact: true })).toContainText(
+      '清水寺',
     );
-    await expect(page.locator('#itinerary-day-0')).toContainText('自由散步');
+    await page.getByRole('button', { name: '地图第 1 天', exact: true }).click();
+    await expect(page.getByLabel('地图地点列表')).toContainText('自由散步 · 待定位');
+    await expect(page.getByLabel('地图地点列表')).not.toContainText('清水寺');
   } finally {
     await app.close();
     await rm(dir, { recursive: true, force: true });

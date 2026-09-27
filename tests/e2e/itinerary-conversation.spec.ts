@@ -133,8 +133,9 @@ test('source itinerary survives conversation follow-up, revision and restart', a
       expect(failures).toEqual([]);
     };
     await send('按原攻略整理', '已根据原攻略整理六天行程，住宿为计划，预订待确认。');
-    await expect(page.getByRole('region', { name: '交互行程正文' })).toBeVisible();
-    await page.getByRole('button', { name: '查看第 5 天', exact: true }).click();
+    await expect(page.getByRole('tab', { name: '行程地图', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: '展开地点列表', exact: true }).click();
+    await page.getByRole('button', { name: '地图第 5 天', exact: true }).click();
     await expect(page.getByRole('region', { name: '第 5 天', exact: true })).toContainText(
       'Hotel Clover Patong',
     );
@@ -151,14 +152,20 @@ test('source itinerary survives conversation follow-up, revision and restart', a
     await app.close();
     app = await launch();
     page = await app.firstWindow();
-    await page.getByRole('button', { name: '查看第 5 天', exact: true }).click();
+    await page.getByRole('tab', { name: '行程', exact: true }).click();
+    await page.getByRole('button', { name: '展开地点列表', exact: true }).click();
+    await page.getByRole('button', { name: '地图第 5 天', exact: true }).click();
     const day = page.getByRole('region', { name: '第 5 天', exact: true });
     await expect(day.getByRole('heading', { name: '10月2日 · 休息', exact: true })).toBeVisible();
     await expect(day).toContainText('Hotel Clover Patong');
-    await day.getByText('详情与来源', { exact: true }).click();
-    await day.getByText('原文摘录', { exact: true }).click();
-    await expect(day.locator('blockquote')).toHaveText(source.excerpt);
-    await expect(day.getByRole('button', { name: '查看原文', exact: true })).toBeVisible();
+    await day.getByRole('button', { name: /休息/ }).click();
+    const detail = page.getByLabel('选中地点');
+    await detail.getByRole('button', { name: /Sources/ }).click();
+    await expect(detail).toContainText(source.excerpt);
+    await expect(detail.locator('a').filter({ hasText: '行程原文' })).toHaveAttribute(
+      'href',
+      source.url!,
+    );
     await expect(
       page.getByText('10月2日已改为休息，住宿和原攻略来源均已保留。', { exact: true }),
     ).toBeVisible();

@@ -1,3 +1,4 @@
+import type { AgentImage } from '../shared/attachments';
 import type { ToolResult } from '../shared/photos';
 import { ResearchBudget } from './research-budget';
 import path from 'node:path';
@@ -59,7 +60,9 @@ export async function runTravelAgent(
   options: ToolOptions & {
     settings: Settings;
     sessionDir: string;
+    contextKey?: string;
     prompt: string;
+    images?: AgentImage[];
     initialContext?: string;
     toolNames?: ToolName[];
     onActivity?: (step: ToolActivity) => void;
@@ -110,7 +113,12 @@ export async function runTravelAgent(
       : undefined,
   });
   await resourceLoader.reload();
-  const manager = SessionManager.continueRecent(options.sessionDir, options.sessionDir);
+  const manager = SessionManager.continueRecent(
+    options.sessionDir,
+    options.contextKey
+      ? path.join(options.sessionDir, 'branches', options.contextKey)
+      : options.sessionDir,
+  );
   const budget = new ResearchBudget();
   const boundedExecute: ToolOptions['execute'] = async (name, args) => {
     budget.check(
@@ -220,7 +228,7 @@ export async function runTravelAgent(
       session.messages.length === 0 && options.initialContext
         ? options.initialContext + '\n\n'
         : '';
-    await session.prompt(initial + options.prompt);
+    await session.prompt(initial + options.prompt, { images: options.images });
     signal.throwIfAborted();
     if (limit) throw new Error('本轮达到24轮上限，已停止。');
     const last = session.messages.at(-1);

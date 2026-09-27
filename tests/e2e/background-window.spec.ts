@@ -41,7 +41,7 @@ test('后台 Electron 可交互与截图，打开深链接也不显示窗口或�
       throttled: false,
     });
     await page.getByRole('button', { name: '先看看一份示例行程' }).click();
-    await expect(page.getByRole('region', { name: '交互行程正文' })).toBeVisible();
+    await expect(page.getByLabel('行程交互地图', { exact: true })).toBeVisible();
     expect((await page.screenshot({ timeout: 8000 })).length).toBeGreaterThan(1000);
     const tripId = await page.evaluate(async () => {
       const snapshot = await window.vitrip.init();

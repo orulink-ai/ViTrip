@@ -11,6 +11,7 @@ import { Expand, ArrowLeft, LocateFixed, List, X } from 'lucide-react';
 import type { Plan } from '../shared/types';
 import { itineraryStops, locationURL } from '../shared/itinerary-map';
 import { Button } from './components/ui/button';
+import { Badge } from './components/ui/badge';
 import {
   Select,
   SelectContent,
@@ -206,6 +207,16 @@ export function JourneyMap({
                       {t('当晚住宿')} · {plan.days[day].stay!.name}
                     </p>
                   )}
+                  {!!plan?.days[day].issues?.length && (
+                    <ul
+                      aria-label={t('当天待确认')}
+                      className="mb-3 list-disc space-y-1 pl-4 text-xs text-muted-foreground"
+                    >
+                      {plan.days[day].issues!.map((issue, index) => (
+                        <li key={index}>{issue}</li>
+                      ))}
+                    </ul>
+                  )}
                   <Timeline
                     className="max-w-none"
                     visibleCount={dayStops.length}
@@ -214,18 +225,30 @@ export function JourneyMap({
                       when: 'future',
                       time: stop.time || t('待定'),
                       title: (
-                        <Button
-                          size="sm"
-                          className="h-auto max-w-full justify-start whitespace-normal text-left text-foreground"
-                          variant={selected?.id === stop.id ? 'secondary' : 'ghost'}
-                          aria-pressed={selected?.id === stop.id}
-                          onClick={() => onSelection({ ...selection, stopId: stop.id })}
-                        >
-                          <StopIcon kind={stop.kind} />
-                          {stop.number}. {stop.location?.name ?? stop.title}
-                          {!stop.location && ' · ' + t('待定位')}
-                          {(stop.optional || stop.optionGroup || stop.recommendation) && ' · 候选'}
-                        </Button>
+                        <span className="flex flex-col gap-1">
+                          <Button
+                            size="sm"
+                            className="h-auto max-w-full justify-start whitespace-normal text-left text-foreground"
+                            variant={selected?.id === stop.id ? 'secondary' : 'ghost'}
+                            aria-pressed={selected?.id === stop.id}
+                            onClick={() => onSelection({ ...selection, stopId: stop.id })}
+                          >
+                            <StopIcon kind={stop.kind} />
+                            {stop.number}. {stop.location?.name ?? stop.title}
+                            {!stop.location && ' · ' + t('待定位')}
+                            {(stop.optional || stop.optionGroup || stop.recommendation) &&
+                              ' · 候选'}
+                          </Button>
+                          {(stop.optionGroup ||
+                            plan?.days[day].activities[stop.activityIndex].origin ===
+                              'suggestion') && (
+                            <span className="flex flex-wrap gap-1">
+                              {stop.optionGroup && <Badge variant="outline">{t('择一')}</Badge>}
+                              {plan?.days[day].activities[stop.activityIndex].origin ===
+                                'suggestion' && <Badge variant="secondary">{t('AI 建议')}</Badge>}
+                            </span>
+                          )}
+                        </span>
                       ),
                       detail:
                         stop.location?.precision === 'approximate' ? t('大致位置') : undefined,
