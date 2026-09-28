@@ -126,10 +126,13 @@ test('长对话导航、生成耗时、阅读位置与停止交互', async () =>
       page.getByRole('button', { name: 'Document attachment', exact: true }),
     ).toBeVisible();
     await input.fill('改成慢节奏，不要继续原来的安排');
-    await expect(page.getByRole('button', { name: '打断并发送', exact: true })).toBeEnabled();
+    await expect(page.getByRole('button', { name: '加入队列', exact: true })).toBeEnabled();
     await page.screenshot({ animations: 'disabled', path: 'artifacts/conversation-interrupt.png' });
     await input.press('Enter');
     await expect(input).toHaveValue('');
+    await expect(page.getByLabel('待发送消息')).toContainText('改成慢节奏');
+    await page.getByRole('button', { name: '停止生成', exact: true }).click();
+    await page.getByRole('button', { name: '继续发送队列', exact: true }).click();
     await expect
       .poll(async () => {
         const state = await page.evaluate(() => window.vitrip.init());

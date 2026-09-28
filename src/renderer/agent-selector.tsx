@@ -10,18 +10,20 @@ import type { PublicSettings } from '../shared/types';
 
 export function AgentSelector({
   config,
+  running = false,
   disabled,
   onChange,
   onSettings,
 }: {
   config: PublicSettings;
+  running?: boolean;
   disabled: boolean;
   onChange: (runtime: 'pi' | 'codex') => Promise<void>;
   onSettings: () => void;
 }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="flex min-w-0 items-center gap-1">
+    <div className="flex min-w-0 flex-1 items-center gap-1">
       <ModelSelectorRoot
         models={[
           { id: 'pi', name: 'Pi', description: config.model || '自定义模型接口', disabled },
@@ -44,6 +46,7 @@ export function AgentSelector({
           variant="ghost"
           size="sm"
           aria-label="切换 Agent"
+          className="shrink-0"
           disabled={disabled}
         />
         <ModelSelectorContent searchable={false} side="top" />
@@ -56,9 +59,11 @@ export function AgentSelector({
           disabled={disabled}
           onClick={onSettings}
           aria-label="选择 Codex 模型和思考强度"
-          className="max-w-40"
+          className="min-w-0 max-w-40 shrink"
+          title={`${config.codexModel || '默认模型'} · ${config.codexEffort || '默认强度'}`}
         >
           <span className="truncate">
+            {running ? '下次：' : ''}
             {config.codexModel || '默认模型'} · {config.codexEffort || '默认强度'}
           </span>
         </Button>
@@ -68,6 +73,7 @@ export function AgentSelector({
         variant="ghost"
         size="icon-sm"
         aria-label="Agent 设置"
+        className="shrink-0"
         onClick={onSettings}
         disabled={disabled}
       >

@@ -35,7 +35,6 @@ import {
   type AssistantState,
   BranchPickerPrimitive,
   ComposerPrimitive,
-  ErrorPrimitive,
   groupPartByType,
   MessagePrimitive,
   SuggestionPrimitive,
@@ -84,8 +83,9 @@ export type ThreadGroupPart = MessagePrimitive.GroupedParts.GroupPart;
 export type ThreadComponents = {
   ComposerQuote?: ComponentType;
   ComposerTools?: ComponentType;
-  ComposerInterrupt?: ComponentType;
+  ComposerSendWhileRunning?: ComponentType;
   MessageHeader?: ComponentType;
+  MessageError?: ComponentType;
   MessageActions?: ComponentType;
   MessageMenuActions?: ComponentType;
   Footer?: ComponentType;
@@ -416,7 +416,7 @@ const Composer: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
   const isRunning = useAuiState((s) => s.thread.isRunning);
   const { ComposerQuote } = useContext(ThreadComponentsContext);
   return (
-    <ComposerPrimitive.Root className="aui-composer-root relative flex w-full flex-col">
+    <ComposerPrimitive.Root className="aui-composer-root @container/composer relative flex w-full min-w-0 flex-col">
       <ComposerPrimitive.AttachmentDropzone asChild>
         <div
           data-slot="aui_composer-shell"
@@ -427,7 +427,7 @@ const Composer: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
           <ComposerPrimitive.Input
             placeholder={t(
               isRunning
-                ? '补充要求，打断当前任务并继续…'
+                ? '补充要求，将在当前任务结束后发送…'
                 : '想去哪、玩几天，或者只是一个模糊的想法…',
             )}
             className="aui-composer-input caret-primary placeholder:text-muted-foreground/60 max-h-48 min-h-10 w-full resize-none bg-transparent px-2.5 py-1 text-base leading-6 outline-none"
@@ -444,7 +444,7 @@ const Composer: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
 };
 
 const ComposerAction: FC = () => {
-  const { ComposerTools, ComposerInterrupt } = useContext(ThreadComponentsContext);
+  const { ComposerTools, ComposerSendWhileRunning } = useContext(ThreadComponentsContext);
   // The stop control only cancels the send while no run it could stop is going.
   const isSending = useAuiState(
     (s) =>
@@ -452,13 +452,13 @@ const ComposerAction: FC = () => {
   );
 
   return (
-    <div className="aui-composer-action-wrapper relative flex items-center justify-between">
-      <div className="flex items-center gap-1">
+    <div className="aui-composer-action-wrapper relative flex flex-wrap items-center justify-between gap-2">
+      <div className="flex min-w-0 flex-1 basis-full items-center gap-1 @min-[480px]/composer:basis-auto">
         <ComposerAddAttachment />
         {ComposerTools && <ComposerTools />}
       </div>
-      <div className="flex items-center gap-1.5">
-        {ComposerInterrupt && <ComposerInterrupt />}
+      <div className="ml-auto flex shrink-0 items-center gap-1.5">
+        {ComposerSendWhileRunning && <ComposerSendWhileRunning />}
         <AuiIf condition={(s) => s.thread.capabilities.dictation}>
           <AuiIf condition={(s) => s.composer.dictation == null}>
             <ComposerPrimitive.Dictate asChild>
@@ -534,19 +534,9 @@ const ComposerAction: FC = () => {
   );
 };
 
-const MessageError: FC = () => {
-  return (
-    <MessagePrimitive.Error>
-      <ErrorPrimitive.Root className="aui-message-error-root border-destructive bg-destructive/10 text-destructive dark:bg-destructive/5 mt-2 rounded-md border p-3 text-sm dark:text-red-200">
-        <ErrorPrimitive.Message className="aui-message-error-message line-clamp-2" />
-      </ErrorPrimitive.Root>
-    </MessagePrimitive.Error>
-  );
-};
-
 const AssistantMessage: FC = () => {
   const id = useAuiState((s) => s.message.id);
-  const { MessageHeader } = useContext(ThreadComponentsContext);
+  const { MessageHeader, MessageError } = useContext(ThreadComponentsContext);
   const {
     ToolFallback: ToolFallbackComponent = ToolFallback,
     ToolGroup,
@@ -644,7 +634,7 @@ const AssistantMessage: FC = () => {
             }}
           </MessagePrimitive.GroupedParts>
         </div>
-        <MessageError />
+        {MessageError && <MessageError />}
       </div>
 
       <div
@@ -652,7 +642,13 @@ const AssistantMessage: FC = () => {
         className={cn('ms-2 flex items-center', ACTION_BAR_HEIGHT)}
       >
         <BranchPicker />
-        <AssistantActionBar />
+        <AuiIf
+          condition={(s) =>
+            !(s.message.status?.type === 'incomplete' && s.message.status.reason === 'error')
+          }
+        >
+          <AssistantActionBar />
+        </AuiIf>
       </div>
     </MessagePrimitive.Root>
   );

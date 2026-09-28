@@ -184,6 +184,7 @@ function App() {
   const layout = useRef<HTMLDivElement>(null);
   const updateTrip = (value: Trip) => {
     setTrip(value);
+    if (value.settings) setConfig((previous) => ({ ...previous, ...value.settings }));
     setTrips((previous) => [value, ...previous.filter((item) => item.id !== value.id)]);
   };
   const perform = async (action: () => Promise<unknown>) => {
@@ -464,10 +465,10 @@ function App() {
                 quoteRequest={quote}
                 config={config}
                 onRuntimeChange={async (runtime) => {
-                  if (running || switchingRuntime || runtime === (config.runtime ?? 'pi')) return;
+                  if (!trip || switchingRuntime || runtime === (config.runtime ?? 'pi')) return;
                   setSwitchingRuntime(true);
                   try {
-                    setConfig(await window.vitrip.settings({ ...config, runtime }));
+                    setConfig(await window.vitrip.conversationSettings(trip.id, { runtime }));
                   } catch (error) {
                     setNotice(String(error));
                   } finally {
@@ -799,6 +800,8 @@ function App() {
           </DialogContent>
         </Dialog>
         <SettingsDialog
+          tripId={trip?.id}
+          onAutoSave={setConfig}
           open={settingsOpen}
           onOpenChange={setSettingsOpen}
           config={config}

@@ -23,6 +23,10 @@ const api: API = {
   select: (id) => ipcRenderer.invoke('vitrip:select', id),
   removeJourney: (id) => ipcRenderer.invoke('vitrip:removeJourney', id),
   remove: (id) => ipcRenderer.invoke('vitrip:remove', id),
+  conversationSettings: (tripId, patch) =>
+    ipcRenderer.invoke('vitrip:conversationSettings', tripId, patch),
+  cancelQueuedMessage: (id) => ipcRenderer.invoke('vitrip:cancelQueuedMessage', id),
+  resumeQueue: () => ipcRenderer.invoke('vitrip:resumeQueue'),
   regenerate: (parentId) => ipcRenderer.invoke('vitrip:regenerate', parentId),
   selectBranch: (headId) => ipcRenderer.invoke('vitrip:selectBranch', headId),
   feedback: (id, value) => ipcRenderer.invoke('vitrip:feedback', id, value),

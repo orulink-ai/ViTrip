@@ -11,6 +11,9 @@ export function toThreadMessages(
   const rows: ThreadMessageLike[] = messages.map((message): ThreadMessageLike => ({
     id: message.id,
     role: message.role,
+    ...(message.role === 'assistant' && message.error
+      ? { status: { type: 'incomplete' as const, reason: 'error' as const, error: message.error } }
+      : {}),
     content: (
       message.parts ?? [
         { type: 'text' as const, text: message.content },
@@ -88,7 +91,9 @@ export function toBranchRepository(trip: Trip, running: boolean) {
   if (last?.message.role === 'assistant')
     last.message = {
       ...last.message,
-      status: running ? { type: 'running' } : { type: 'complete', reason: 'stop' },
+      status:
+        last.message.status ??
+        (running ? { type: 'running' } : { type: 'complete', reason: 'stop' }),
     };
   return ExportedMessageRepository.fromBranchableArray([...nodes.values()], { headId });
 }

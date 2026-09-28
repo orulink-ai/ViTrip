@@ -1,4 +1,23 @@
 export const translations: Record<string, string> = {
+  加入队列: 'Queue message',
+  待发送消息: 'Queued messages',
+  '{count} 条待发送': '{count} queued',
+  当前任务结束后发送: 'Sends when this finishes',
+  队列已暂停: 'Queue paused',
+  '取消排队：{text}': 'Remove from queue: {text}',
+  继续发送队列: 'Resume queue',
+  '补充要求，将在当前任务结束后发送…': 'Add a message to send after this task…',
+  '额度恢复后可重试，也可以在模型设置中切换账号或模型。':
+    'Retry when your quota resets, or switch accounts or models in settings.',
+
+  账号额度已用尽: 'Account usage limit reached',
+  本次请求未完成: 'Request could not be completed',
+  '请检查账号额度，或在模型设置中切换账号或模型后重试。':
+    'Check your account usage, or switch accounts or models in model settings before retrying.',
+  查看错误详情: 'View error details',
+  '正在重试…': 'Retrying…',
+  重试: 'Retry',
+
   '未配置时使用 Exa 搜索': 'Uses Exa search when no key is configured',
   '普通资料先搜索和读取正文，需要网页交互时再打开浏览器。':
     'Search and read sources first; open the browser when interaction is needed.',

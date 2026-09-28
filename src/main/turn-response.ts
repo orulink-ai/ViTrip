@@ -23,6 +23,17 @@ export function createTurnResponse(messages: Message[], publish: (persist: boole
       .join('\n\n');
   };
   return {
+    fail(error: string) {
+      const row = ensure();
+      row.error = error;
+      for (const step of row.activities ?? []) {
+        if (step.status === 'active') {
+          step.status = 'interrupted';
+          step.finishedAt = Date.now();
+        }
+      }
+      publish(true);
+    },
     delta(text: string) {
       // A transport reset is not a new message or a request to erase partial output.
       if (!text) return;

@@ -98,7 +98,7 @@ test('选择 Codex 后操作真实浏览器、更新行程、停止并在重启�
     await expect(
       page.getByTestId('agent-activity').last().getByText('进行中', { exact: true }).first(),
     ).toBeVisible();
-    await expect(page.getByRole('combobox', { name: '切换 Agent' })).toBeDisabled();
+    await expect(page.getByRole('combobox', { name: '切换 Agent' })).toBeEnabled();
     await page
       .locator('[data-sidebar="menu-button"]')
       .filter({ hasText: state.trips[0].title })
@@ -114,7 +114,7 @@ test('选择 Codex 后操作真实浏览器、更新行程、停止并在重启�
         .last()
         .getByText(/^已中断/),
     ).toBeVisible();
-    // Send a correction while Codex is still executing, preserving the interrupted activity.
+    // Queue a correction without interrupting, then explicitly stop and resume the queue.
     await page.getByLabel('旅行需求', { exact: true }).fill('wait');
     await page.getByRole('button', { name: '发送', exact: true }).click();
     await expect(page.getByRole('button', { name: '停止生成', exact: true })).toBeVisible();
@@ -122,8 +122,18 @@ test('选择 Codex 后操作真实浏览器、更新行程、停止并在重启�
       page.getByTestId('agent-activity').last().getByText('进行中', { exact: true }).first(),
     ).toBeVisible();
     await page.getByLabel('旅行需求', { exact: true }).fill('改为只安排半天');
-    await page.getByRole('button', { name: '打断并发送', exact: true }).click();
+    await page.getByRole('button', { name: '加入队列', exact: true }).click();
+    await expect(page.getByLabel('待发送消息')).toContainText('改为只安排半天');
+    await page.getByRole('button', { name: '停止生成', exact: true }).click();
+    await expect(page.getByLabel('待发送消息')).toContainText('队列已暂停');
+    await page.getByRole('button', { name: '继续发送队列', exact: true }).click();
     await expect(page.getByRole('button', { name: '发送', exact: true })).toBeVisible();
+    await expect
+      .poll(async () => {
+        const state = await page.evaluate(() => window.vitrip.init());
+        return state.trips[0].messages.at(-1)?.content;
+      })
+      .toContain('Codex 已完成');
     const corrected = await page.evaluate(() => window.vitrip.init());
     const messages = corrected.trips[0].messages;
     const correction = messages.findIndex((m) => m.content === '改为只安排半天');

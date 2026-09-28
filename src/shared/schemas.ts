@@ -112,6 +112,15 @@ export const settingsSchema = z.object({
   jevApiKey: z.string().max(10000).optional(),
   tavilyApiKey: z.string().max(10000).optional(),
 });
+export const conversationSettingsSchema = settingsSchema
+  .pick({
+    runtime: true,
+    codexModel: true,
+    codexEffort: true,
+    model: true,
+    imageInput: true,
+  })
+  .partial();
 export const boundsSchema = z.object({
   x: z.number().finite(),
   y: z.number().finite(),

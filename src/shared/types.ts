@@ -23,6 +23,12 @@ export interface Settings {
   jevApiKey?: string;
   tavilyApiKey?: string;
 }
+export type ConversationSettings = Partial<
+  Pick<
+    Settings,
+    'runtime' | 'codexModel' | 'codexEffort' | 'model' | 'imageInput'
+  >
+>;
 export interface PublicSettings {
   jevExperiments?: JevExperiments;
   runtime?: 'pi' | 'codex';
@@ -45,6 +51,8 @@ export interface ToolActivity {
   finishedAt?: number;
 }
 export interface Message {
+  settings?: ConversationSettings;
+  error?: string;
   parts?: ({ type: 'text'; text: string } | { type: 'tool'; toolId: string })[];
   feedback?: 'positive' | 'negative';
   attachments?: FileAttachment[];
@@ -113,6 +121,8 @@ export interface Journey {
   updatedAt: number;
 }
 export interface Trip {
+  settings?: ConversationSettings;
+  queuedMessages?: Message[];
   branches?: Message[][];
   contextKey?: string;
   journeyId: string;
@@ -193,6 +203,12 @@ export interface API {
   select(id: string): Promise<Trip>;
   remove(id: string): Promise<void>;
   removeJourney(id: string): Promise<void>;
+  conversationSettings(
+    tripId: string,
+    patch: Partial<ConversationSettings>,
+  ): Promise<PublicSettings>;
+  cancelQueuedMessage(id: string): Promise<void>;
+  resumeQueue(): Promise<void>;
   regenerate(parentId: string): Promise<void>;
   selectBranch(headId: string): Promise<void>;
   feedback(messageId: string, value: 'positive' | 'negative'): Promise<void>;

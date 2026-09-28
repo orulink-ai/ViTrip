@@ -23,14 +23,18 @@ import {
 } from './components/ui/dialog';
 import { Input } from './components/ui/input';
 import { Button } from './components/ui/button';
-import type { PublicSettings } from '../shared/types';
+import type { ConversationSettings, PublicSettings } from '../shared/types';
 export function SettingsDialog({
   open,
+  tripId,
+  onAutoSave,
   onOpenChange,
   config,
   onSave,
 }: {
   open: boolean;
+  tripId?: string;
+  onAutoSave: (value: PublicSettings) => void;
   onOpenChange: (value: boolean) => void;
   config: PublicSettings;
   onSave: (value: PublicSettings) => void;
@@ -76,6 +80,8 @@ export function SettingsDialog({
   const [jevKey, setJevKey] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [selectionSaving, setSelectionSaving] = useState(false);
+  const [autoSaved, setAutoSaved] = useState(false);
   useEffect(() => {
     if (open) {
       setExperiments(
@@ -90,17 +96,36 @@ export function SettingsDialog({
       setKey('');
       setJevKey('');
       setError('');
+      setAutoSaved(false);
     }
-  }, [open, config]);
+  }, [open, tripId]);
+  async function saveSelection(patch: Partial<ConversationSettings>) {
+    if (!tripId) return;
+    setSelectionSaving(true);
+    setError('');
+    try {
+      onAutoSave(await window.vitrip.conversationSettings(tripId, patch));
+      setAutoSaved(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t('保存失败'));
+    } finally {
+      setSelectionSaving(false);
+    }
+  }
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="settings-dialog max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{t('连接你的旅行助手')}</DialogTitle>
           <DialogDescription>
-            选择 Pi 或本机 Codex 规划旅行。Jev 操控本地浏览器，接口密钥加密保存在本机。
+            模型和思考强度自动保存到当前会话，运行中修改用于后续发送。接口与密钥由所有会话共用，填写后点击保存。
           </DialogDescription>
         </DialogHeader>
+        {autoSaved && !saving && !selectionSaving && !error && (
+          <p role="status" className="text-xs text-muted-foreground">
+            当前会话设置已自动保存
+          </p>
+        )}
         <form
           onSubmit={async (event) => {
             event.preventDefault();
@@ -115,8 +140,8 @@ export function SettingsDialog({
                   baseURL,
                   model,
                   imageInput,
-                  ...(tavilyKey ? { tavilyApiKey: tavilyKey } : {}),
                   ...(key ? { apiKey: key } : {}),
+                  ...(tavilyKey ? { tavilyApiKey: tavilyKey } : {}),
                   ...(jevKey ? { jevApiKey: jevKey } : {}),
                 }),
               );
@@ -129,7 +154,15 @@ export function SettingsDialog({
         >
           <label>
             执行引擎
-            <Select value={runtime} onValueChange={(value) => setRuntime(value as 'pi' | 'codex')}>
+            <Select
+              value={runtime}
+              disabled={saving || selectionSaving}
+              onValueChange={(value) => {
+                if (value !== 'pi' && value !== 'codex') return;
+                setRuntime(value);
+                void saveSelection({ runtime: value as 'pi' | 'codex' });
+              }}
+            >
               <SelectTrigger aria-label="执行引擎">
                 <SelectValue />
               </SelectTrigger>
@@ -159,16 +192,18 @@ export function SettingsDialog({
                   ]}
                   value={codexModel || '__default__'}
                   onValueChange={(value) => {
-                    setCodexModel(value === '__default__' ? '' : value);
-                    setCodexEffort(
-                      codexModels.find((m) => m.model === value)?.defaultReasoningEffort ?? '',
-                    );
+                    const nextModel = value === '__default__' ? '' : value;
+                    const nextEffort =
+                      codexModels.find((m) => m.model === value)?.defaultReasoningEffort ?? '';
+                    setCodexModel(nextModel);
+                    setCodexEffort(nextEffort);
+                    void saveSelection({ codexModel: nextModel, codexEffort: nextEffort });
                   }}
                 >
                   <ModelSelectorTrigger
                     type="button"
                     aria-label="Codex 模型"
-                    disabled={catalogLoading}
+                    disabled={catalogLoading || saving || selectionSaving}
                   />
                   <ModelSelectorContent />
                 </ModelSelectorRoot>
@@ -179,14 +214,19 @@ export function SettingsDialog({
                 思考强度
                 <Select
                   value={codexEffort || '__default__'}
-                  onValueChange={(value) =>
-                    setCodexEffort(
-                      value === '__default__'
-                        ? (selectedModel?.defaultReasoningEffort ?? '')
-                        : value,
+                  onValueChange={(value) => {
+                    if (
+                      value !== '__default__' &&
+                      !selectedModel?.supportedReasoningEfforts.some(
+                        (item) => item.reasoningEffort === value,
+                      )
                     )
-                  }
-                  disabled={!selectedModel || catalogLoading}
+                      return;
+                    const effort = value === '__default__' ? '' : value;
+                    setCodexEffort(effort);
+                    void saveSelection({ codexEffort: effort });
+                  }}
+                  disabled={!selectedModel || catalogLoading || saving || selectionSaving}
                 >
                   <SelectTrigger aria-label="Codex 思考强度">
                     <SelectValue />
@@ -226,6 +266,10 @@ export function SettingsDialog({
                   aria-label={t('模型名称')}
                   value={model}
                   onChange={(event) => setModel(event.target.value)}
+                  onBlur={() => {
+                    if (model.trim() && model !== config.model)
+                      void saveSelection({ model: model.trim() });
+                  }}
                   required
                   placeholder={t('填写服务商提供的模型 ID')}
                 />

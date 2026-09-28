@@ -84,3 +84,12 @@ it('bridges ordered parts without moving tools ahead of text, including legacy m
     },
   ]);
 });
+it('exposes persisted failures to the error UI without inserting error prose into the reply', () => {
+  const messages = toThreadMessages(
+    [{ id: 'failed', role: 'assistant', content: '部分结果', error: '额度耗尽' }],
+    '',
+    false,
+  );
+  expect(messages[0].status).toEqual({ type: 'incomplete', reason: 'error', error: '额度耗尽' });
+  expect(messages[0].content).toEqual([{ type: 'text', text: '部分结果' }]);
+});

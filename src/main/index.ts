@@ -1,3 +1,6 @@
+import type { Settings } from '../shared/types';
+import { conversationSettingsSchema } from '../shared/schemas';
+import { enqueueMessage, cancelQueuedMessage, nextQueuedMessage } from '../shared/message-queue';
 import { configureWebSearch } from './web-search';
 import { listCodexModels } from './codex-models';
 import { NotebookDocuments } from './notebook-documents';
@@ -254,6 +257,7 @@ app
       args: Record<string, unknown>,
       trip: Trip,
       signal: AbortSignal,
+      runSettings: Settings,
     ): Promise<ToolResult> {
       signal.throwIfAborted();
       if (name !== 'notebook' && name !== 'prepare')
@@ -342,11 +346,11 @@ app
               saved: true,
               note:
                 '来源与图片已保存；地点、分店和房型仍待核对。' +
-                (supportsImages(store.settings)
+                (supportsImages(runSettings)
                   ? '已附真实图片供视觉辅助。'
                   : '当前模型未启用图片输入，不能声称看过图片。'),
             }),
-            ...(supportsImages(store.settings)
+            ...(supportsImages(runSettings)
               ? { image: { data: capture.png.toString('base64'), mimeType: 'image/png' as const } }
               : {}),
           };
@@ -360,9 +364,9 @@ app
             text: JSON.stringify({
               photo,
               imageAvailable: !!data,
-              visualInput: !!data && supportsImages(store.settings),
+              visualInput: !!data && supportsImages(runSettings),
             }),
-            ...(data && supportsImages(store.settings)
+            ...(data && supportsImages(runSettings)
               ? { image: { data, mimeType: 'image/png' as const } }
               : {}),
           };
@@ -400,12 +404,12 @@ app
             throw new Error('请先打开网页（navigate），再执行 computer_use。');
           return (store.settings.jevExperiments?.browser ? piComputerUse : computerUse)({
             goal: toolsSchema.computer_use.parse(args).goal,
-            settings: { ...store.settings },
+            settings: { ...runSettings },
             signal,
             observe: () => browser.observe(),
             assertFresh: () => browser.assertFresh(),
             execute: async (operation, input) => {
-              const result = await execute(operation, input, trip, signal);
+              const result = await execute(operation, input, trip, signal, runSettings);
               return typeof result === 'string' ? result : result.text;
             },
             onStatus: (text) => emit({ type: 'status', text }),
@@ -436,9 +440,28 @@ app
         }
       }
     }
+    function dispatchQueuedMessage() {
+      if (task || !current.queuedMessages?.length) return;
+      if (store.settingsFor(current).runtime !== 'codex' && !store.settingsFor(current).model)
+        throw new Error('请先配置模型');
+      const message = nextQueuedMessage(current);
+      if (!message) return;
+      current.messages.push(message);
+      if (current.messages.length === 1 && !current.customTitle)
+        current.title = (message.content || message.attachments?.[0]?.name || '新的旅行').slice(
+          0,
+          26,
+        );
+      save(current);
+      begin();
+    }
     function begin(resuming = false) {
       if (task) throw new Error('请等待当前任务结束');
-      if (store.settings.runtime !== 'codex' && !store.settings.model)
+      const runSettings = {
+        ...store.settingsFor(current),
+        ...current.messages.findLast((m) => m.role === 'user')?.settings,
+      };
+      if (runSettings.runtime !== 'codex' && !runSettings.model)
         throw new Error('请先在模型设置中填写模型名称和接口地址');
       paused = false;
       control.resume();
@@ -456,11 +479,12 @@ app
           return false;
         }
       };
+      let failed = false;
       let syncing = false;
       let documentsSaved = false;
       const trip = current;
       const executeForRequest = async (name: ToolName, args: Record<string, unknown>) => {
-        const result = await execute(name, args, trip, signal);
+        const result = await execute(name, args, trip, signal, runSettings);
         // Record only successful durable writes; older journey revisions are irrelevant.
         if (name === 'plan' || name === 'journal') outcome.saved(name);
         if (name === 'notebook' && args.action === 'write') {
@@ -486,7 +510,7 @@ app
         const uploaded = await attachments.prepare(
           trip.id,
           latest?.attachments?.map((file) => file.id) ?? [],
-          supportsImages(store.settings),
+          supportsImages(runSettings),
         );
         signal.throwIfAborted();
         let prompt = messagePrompt(latest ?? { content: '继续当前旅行规划' });
@@ -526,7 +550,7 @@ app
             'notebook',
           ),
           sessionDir: path.join(app.getPath('userData'), 'sessions', trip.id),
-          settings: { ...store.settings },
+          settings: { ...runSettings },
           contextKey: trip.contextKey,
           control,
           onDelta: response.delta,
@@ -543,7 +567,7 @@ app
           emit({ type: 'status', text: '正在整理笔记与旅行资料…' });
           await runTravelAgent({
             approve: approveForRequest,
-            settings: { ...store.settings },
+            settings: { ...runSettings },
             searchDirectory: path.join(
               app.getPath('userData'),
               'journeys',
@@ -572,13 +596,14 @@ app
         }
       })()
         .catch((error) => {
+          failed = true;
           const message = outcome.failure(error, {
             cancelled: userSignal.aborted,
             timedOut: timeoutSignal.aborted,
             syncing,
-            secrets: [store.settings.apiKey, store.settings.jevApiKey],
+            secrets: [runSettings.apiKey, runSettings.jevApiKey],
           });
-          if (message) add(trip, 'assistant', message);
+          if (message) response.fail(message);
         })
         .finally(() => {
           save(trip);
@@ -591,6 +616,7 @@ app
             running: false,
             paused,
           });
+          if (!failed && !signal.aborted && current.id === trip.id) dispatchQueuedMessage();
         });
     }
     async function stop(takeover: boolean) {
@@ -660,7 +686,7 @@ app
       approval: latestApproval,
       trips: store.trips,
       journeys: store.journeys,
-      settings: redactSettings(store.settings),
+      settings: redactSettings(store.settingsFor(current)),
       browser: browser.state(),
     }));
     handle('create', async (journeyId) => {
@@ -806,8 +832,8 @@ app
       if (!trip) throw new Error('会话不存在');
       const attachmentId = z.string().uuid().parse(id);
       if (
-        [...trip.messages, ...(trip.branches ?? []).flat()].some((message) =>
-          message.attachments?.some((file) => file.id === attachmentId),
+        [...trip.messages, ...(trip.queuedMessages ?? []), ...(trip.branches ?? []).flat()].some(
+          (message) => message.attachments?.some((file) => file.id === attachmentId),
         )
       )
         return;
@@ -816,6 +842,8 @@ app
     handle('regenerate', (parentId) => {
       if (task) throw new Error('请先停止当前任务');
       regenerateFrom(current, z.string().parse(parentId));
+      const question = current.messages.at(-1);
+      if (question) question.settings = structuredClone(current.settings);
       save(current);
       begin();
     });
@@ -840,7 +868,7 @@ app
       if (sending) throw new Error('消息正在发送，请稍候');
       sending = true;
       try {
-        if (store.settings.runtime !== 'codex' && !store.settings.model)
+        if (store.settingsFor(current).runtime !== 'codex' && !store.settingsFor(current).model)
           throw new Error('请先配置模型');
         const trip = current;
         const value = z.string().trim().max(12000).parse(text);
@@ -850,22 +878,34 @@ app
         const quote = quotation === undefined ? undefined : quoteSchema.parse(quotation);
         const files = await Promise.all(ids.map((id) => attachments.get(trip.id, id)));
         if (current.id !== trip.id) throw new Error('会话状态已变化，请重试');
-        // Validate the whole message before interrupting; wait for old tools and writes to settle.
-        if (task) await stop(false);
-        if (current.id !== trip.id) throw new Error('会话状态已变化，请重试');
-        add(trip, 'user', value, quote, files);
-        if (trip.messages.length === 1 && !trip.customTitle) {
-          trip.title = (value || files[0].name).slice(0, 26);
-          save(trip);
-        }
-        begin();
+        enqueueMessage(trip, {
+          id: randomUUID(),
+          role: 'user',
+          content: value,
+          quote,
+          attachments: files,
+          settings: structuredClone(trip.settings),
+        });
+        save(trip);
+        if (!task) dispatchQueuedMessage();
       } finally {
         sending = false;
       }
     });
+    handle('cancelQueuedMessage', (id) => {
+      cancelQueuedMessage(current, z.string().parse(id));
+      save(current);
+    });
+    handle('resumeQueue', () => dispatchQueuedMessage());
     handle('codexModels', () => listCodexModels(app.getPath('userData')));
+    handle('conversationSettings', (tripId, patch) => {
+      const trip = store.trips.find((item) => item.id === z.string().parse(tripId));
+      if (!trip) throw new Error('会话不存在');
+      const settings = store.configureConversation(trip, patch);
+      if (trip.id === current.id) save(trip);
+      return redactSettings(settings);
+    });
     handle('settings', async (value) => {
-      if (task) throw new Error('请先停止任务再修改模型设置');
       const settings = settingsSchema.parse(value);
       const url = new URL(allowedURL(settings.baseURL));
       if (url.protocol !== 'https:' && !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname))
@@ -885,11 +925,13 @@ app
           : store.settings.imageInput,
         apiKey: settings.apiKey === undefined ? store.settings.apiKey : settings.apiKey,
       });
+      store.configureConversation(current, conversationSettingsSchema.parse(settings));
+      save(current);
       await configureWebSearch(
         path.join(app.getPath('userData'), 'web-search'),
         store.settings.tavilyApiKey,
       );
-      return redactSettings(store.settings);
+      return redactSettings(store.settingsFor(current));
     });
     handle('browse', async (url) => {
       await stop(paused);

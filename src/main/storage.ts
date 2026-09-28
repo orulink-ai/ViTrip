@@ -1,4 +1,4 @@
-import { jevExperimentsSchema } from '../shared/schemas';
+import { conversationSettingsSchema, jevExperimentsSchema } from '../shared/schemas';
 import { attachmentSchema } from '../shared/attachments';
 import { photoSchema } from '../shared/photos';
 import { editItinerary, type ItineraryEdit } from '../shared/journey-editing';
@@ -17,6 +17,8 @@ import { z } from 'zod';
 import { planSchema, journeySchema, journalSchema, nameSchema } from '../shared/schemas';
 import type { Settings, Trip, Journey } from '../shared/types';
 const messageSchema = z.object({
+  settings: conversationSettingsSchema.optional(),
+  error: z.string().optional(),
   id: z.string(),
   role: z.enum(['user', 'assistant']),
   content: z.string(),
@@ -46,11 +48,13 @@ const messageSchema = z.object({
     .optional(),
 });
 const tripSchema = z.object({
+  settings: conversationSettingsSchema.optional(),
   id: z.string(),
   journeyId: z.string().default(''),
   customTitle: z.boolean().optional(),
   title: z.string(),
   messages: z.array(messageSchema),
+  queuedMessages: z.array(messageSchema).optional(),
   branches: z.array(z.array(messageSchema)).optional(),
   contextKey: z.string().uuid().optional(),
   plan: planSchema.nullable(),
@@ -140,6 +144,32 @@ export class Storage {
         apiKey: value.encryptedKey ? cipher.decrypt(Buffer.from(value.encryptedKey, 'base64')) : '',
       };
     }
+    for (const trip of this.trips) trip.settings ??= this.conversationDefaults();
+    this.save();
+  }
+  private conversationDefaults() {
+    return {
+      ...conversationSettingsSchema.parse(this.settings),
+      runtime: this.settings.runtime ?? ('pi' as const),
+      codexModel: this.settings.codexModel ?? '',
+      codexEffort: this.settings.codexEffort ?? '',
+    };
+  }
+  settingsFor(trip: Trip): Settings {
+    return structuredClone({
+      ...this.settings,
+      ...trip.settings,
+      imageInput: trip.settings ? trip.settings.imageInput : this.settings.imageInput,
+    });
+  }
+  configureConversation(trip: Trip, patch: unknown) {
+    trip.settings = {
+      ...this.conversationDefaults(),
+      ...trip.settings,
+      ...conversationSettingsSchema.parse(patch),
+    };
+    this.save();
+    return this.settingsFor(trip);
   }
   private read(name: string) {
     const row = this.db.prepare('SELECT value FROM state WHERE name=?').get(name);
@@ -424,6 +454,7 @@ export class Storage {
       id: randomUUID(),
       journeyId: journey.id,
       title: '新的会话',
+      settings: this.conversationDefaults(),
       messages: [],
       plan: journey.plan,
       updatedAt: Date.now(),

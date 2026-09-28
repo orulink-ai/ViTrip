@@ -19,6 +19,26 @@ for await (const line of readline.createInterface({ input: process.stdin })) {
     reply({
       data: [
         {
+          id: 'gpt-6-luna',
+          model: 'gpt-6-luna',
+          displayName: 'GPT Luna',
+          defaultReasoningEffort: 'medium',
+          supportedReasoningEfforts: [
+            { reasoningEffort: 'medium', description: 'Balanced' },
+            { reasoningEffort: 'high', description: 'More reasoning' },
+          ],
+        },
+        {
+          id: 'gpt-6-sol',
+          model: 'gpt-6-sol',
+          displayName: 'GPT Sol',
+          defaultReasoningEffort: 'medium',
+          supportedReasoningEfforts: [
+            { reasoningEffort: 'medium', description: 'Balanced' },
+            { reasoningEffort: 'high', description: 'More reasoning' },
+          ],
+        },
+        {
           id: 'test-codex',
           model: 'test-codex',
           displayName: 'Test Codex',

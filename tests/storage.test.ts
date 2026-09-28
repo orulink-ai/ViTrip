@@ -19,6 +19,7 @@ describe('local data and exported plans', () => {
       const trip = first.create();
       trip.messages.push({
         id: 'activity',
+        error: '本次请求未完成：额度不足',
         role: 'assistant',
         content: '',
         activities: [
@@ -53,6 +54,7 @@ describe('local data and exported plans', () => {
       ).toBe(false);
       const second = new Storage(directory, cipher);
       expect(second.trips[0].title).toBe('京都');
+      expect(second.trips[0].messages[0].error).toBe('本次请求未完成：额度不足');
       expect(second.trips[0].messages[0].activities?.map((step) => step.status)).toEqual([
         'complete',
         'interrupted',

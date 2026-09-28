@@ -1,4 +1,6 @@
 import { createPortal } from 'react-dom';
+import { TravelMessageError } from './message-error';
+import { MessageQueue } from './components/assistant-ui/elements/message-queue';
 import { AssistantModal } from './components/assistant-ui/elements/assistant-modal.aui';
 import { ConversationMapAui } from './components/assistant-ui/elements/conversation-map.aui';
 import { createAttachmentAdapter } from './attachment-adapter';
@@ -260,13 +262,14 @@ function Tools() {
   return (
     <AgentSelector
       config={config}
-      disabled={running || !!disabled}
+      running={running}
+      disabled={!!disabled}
       onChange={onRuntimeChange}
       onSettings={onSettings}
     />
   );
 }
-function InterruptSend() {
+function QueueSend() {
   const { running } = useTravel();
   const aui = useAui();
   const canSend = useAuiState((s) => s.composer.canSend && !s.thread.isDisabled);
@@ -279,7 +282,7 @@ function InterruptSend() {
       disabled={!canSend}
       onClick={() => aui.composer().send()}
     >
-      {t('打断并发送')}
+      {t('加入队列')}
     </Button>
   );
 }
@@ -366,8 +369,48 @@ function Selection() {
     </SelectionToolbar.Root>
   );
 }
+function MessageError() {
+  return <TravelMessageError onSettings={useTravel().onSettings} />;
+}
 function Footer() {
-  return <>{useTravel().footer}</>;
+  const { footer, trip, running, onError } = useTravel();
+  const queued = trip?.queuedMessages ?? [];
+  return (
+    <>
+      {footer}
+      {queued.length > 0 && (
+        <div className="max-h-44 overflow-y-auto py-2" aria-label={t('待发送消息')}>
+          <MessageQueue
+            className="max-w-none"
+            showRunning={false}
+            running={
+              running
+                ? trip?.messages.findLast((m) => m.role === 'user')?.content || t('处理中')
+                : ''
+            }
+            queued={queued.map((m) => ({
+              id: m.id,
+              text: m.content || m.attachments?.map((f) => f.name).join('、') || t('附件'),
+            }))}
+            onCancel={(id) => {
+              void window.vitrip.cancelQueuedMessage(id).catch((e: Error) => onError(e.message));
+            }}
+          />
+          {!running && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                void window.vitrip.resumeQueue().catch((e: Error) => onError(e.message));
+              }}
+            >
+              {t('继续发送队列')}
+            </Button>
+          )}
+        </div>
+      )}
+    </>
+  );
 }
 function Navigation() {
   const viewport = useThreadViewport((s) => s.element.viewport);
@@ -384,13 +427,14 @@ function Navigation() {
   return fits && count > 1 ? <ConversationMapAui /> : null;
 }
 const components: ThreadComponents = {
+  MessageError,
   ToolFallback: ActivityPart,
   ToolGroup: ActivityGroup,
   Navigation,
   Welcome,
   WelcomeFooter,
   ComposerTools: Tools,
-  ComposerInterrupt: InterruptSend,
+  ComposerSendWhileRunning: QueueSend,
   ComposerQuote: Preview,
   MessageHeader: Header,
   MessageActions,

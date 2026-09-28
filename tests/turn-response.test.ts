@@ -69,3 +69,25 @@ it('persists text/tool chronology and updates a tool in place', () => {
   ]);
   expect(messages[0].activities).toHaveLength(2);
 });
+it('persists failure separately while retaining partial output and ending active tools', () => {
+  const messages: Message[] = [];
+  let persisted = false;
+  const response = createTurnResponse(messages, (value) => {
+    persisted = value;
+  });
+  response.delta('已查到的资料');
+  response.activity({
+    id: 'search',
+    name: 'webSearch',
+    input: '',
+    output: '',
+    status: 'active',
+    startedAt: 1,
+  });
+  response.fail('本次请求未完成：usage limit');
+  expect(messages).toHaveLength(1);
+  expect(messages[0].content).toBe('已查到的资料');
+  expect(messages[0].error).toBe('本次请求未完成：usage limit');
+  expect(messages[0].activities?.[0].status).toBe('interrupted');
+  expect(persisted).toBe(true);
+});
