@@ -1,4 +1,3 @@
-import { MapDiscussion } from './map-discussion';
 import { ItineraryQuotation } from './itinerary-quotation';
 import type { Quote } from '../shared/notebook';
 import { itineraryStops } from '../shared/itinerary-map';
@@ -24,7 +23,7 @@ export function JournalPanel({
 }: {
   journey: Journey;
   tripId?: string;
-  onQuote?: (quote: Quote) => void;
+  onQuote?: (quote: Quote, newConversation?: boolean) => void;
   quoteTarget?: Quote['source'];
   onBrowse: (url: string) => void;
   onBuildPlan: () => void;
@@ -73,88 +72,98 @@ export function JournalPanel({
       setSelection({ ...selection, day: stop.dayIndex });
   }, [plan]);
 
-  function discuss(id: string) {
-    const stop = itineraryStops(plan).find((stop) => stop.id === id);
-    if (!stop || !tripId || !onQuote) return;
-    onQuote({
-      tripId,
-      messageId: `itinerary:${journey.id}`,
-      text: [stop.title, stop.time, stop.detail].filter(Boolean).join('\n'),
-      source: {
-        kind: 'itinerary',
-        journeyId: journey.id,
-        revision: journey.revision,
-        activityId: stop.id,
-        activityTitle: stop.title,
-        dayTitle: stop.dayTitle,
+  function quoteDay(index: number, newConversation: boolean) {
+    const day = plan?.days[index];
+    if (!day || !tripId || !onQuote) return;
+    onQuote(
+      {
+        tripId,
+        messageId: `itinerary:${journey.id}`,
+        text: [
+          day.title,
+          day.subtitle,
+          day.stay ? `当晚住宿：${day.stay.name}` : '',
+          ...(day.issues ?? []),
+          ...day.activities.map((activity) =>
+            [activity.time, activity.title, activity.detail].filter(Boolean).join('\n'),
+          ),
+        ]
+          .filter(Boolean)
+          .join('\n\n')
+          .slice(0, 12000),
+        source: {
+          kind: 'itinerary',
+          journeyId: journey.id,
+          revision: journey.revision,
+          dayTitle: day.title,
+        },
       },
-    });
+      newConversation,
+    );
   }
   useEffect(() => {
-    if (quoteTarget?.journeyId !== journey.id) return;
+    if (quoteTarget?.kind !== 'itinerary' || quoteTarget.journeyId !== journey.id) return;
     setMode('map');
     const stop = itineraryStops(plan).find((stop) => stop.id === quoteTarget.activityId);
     if (stop) setSelection({ stopId: stop.id, day: stop.dayIndex });
   }, [quoteTarget]);
   return (
-    <MapDiscussion.Provider value={tripId && onQuote ? (stop) => discuss(stop.id) : undefined}>
-      <div className="journal-panel">
-        {tripId && onQuote && (
-          <ItineraryQuotation root={reading} journey={journey} tripId={tripId} onQuote={onQuote} />
-        )}
-        <div className="journal-toolbar">
-          <Tabs value={mode} onValueChange={(value) => setMode(value as typeof mode)}>
-            <TabsList aria-label="行程视图">
-              <TabsTrigger value="map">
-                <Map size={14} />
-                行程地图
-              </TabsTrigger>
-              <TabsTrigger value="prepare">
-                <ListTodo size={14} />
-                准备待办
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-        </div>
-        <div
-          ref={reading}
-          className="flex min-h-0 flex-1 flex-col"
-          data-message-id={`itinerary:${journey.id}`}
-        >
-          {mode === 'map' ? (
-            <>
-              {!plan && (
-                <div className="space-y-3 px-6 py-4">
-                  <p className="text-sm text-muted-foreground">
-                    尚未生成行程地图。已有记录会保留，可让助手整理行程。
-                  </p>
-                  <Button variant="outline" disabled={building} onClick={onBuildPlan}>
-                    {t('整理成交互行程')}
-                  </Button>
-                </div>
-              )}
-              <JourneyMap
-                journeyId={journey.id}
-                photos={journey.photos}
-                plan={plan}
-                selection={selection}
-                onSelection={setSelection}
-                expanded={true}
-                onBrowse={onBrowse}
-                onRead={discuss}
-              />
-            </>
-          ) : (
-            <PreparationPanel
-              plan={plan}
-              todos={todos ?? []}
-              onChange={onTodos ?? (() => {})}
-              entries={journey.entries}
-              onBrowse={onBrowse}
-            />
-          )}
-        </div>
+    <div className="journal-panel">
+      {tripId && onQuote && (
+        <ItineraryQuotation root={reading} journey={journey} tripId={tripId} onQuote={onQuote} />
+      )}
+      <div className="journal-toolbar">
+        <Tabs value={mode} onValueChange={(value) => setMode(value as typeof mode)}>
+          <TabsList aria-label="行程视图">
+            <TabsTrigger value="map">
+              <Map size={14} />
+              行程地图
+            </TabsTrigger>
+            <TabsTrigger value="prepare">
+              <ListTodo size={14} />
+              准备待办
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
-    </MapDiscussion.Provider>
+      <div
+        ref={reading}
+        className="flex min-h-0 flex-1 flex-col"
+        data-message-id={`itinerary:${journey.id}`}
+      >
+        {mode === 'map' ? (
+          <>
+            {!plan && (
+              <div className="space-y-3 px-6 py-4">
+                <p className="text-sm text-muted-foreground">
+                  尚未生成行程地图。已有记录会保留，可让助手整理行程。
+                </p>
+                <Button variant="outline" disabled={building} onClick={onBuildPlan}>
+                  {t('整理成交互行程')}
+                </Button>
+              </div>
+            )}
+            <JourneyMap
+              journeyId={journey.id}
+              photos={journey.photos}
+              plan={plan}
+              selection={selection}
+              onSelection={setSelection}
+              expanded={true}
+              onBrowse={onBrowse}
+              onQuoteDay={tripId && onQuote ? quoteDay : undefined}
+            />
+          </>
+        ) : (
+          <PreparationPanel
+            plan={plan}
+            todos={todos ?? []}
+            onChange={onTodos ?? (() => {})}
+            entries={journey.entries}
+            onBrowse={onBrowse}
+          />
+        )}
+      </div>
+    </div>
   );
 }

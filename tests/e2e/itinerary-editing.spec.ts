@@ -42,7 +42,7 @@ test('行程变更新增和跨日移动会同步地图，重启后保留活动�
     const day = page.getByRole('region', { name: '第 2 天', exact: true });
     await day.getByRole('button', { name: /清水寺/ }).click();
     await expect(page.locator('#temple')).toContainText('从清水寺走进东山');
-    await expect(day.getByRole('button').first()).toContainText('清水寺');
+    await expect(day.locator('button[aria-pressed]').first()).toContainText('清水寺');
     await app.close();
     app = await electron.launch({ args: ['.'], env: { ...process.env, VITRIP_TEST_DATA: dir } });
     page = await app.firstWindow();

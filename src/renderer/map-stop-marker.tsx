@@ -1,6 +1,5 @@
-import { Check, MessageSquare } from 'lucide-react';
-import { MapDiscussion } from './map-discussion';
-import { useContext, useEffect, useRef, useState } from 'react';
+import { Check } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import type { ItineraryStop } from '../shared/itinerary-map';
 import { decisionKey, referenceCards } from '../shared/map-references';
 import { Sources } from './components/assistant-ui/elements/sources';
@@ -21,7 +20,6 @@ export function MapStopMarker({
   onSelect: () => void;
   onBrowse: (url: string) => void;
 }) {
-  const discuss = useContext(MapDiscussion);
   const key = decisionKey(journeyKey, stop);
   const journeyId = journeyKey.replace(/^vitrip-map:/, '');
   const popup = useRef<HTMLDivElement>(null);
@@ -115,9 +113,8 @@ export function MapStopMarker({
           const target = event.target;
           if (
             target instanceof Element &&
-            target
-              .closest('[data-itinerary-quote-journey]')
-              ?.getAttribute('data-itinerary-quote-journey') === journeyId
+            target.closest('[data-quotation-scope]')?.getAttribute('data-quotation-scope') ===
+              journeyId
           ) {
             event.preventDefault();
           }
@@ -178,17 +175,6 @@ export function MapStopMarker({
             >
               <Check aria-hidden="true" />
               {confirmed ? '已确认安排' : '确认安排'}
-            </Button>
-            <Button
-              variant="outline"
-              disabled={!discuss}
-              onClick={() => {
-                setOpen(false);
-                discuss?.(stop);
-              }}
-            >
-              <MessageSquare aria-hidden="true" />
-              讨论或修改
             </Button>
           </div>
           <span role="status" className="sr-only">

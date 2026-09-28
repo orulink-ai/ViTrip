@@ -1,3 +1,4 @@
+import { NotebookQuotation } from './notebook-quotation';
 import { referenceRehypePlugins } from './reference-markdown';
 import { referenceUrlTransform } from './link-url';
 import { t } from './i18n';
@@ -23,6 +24,9 @@ import type { useNotebook } from './use-notebook';
 const Board = lazy(() => import('./notebook-board'));
 export function NotebookPanel({
   notebook,
+  journeyId,
+  tripId,
+  documentName,
   title,
   onQuote,
   onSource,
@@ -30,13 +34,17 @@ export function NotebookPanel({
   showExtras = true,
 }: {
   showExtras?: boolean;
+  journeyId: string;
+  tripId: string;
+  documentName?: string;
   title: string;
   notebook: ReturnType<typeof useNotebook>;
-  onQuote: (quote: Quote) => void;
+  onQuote: (quote: Quote, newConversation?: boolean) => void;
   onSource: (quote: Quote) => void;
   onBrowse: (url: string) => void;
 }) {
   const [preview, setPreview] = useState(true);
+  const quotationRoot = useRef<HTMLDivElement>(null);
   const editor = useRef<HTMLTextAreaElement>(null);
   const lastCanvas = useRef(notebook.value?.canvas ?? '');
   const { value, error, pending, update } = notebook;
@@ -64,6 +72,13 @@ export function NotebookPanel({
       aria-label={t('旅行笔记页面')}
       className="flex-1 min-h-0 overflow-y-auto bg-background text-foreground"
     >
+      <NotebookQuotation
+        root={quotationRoot}
+        tripId={tripId}
+        journeyId={journeyId}
+        documentName={documentName}
+        onQuote={onQuote}
+      />
       <div className="mx-auto max-w-3xl px-8 py-6">
         <header className="mb-6 flex items-center justify-between gap-3">
           <span className="min-w-0 truncate text-sm text-muted-foreground">{title}</span>
@@ -90,25 +105,31 @@ export function NotebookPanel({
           </div>
         )}
         {preview ? (
-          <MessageResponse
-            urlTransform={referenceUrlTransform}
-            rehypePlugins={referenceRehypePlugins}
-            components={{
-              a: ({ href, children }) => (
-                <a
-                  href={href}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    if (href && /^https?:\/\//.test(href)) onBrowse(href);
-                  }}
-                >
-                  {children}
-                </a>
-              ),
-            }}
+          <div
+            ref={quotationRoot}
+            data-message-id={`notebook:${journeyId}:${documentName ?? '__scratch__'}`}
+            data-aui-quote-selectable
           >
-            {value.markdown || t('写下旅途中的想法…')}
-          </MessageResponse>
+            <MessageResponse
+              urlTransform={referenceUrlTransform}
+              rehypePlugins={referenceRehypePlugins}
+              components={{
+                a: ({ href, children }) => (
+                  <a
+                    href={href}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (href && /^https?:\/\//.test(href)) onBrowse(href);
+                    }}
+                  >
+                    {children}
+                  </a>
+                ),
+              }}
+            >
+              {value.markdown || t('写下旅途中的想法…')}
+            </MessageResponse>
+          </div>
         ) : (
           <textarea
             ref={editor}

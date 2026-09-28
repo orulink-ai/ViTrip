@@ -17,6 +17,7 @@ import { Sidebar, SidebarProvider, SidebarFooter, SidebarTrigger } from './compo
 import { Tabs, TabsList, TabsTrigger } from './components/ui/tabs';
 import { Badge } from './components/ui/badge';
 import { Alert } from './components/ui/alert';
+import type { NotebookOpenRequest } from '../shared/notebook-artifacts';
 import { NotebookWorkspace } from './notebook-workspace';
 import { useNotebook } from './use-notebook';
 import type { Quote } from '../shared/notebook';
@@ -110,6 +111,7 @@ function App() {
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [tab, setActiveTab] = useState<'browser' | 'plan' | 'notebook'>('plan');
   function setTab(value: 'browser' | 'plan' | 'notebook') {
+    if (value !== 'notebook') setDocumentRequest(undefined);
     setActiveTab(value);
     setWorkspaceOpen(true);
   }
@@ -119,11 +121,13 @@ function App() {
   const [status, setStatus] = useState(t('准备好下一段旅程'));
   const [draft, setDraft] = useState('');
   const [quote, setQuote] = useState<Quote>();
+  const [documentRequest, setDocumentRequest] = useState<NotebookOpenRequest>();
   const [itinerarySource, setItinerarySource] = useState<Quote['source']>();
   const [sourceTarget, setSourceTarget] = useState<string>();
   const notebook = useNotebook(trip?.journeyId);
   useEffect(() => {
-    setQuote(undefined);
+    setQuote((value) => (value?.tripId === trip?.id ? value : undefined));
+    setDocumentRequest(undefined);
   }, [trip?.id]);
   useEffect(() => {
     if (!sourceTarget) return;
@@ -152,7 +156,33 @@ function App() {
       document.querySelector<HTMLTextAreaElement>('.aui-composer-input')?.focus(),
     );
   }
+  function quoteWorkspace(value: Quote, newConversation = false) {
+    if (!newConversation || !value.source) return quoteReply(value);
+    void perform(async () => {
+      const created = await window.vitrip.create(value.source!.journeyId);
+      updateTrip(created);
+      setDraft('');
+      quoteReply({ ...value, tripId: created.id });
+    });
+  }
   async function showSource(value: Quote) {
+    if (value.source?.kind === 'notebook') {
+      const source = value.source;
+      const conversation = trips.find((item) => item.journeyId === source.journeyId);
+      if (!conversation) {
+        setNotice(t('来源笔记已删除，引用原文仍保留。'));
+        return;
+      }
+      if (trip?.journeyId !== source.journeyId)
+        updateTrip(await window.vitrip.select(conversation.id));
+      setTab('notebook');
+      setDocumentRequest({
+        journeyId: source.journeyId,
+        name: source.documentName ?? '',
+        token: Date.now(),
+      });
+      return;
+    }
     if (value.source?.kind === 'itinerary') {
       const target = journeys.find((j) => j.id === value.source!.journeyId);
       const conversation = trips.find((item) => item.journeyId === target?.id);
@@ -604,10 +634,12 @@ function App() {
               {tab === 'notebook' && trip ? (
                 <NotebookWorkspace
                   journeyId={trip.journeyId}
+                  tripId={trip.id}
+                  openRequest={documentRequest}
                   key={trip?.journeyId}
                   notebook={notebook}
                   title={journey?.title || t('新的旅行')}
-                  onQuote={quoteReply}
+                  onQuote={quoteWorkspace}
                   onSource={(value) => void perform(() => showSource(value))}
                   onBrowse={(url) => void browse(url)}
                 />
@@ -617,7 +649,7 @@ function App() {
                     key={journey.id}
                     journey={journey}
                     tripId={trip?.id}
-                    onQuote={quoteReply}
+                    onQuote={quoteWorkspace}
                     quoteTarget={itinerarySource}
                     building={running}
                     todos={notebook.value?.todos}

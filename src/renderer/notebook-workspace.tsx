@@ -1,4 +1,5 @@
-import { useState, type ComponentProps } from 'react';
+import type { NotebookOpenRequest } from '../shared/notebook-artifacts';
+import { useEffect, useState, type ComponentProps } from 'react';
 import { NotebookPanel } from './notebook-panel';
 import { useNotebookDocuments } from './use-notebook-documents';
 import { Button } from './components/ui/button';
@@ -13,9 +14,16 @@ import {
 import { t } from './i18n';
 
 export function NotebookWorkspace(
-  props: ComponentProps<typeof NotebookPanel> & { journeyId: string },
+  props: ComponentProps<typeof NotebookPanel> & {
+    journeyId: string;
+    openRequest?: NotebookOpenRequest;
+  },
 ) {
   const documents = useNotebookDocuments(props.journeyId);
+  useEffect(() => {
+    if (props.openRequest?.journeyId === props.journeyId)
+      void documents.select(props.openRequest.name);
+  }, [props.openRequest, props.journeyId]);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
   const [content, setContent] = useState('');
@@ -124,7 +132,8 @@ export function NotebookWorkspace(
       )}
       <NotebookPanel
         {...props}
-        key={active?.name ?? '__scratch__'}
+        key={`${active?.name ?? '__scratch__'}:${props.openRequest?.token ?? ''}`}
+        documentName={active?.name}
         notebook={notebook}
         title={active?.name ?? props.title}
         showExtras={!active}

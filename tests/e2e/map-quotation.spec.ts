@@ -61,14 +61,50 @@ test('地图引用浮层选中文字可加入对话且不修改行程', async ()
     await page.screenshot({ path: 'artifacts/map-ux/map-quote-floating.png' });
     await page.getByRole('button', { name: 'Close Assistant', exact: true }).click();
     await page.getByRole('button', { name: '地图地点 1 清水寺', exact: true }).click();
-    await popup.getByRole('button', { name: '讨论或修改', exact: true }).click();
+    await expect(page.getByRole('button', { name: '讨论或修改', exact: true })).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: '展开地点列表', exact: true }).click();
+    await page.getByRole('button', { name: '第 1 天对话操作', exact: true }).click();
+    await page.screenshot({ path: 'artifacts/map-ux/day-conversation-menu.png' });
+    await page.getByRole('menuitem', { name: '添加到对话', exact: true }).click();
     await expect(page.getByLabel('待发送的引用')).toContainText('从清水寺走进东山');
+    await expect(page.getByLabel('待发送的引用')).not.toContainText('早一点抵达岚山');
     await expect(page.getByLabel('旅行需求', { exact: true })).toHaveValue(
       '这个地点有问题，请核实后修改一下',
     );
+    await page.getByRole('button', { name: 'Close Assistant', exact: true }).click();
+    await page.getByRole('button', { name: '第 1 天对话操作', exact: true }).click();
+    await page.getByRole('menuitem', { name: '在新对话中讨论', exact: true }).click();
+    await expect(page.getByLabel('待发送的引用')).toContainText('从清水寺走进东山');
+    await expect(page.getByLabel('旅行需求', { exact: true })).toHaveValue('');
     const state = await page.evaluate(() => window.vitrip.init());
+    expect(state.activeTripId).not.toBe(trip.id);
+    expect(state.trips).toHaveLength(2);
+    expect(state.trips.every((entry) => entry.journeyId === trip.journeyId)).toBe(true);
+    expect(state.trips.every((entry) => entry.messages.length === 0)).toBe(true);
     expect(state.journeys.find((journey) => journey.id === trip.journeyId)?.plan).toEqual(plan);
     expect(state.trips.find((entry) => entry.id === trip.id)?.messages).toHaveLength(0);
+    expect(await page.evaluate((id) => localStorage.getItem(`vitrip:draft:${id}`), trip.id)).toBe(
+      '这个地点有问题，请核实后修改一下',
+    );
+    await page.getByRole('button', { name: 'Close Assistant', exact: true }).click();
+    await page.getByRole('button', { name: '地图地点 1 清水寺', exact: true }).click();
+    await title.evaluate((element) => {
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      window.getSelection()?.removeAllRanges();
+      window.getSelection()?.addRange(range);
+    });
+    await title.dispatchEvent('mouseup');
+    await page
+      .getByRole('toolbar', { name: '行程选中文字操作' })
+      .getByRole('button', { name: '在新对话中讨论', exact: true })
+      .click();
+    await expect(page.getByLabel('待发送的引用')).toContainText('清水寺');
+    await expect(page.getByLabel('待发送的引用')).not.toContainText('把黄昏留给鸭川');
+    await expect
+      .poll(async () => (await page.evaluate(() => window.vitrip.init())).trips.length)
+      .toBe(3);
   } finally {
     await app.close();
     await rm(dir, { recursive: true, force: true });

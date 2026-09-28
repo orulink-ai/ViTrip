@@ -1,3 +1,4 @@
+import { QuoteActions } from './quote-actions';
 import { Sources } from './components/assistant-ui/elements/sources';
 import { referenceCards } from '../shared/map-references';
 import { Timeline } from './components/assistant-ui/elements/timeline';
@@ -7,10 +8,15 @@ import { PhotoGallery } from './photo-gallery';
 import { photosForActivity, type TravelPhoto } from '../shared/photos';
 import { t } from './i18n';
 import { lazy, Suspense, useMemo, useState, useEffect, useRef } from 'react';
-import { Expand, ArrowLeft, LocateFixed, List, X } from 'lucide-react';
+import { Expand, ArrowLeft, LocateFixed, List, X, MessageSquare } from 'lucide-react';
 import type { Plan } from '../shared/types';
 import { itineraryStops, locationURL } from '../shared/itinerary-map';
 import { Button } from './components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+} from './components/ui/dropdown-menu';
 import { Badge } from './components/ui/badge';
 import {
   Select,
@@ -35,7 +41,7 @@ export function JourneyMap({
   expanded,
   onExpand,
   onBrowse,
-  onRead,
+  onQuoteDay,
 }: {
   plan: Plan | null;
   journeyId?: string;
@@ -45,7 +51,7 @@ export function JourneyMap({
   expanded: boolean;
   onExpand?: (value: boolean) => void;
   onBrowse: (url: string) => void;
-  onRead: (id: string) => void;
+  onQuoteDay?: (day: number, newConversation: boolean) => void;
 }) {
   const allStops = useMemo(() => itineraryStops(plan, selection.day), [plan, selection.day]);
   const contextStops = useMemo(
@@ -195,13 +201,36 @@ export function JourneyMap({
             {t('备选不代表已安排，连线仅表示顺序，不代表导航路线。')}
           </p>
           <div ref={listRef} aria-label="地图地点列表" className="space-y-3">
-            {[...new Set(stops.map((stop) => stop.dayIndex))].map((day) => {
+            {(
+              plan?.days
+                .map((_, index) => index)
+                .filter((index) => selection.day === undefined || selection.day === index) ?? []
+            ).map((day) => {
               const dayStops = stops.filter((stop) => stop.dayIndex === day);
               return (
                 <section key={day} aria-label={t('第 {day} 天', { day: day + 1 })}>
-                  <h3 className="mb-2 flex items-center gap-2 text-sm font-medium">
-                    {plan?.days[day].title}
-                  </h3>
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <h3 className="text-sm font-medium">{plan?.days[day].title}</h3>
+                    {onQuoteDay && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label={t('第 {day} 天对话操作', { day: day + 1 })}
+                          >
+                            <MessageSquare />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <QuoteActions
+                            variant="menu"
+                            onSelect={(newConversation) => onQuoteDay(day, newConversation)}
+                          />
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </div>
                   {plan?.days[day].stay && (
                     <p className="mb-2 text-xs text-muted-foreground">
                       {t('当晚住宿')} · {plan.days[day].stay!.name}
@@ -307,9 +336,6 @@ export function JourneyMap({
                 />
               )}
               <div className="flex flex-wrap gap-2">
-                <Button size="sm" variant="outline" onClick={() => onRead(selected.id)}>
-                  讨论或修改
-                </Button>
                 {selected.location && (
                   <Button
                     size="sm"

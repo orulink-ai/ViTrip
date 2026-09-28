@@ -297,7 +297,13 @@ function Preview() {
         type="button"
         className="min-w-0 flex-1 text-left"
         onClick={() => local && onSource(local)}
-        title={t(local?.source?.kind === 'itinerary' ? '回到行程' : '回到原对话')}
+        title={t(
+          local?.source?.kind === 'itinerary'
+            ? '回到行程'
+            : local?.source?.kind === 'notebook'
+              ? '回到笔记'
+              : '回到原对话',
+        )}
       >
         <ComposerQuotePreview.Text />
       </button>
@@ -330,7 +336,13 @@ function Header() {
         <button
           type="button"
           className="message-quote block w-full text-left"
-          title={t(quote.source?.kind === 'itinerary' ? '回到行程' : '回到原对话')}
+          title={t(
+            quote.source?.kind === 'itinerary'
+              ? '回到行程'
+              : quote.source?.kind === 'notebook'
+                ? '回到笔记'
+                : '回到原对话',
+          )}
           onClick={() => onSource(quote)}
         >
           <QuoteBlock text={quote.text} messageId={quote.messageId} />

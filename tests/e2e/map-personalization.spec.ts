@@ -53,7 +53,7 @@ test('密集地点可展开，偏好仅筛选候选，切换视图保留地图�
     await page.getByRole('option', { name: '慢节奏', exact: true }).click();
     await page.getByRole('button', { name: '展开地点列表', exact: true }).click();
     const list = page.getByLabel('地图地点列表');
-    await expect(list.getByRole('button')).toHaveCount(3);
+    await expect(list.locator('button[aria-pressed]')).toHaveCount(3);
     await list.getByRole('button', { name: '2. 地点 1 · 候选', exact: true }).click();
     await expect(page.getByLabel('选中地点')).toContainText('根据你希望慢走的偏好');
     await expect
