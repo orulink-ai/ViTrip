@@ -46427,3 +46427,9 @@ IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
 CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
 TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+Pi Jev Browser — Apache-2.0
+https://github.com/laihenyi/pi-Jev-browser
+Pinned revision: 206a351831d82580a78ac4635aabcc33bc7134c9
+Vendored loop, driver, gate, errors and question builders; adapted imports and transport.
+See PI-JEV-BROWSER-LICENSE and src/main/vendor/pi-jev-browser/NOTICE.md.

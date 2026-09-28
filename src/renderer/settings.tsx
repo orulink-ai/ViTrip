@@ -35,6 +35,9 @@ export function SettingsDialog({
   config: PublicSettings;
   onSave: (value: PublicSettings) => void;
 }) {
+  const [experiments, setExperiments] = useState(
+    config.jevExperiments ?? { browser: false, webSearch: false, localSearch: false },
+  );
   const [tavilyKey, setTavilyKey] = useState('');
   useEffect(() => {
     if (open) setTavilyKey('');
@@ -75,6 +78,9 @@ export function SettingsDialog({
   const [saving, setSaving] = useState(false);
   useEffect(() => {
     if (open) {
+      setExperiments(
+        config.jevExperiments ?? { browser: false, webSearch: false, localSearch: false },
+      );
       setRuntime(config.runtime ?? 'pi');
       setCodexModel(config.codexModel ?? '');
       setCodexEffort(config.codexEffort ?? '');
@@ -88,7 +94,7 @@ export function SettingsDialog({
   }, [open, config]);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="settings-dialog">
+      <DialogContent className="settings-dialog max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{t('连接你的旅行助手')}</DialogTitle>
           <DialogDescription>
@@ -102,6 +108,7 @@ export function SettingsDialog({
             try {
               onSave(
                 await window.vitrip.settings({
+                  jevExperiments: experiments,
                   runtime,
                   codexModel,
                   codexEffort,
@@ -303,37 +310,75 @@ export function SettingsDialog({
               )}
             </label>
           )}
-          <label>
-            Jev · OpenRouter Key{' '}
-            <span>{config.hasJevKey ? t('已保存，留空保留') : t('浏览器自动操作使用')}</span>
-            <Input
-              aria-label="Jev OpenRouter Key"
-              type="password"
-              autoComplete="off"
-              value={jevKey}
-              onChange={(e) => setJevKey(e.target.value)}
-              placeholder={
-                config.hasJevKey ? t('••••••••（已加密保存）') : t('输入 OpenRouter API Key')
-              }
-            />
-          </label>
-          <p className="settings-note">{t('浏览器决策模型：typesafe/jev-1.13')}</p>
-          {config.hasJevKey && (
-            <Button
-              variant="ghost"
-              type="button"
-              className="clear-key"
-              onClick={async () => {
-                try {
-                  onSave(await window.vitrip.settings({ baseURL, model, jevApiKey: '' }));
-                } catch (e) {
-                  setError(String(e));
+          <fieldset className="grid gap-4 border-t pt-4">
+            <legend>JEV 实验性功能</legend>
+            <p className="settings-note">
+              默认关闭，可分别启用。关闭后继续使用原有浏览器控制与 Pi 搜索。搜索实验目前用于 Pi
+              引擎。
+            </p>
+            {(
+              [
+                ['browser', 'Pi JEV 浏览器控制'],
+                ['webSearch', 'JEV 联网搜索'],
+                ['localSearch', 'JEV 本地代码与文档搜索'],
+              ] as const
+            ).map(([name, label]) => (
+              <label key={name}>
+                {label}
+                <Select
+                  value={experiments[name] ? 'on' : 'off'}
+                  disabled={saving}
+                  onValueChange={(value) => {
+                    const next = { ...experiments, [name]: value === 'on' };
+                    setExperiments(next);
+                  }}
+                >
+                  <SelectTrigger aria-label={label}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="off">关闭 · 使用原有功能</SelectItem>
+                    <SelectItem value="on">启用实验</SelectItem>
+                  </SelectContent>
+                </Select>
+              </label>
+            ))}
+            <p className="settings-note">
+              联网搜索由现有搜索服务获取来源，再由 JEV
+              判断相关性。本地搜索支持代码及纯文本文档；候选片段会发送至 OpenRouter。
+            </p>
+            <label>
+              Jev · OpenRouter Key{' '}
+              <span>{config.hasJevKey ? t('已保存，留空保留') : t('浏览器自动操作使用')}</span>
+              <Input
+                aria-label="Jev OpenRouter Key"
+                type="password"
+                autoComplete="off"
+                value={jevKey}
+                onChange={(e) => setJevKey(e.target.value)}
+                placeholder={
+                  config.hasJevKey ? t('••••••••（已加密保存）') : t('输入 OpenRouter API Key')
                 }
-              }}
-            >
-              {t('清除 Jev 密钥')}
-            </Button>
-          )}
+              />
+            </label>
+            <p className="settings-note">{t('浏览器决策模型：typesafe/jev-1.13')}</p>
+            {config.hasJevKey && (
+              <Button
+                variant="ghost"
+                type="button"
+                className="clear-key"
+                onClick={async () => {
+                  try {
+                    onSave(await window.vitrip.settings({ baseURL, model, jevApiKey: '' }));
+                  } catch (e) {
+                    setError(String(e));
+                  }
+                }}
+              >
+                {t('清除 Jev 密钥')}
+              </Button>
+            )}
+          </fieldset>
           {error && (
             <p className="form-error" role="alert">
               {error}

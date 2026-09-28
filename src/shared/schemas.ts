@@ -91,7 +91,13 @@ export const journeySchema = z.object({
   updatedAt: z.number(),
 });
 export const nameSchema = z.string().trim().min(1).max(80);
+export const jevExperimentsSchema = z.object({
+  browser: z.boolean(),
+  webSearch: z.boolean(),
+  localSearch: z.boolean(),
+});
 export const settingsSchema = z.object({
+  jevExperiments: jevExperimentsSchema.optional(),
   runtime: z.enum(['pi', 'codex']).optional(),
   codexModel: z.string().trim().max(200).optional(),
   codexEffort: z

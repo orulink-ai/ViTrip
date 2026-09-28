@@ -6,7 +6,13 @@ import type { ItineraryEdit } from './journey-editing';
 import type { LinkTarget } from './deep-link';
 import type { Notebook, Quote } from './notebook';
 import type { ItineraryLocation } from './itinerary-map';
+export interface JevExperiments {
+  browser: boolean;
+  webSearch: boolean;
+  localSearch: boolean;
+}
 export interface Settings {
+  jevExperiments?: JevExperiments;
   runtime?: 'pi' | 'codex';
   codexModel?: string;
   codexEffort?: string;
@@ -18,6 +24,7 @@ export interface Settings {
   tavilyApiKey?: string;
 }
 export interface PublicSettings {
+  jevExperiments?: JevExperiments;
   runtime?: 'pi' | 'codex';
   codexModel?: string;
   codexEffort?: string;
@@ -205,6 +212,7 @@ export interface API {
   addBookmark(journeyId: string, quote: Quote): Promise<Notebook>;
   removeBookmark(journeyId: string, id: string): Promise<Notebook>;
   settings(value: {
+    jevExperiments?: JevExperiments;
     runtime?: 'pi' | 'codex';
     codexModel?: string;
     codexEffort?: string;

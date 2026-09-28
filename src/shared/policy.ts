@@ -20,6 +20,7 @@ export function redactSettings(settings: Settings): PublicSettings {
     baseURL: settings.baseURL,
     model: settings.model,
     ...(settings.imageInput !== undefined ? { imageInput: settings.imageInput } : {}),
+    ...(settings.jevExperiments ? { jevExperiments: settings.jevExperiments } : {}),
     hasKey: Boolean(settings.apiKey),
     ...(settings.tavilyApiKey ? { hasTavilyKey: true } : {}),
     ...(settings.jevApiKey ? { hasJevKey: true } : {}),

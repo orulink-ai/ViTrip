@@ -1,0 +1,125 @@
+{
+  "model": "deepseek-v4.1-flash",
+  "rows": [
+    {
+      "task": "browser",
+      "enabled": false,
+      "trials": 3,
+      "successes": 3,
+      "timeouts": 0,
+      "elapsedMedianMs": 21393,
+      "elapsedRangeMs": [
+        20731,
+        22087
+      ],
+      "answerReadyMedianMs": 13210,
+      "relevantToolMedianMs": 2957,
+      "mainCallsMedian": 5,
+      "mainInputMedian": 58986,
+      "mainOutputMedian": 377,
+      "cacheReadMedian": 39680,
+      "jevCallsMedian": 4,
+      "jevKnownCostMedian": 0.00023494800000000001
+    },
+    {
+      "task": "browser",
+      "enabled": true,
+      "trials": 3,
+      "successes": 3,
+      "timeouts": 0,
+      "elapsedMedianMs": 22318,
+      "elapsedRangeMs": [
+        19760,
+        24115
+      ],
+      "answerReadyMedianMs": 15066,
+      "relevantToolMedianMs": 4434,
+      "mainCallsMedian": 5,
+      "mainInputMedian": 60331,
+      "mainOutputMedian": 304,
+      "cacheReadMedian": 39936,
+      "jevCallsMedian": 6,
+      "jevKnownCostMedian": 0.000436926
+    },
+    {
+      "task": "web",
+      "enabled": false,
+      "trials": 3,
+      "successes": 3,
+      "timeouts": 0,
+      "elapsedMedianMs": 19060,
+      "elapsedRangeMs": [
+        17888,
+        19117
+      ],
+      "answerReadyMedianMs": 11547,
+      "relevantToolMedianMs": 1150,
+      "mainCallsMedian": 5,
+      "mainInputMedian": 60998,
+      "mainOutputMedian": 263,
+      "cacheReadMedian": 40448,
+      "jevCallsMedian": 0,
+      "jevKnownCostMedian": 0
+    },
+    {
+      "task": "web",
+      "enabled": true,
+      "trials": 3,
+      "successes": 3,
+      "timeouts": 0,
+      "elapsedMedianMs": 16547,
+      "elapsedRangeMs": [
+        16484,
+        33326
+      ],
+      "answerReadyMedianMs": 9365,
+      "relevantToolMedianMs": 1970,
+      "mainCallsMedian": 4,
+      "mainInputMedian": 44484,
+      "mainOutputMedian": 376,
+      "cacheReadMedian": 25856,
+      "jevCallsMedian": 1,
+      "jevKnownCostMedian": 0.00003717
+    },
+    {
+      "task": "local",
+      "enabled": false,
+      "trials": 3,
+      "successes": 3,
+      "timeouts": 0,
+      "elapsedMedianMs": 20247,
+      "elapsedRangeMs": [
+        18840,
+        27059
+      ],
+      "answerReadyMedianMs": 13295,
+      "relevantToolMedianMs": 137,
+      "mainCallsMedian": 5,
+      "mainInputMedian": 65197,
+      "mainOutputMedian": 669,
+      "cacheReadMedian": 42368,
+      "jevCallsMedian": 0,
+      "jevKnownCostMedian": 0
+    },
+    {
+      "task": "local",
+      "enabled": true,
+      "trials": 3,
+      "successes": 3,
+      "timeouts": 0,
+      "elapsedMedianMs": 22575,
+      "elapsedRangeMs": [
+        21710,
+        23965
+      ],
+      "answerReadyMedianMs": 15904,
+      "relevantToolMedianMs": 2205,
+      "mainCallsMedian": 5,
+      "mainInputMedian": 67119,
+      "mainOutputMedian": 520,
+      "cacheReadMedian": 44160,
+      "jevCallsMedian": 4,
+      "jevKnownCostMedian": 0.000214872
+    }
+  ]
+}

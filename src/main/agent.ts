@@ -1,3 +1,4 @@
+import { jevSearchToolNames } from './jev-search-tools';
 import { loadWebSearch, webToolNames } from './web-search';
 import type { AgentImage } from '../shared/attachments';
 import type { ToolResult } from '../shared/photos';
@@ -61,6 +62,7 @@ export async function runTravelAgent(
   options: ToolOptions & {
     settings: Settings;
     sessionDir: string;
+    searchDirectory?: string;
     contextKey?: string;
     prompt: string;
     images?: AgentImage[];
@@ -108,11 +110,24 @@ export async function runTravelAgent(
   const budget = new ResearchBudget();
   const extensions = options.toolNames
     ? undefined
-    : await loadWebSearch(options.sessionDir, signal, (name) => budget.check(name));
+    : await loadWebSearch(
+        options.sessionDir,
+        signal,
+        (name) => budget.check(name),
+        options.settings,
+        options.searchDirectory,
+      );
   const resourceLoader = createTravelResources({
     extensions,
     cwd: options.sessionDir,
-    prompt: travelPrompt,
+    prompt:
+      travelPrompt +
+      (options.settings.jevExperiments?.webSearch
+        ? '\nJEV 联网搜索实验已开启，优先用 jev_web_search 获取资料；web_search 保留作为原始搜索。'
+        : '') +
+      (options.settings.jevExperiments?.localSearch
+        ? '\nJEV 本地搜索实验已开启，语义检索代码或笔记本可使用 jev_search；精确搜索仍用 grep。'
+        : ''),
     cliPath: host.cliPath,
     skillRoots: process.env.VITRIP_LARK_SKILLS_DIR
       ? process.env.VITRIP_LARK_SKILLS_DIR.split(path.delimiter)
@@ -185,7 +200,12 @@ export async function runTravelAgent(
     modelRuntime: runtime,
     thinkingLevel: 'off',
     resourceLoader,
-    tools: options.toolNames ?? [...builtinToolNames, ...webToolNames, ...Object.keys(toolsSchema)],
+    tools: options.toolNames ?? [
+      ...builtinToolNames,
+      ...webToolNames,
+      ...jevSearchToolNames(options.settings),
+      ...Object.keys(toolsSchema),
+    ],
     customTools: [...boundedTools, ...travelTools({ ...options, execute: boundedExecute, signal })],
     sessionManager: manager,
     settingsManager: SettingsManager.inMemory({

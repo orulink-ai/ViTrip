@@ -1,3 +1,6 @@
+import type { Settings } from '../shared/types';
+import { registerJevSearch } from './jev-search-tools';
+import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {
@@ -42,14 +45,25 @@ export async function loadWebSearch(
   cwd: string,
   signal: AbortSignal,
   beforeTool: (name: string) => void,
+  settings?: Settings,
+  searchDirectory = cwd,
 ) {
   if (!configDirectory) throw new Error('搜索服务尚未初始化');
   const { default: upstream } = await import('pi-web-access/dist/index.js');
-  const factory: ExtensionFactory = (pi) =>
-    upstream({
+  const factory: ExtensionFactory = async (pi) => {
+    const captured = new Map<string, ToolDefinition>();
+    await upstream({
       ...pi,
       registerTool: (tool) => {
         if (!webToolNames.includes(tool.name)) return;
+        captured.set(tool.name, {
+          name: tool.name,
+          label: tool.label,
+          description: tool.description,
+          parameters: tool.parameters,
+          execute: (id, args, signal, update, context) =>
+            tool.execute(id, args as Parameters<typeof tool.execute>[1], signal, update, context),
+        });
         pi.registerTool({
           ...tool,
           execute: async (id, args, toolSignal, update, context) => {
@@ -74,6 +88,8 @@ export async function loadWebSearch(
         });
       },
     });
+    if (settings) registerJevSearch(pi, captured, settings, searchDirectory, beforeTool, signal);
+  };
   const loader = new DefaultResourceLoader({
     cwd,
     agentDir: configDirectory,

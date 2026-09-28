@@ -14,6 +14,8 @@ const labels: Record<string, string> = {
   webSearch: '搜索网页',
   web_enable: '启用联网检索',
   web_search: '搜索网页',
+  jev_web_search: 'JEV 联网搜索',
+  jev_search: 'JEV 本地检索',
   fetch_content: '读取网页正文',
   get_search_content: '读取检索结果',
   mcpToolCall: '调用外部工具',

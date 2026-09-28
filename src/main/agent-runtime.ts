@@ -11,6 +11,7 @@ import { runCodexAgent } from './codex-agent';
 export interface AgentRunOptions {
   settings: Settings;
   sessionDir: string;
+  searchDirectory?: string;
   contextKey?: string;
   prompt: string;
   images?: AgentImage[];

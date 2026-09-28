@@ -116,6 +116,8 @@ export class Browser {
     return this.view.webContents.executeJavaScriptInIsolatedWorld(1004, [{ code }], true);
   }
   async observe(): Promise<string> {
+    if (!this.view.webContents.getURL())
+      throw new Error('请先打开网页（navigate），再观察页面或执行 computer_use。');
     this.sequence += 1000;
     const result = await this.evaluate(`(() => {
       const refs = new Map(); globalThis.__vitripRefs = refs;

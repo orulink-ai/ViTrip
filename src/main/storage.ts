@@ -1,3 +1,4 @@
+import { jevExperimentsSchema } from '../shared/schemas';
 import { attachmentSchema } from '../shared/attachments';
 import { photoSchema } from '../shared/photos';
 import { editItinerary, type ItineraryEdit } from '../shared/journey-editing';
@@ -117,11 +118,13 @@ export class Storage {
           model: z.string(),
           imageInput: z.boolean().optional(),
           encryptedKey: z.string(),
+          jevExperiments: jevExperimentsSchema.optional(),
           encryptedJevKey: z.string().optional(),
           encryptedTavilyKey: z.string().optional(),
         })
         .parse(JSON.parse(config));
       this.settings = {
+        jevExperiments: value.jevExperiments,
         runtime: value.runtime,
         codexModel: value.codexModel,
         codexEffort: value.codexEffort,
@@ -217,6 +220,7 @@ export class Storage {
       ? this.cipher.encrypt(settings.apiKey).toString('base64')
       : '';
     this.write('settings', {
+      jevExperiments: settings.jevExperiments,
       runtime: settings.runtime,
       codexModel: settings.codexModel,
       codexEffort: settings.codexEffort,

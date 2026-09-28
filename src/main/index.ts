@@ -35,6 +35,7 @@ import { Storage } from './storage';
 import { RunControl } from './control';
 import { runTravelAgent, supportsImages } from './agent-runtime';
 import { computerUse } from './jev';
+import { piComputerUse } from './pi-jev-browser';
 import { journalHTML, cleanJournal } from './journal';
 import {
   boundsSchema,
@@ -395,7 +396,9 @@ app
           return '共享旅行手册已更新，所有会话都可沿用这些信息。';
         }
         case 'computer_use':
-          return computerUse({
+          if (!browser.state().url)
+            throw new Error('请先打开网页（navigate），再执行 computer_use。');
+          return (store.settings.jevExperiments?.browser ? piComputerUse : computerUse)({
             goal: toolsSchema.computer_use.parse(args).goal,
             settings: { ...store.settings },
             signal,
@@ -516,6 +519,12 @@ app
             ) +
             '\n当前行程：' +
             JSON.stringify(trip.plan),
+          searchDirectory: path.join(
+            app.getPath('userData'),
+            'journeys',
+            trip.journeyId,
+            'notebook',
+          ),
           sessionDir: path.join(app.getPath('userData'), 'sessions', trip.id),
           settings: { ...store.settings },
           contextKey: trip.contextKey,
@@ -535,6 +544,12 @@ app
           await runTravelAgent({
             approve: approveForRequest,
             settings: { ...store.settings },
+            searchDirectory: path.join(
+              app.getPath('userData'),
+              'journeys',
+              trip.journeyId,
+              'notebook',
+            ),
             sessionDir: path.join(app.getPath('userData'), 'sessions', trip.id),
             control,
             signal,
@@ -856,6 +871,7 @@ app
       if (url.protocol !== 'https:' && !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname))
         throw new Error('远程模型接口必须使用 HTTPS');
       store.configure({
+        jevExperiments: settings.jevExperiments ?? store.settings.jevExperiments,
         runtime: settings.runtime ?? store.settings.runtime,
         codexModel: settings.codexModel ?? store.settings.codexModel,
         codexEffort: settings.codexEffort ?? store.settings.codexEffort,
