@@ -21,6 +21,7 @@ export function redactSettings(settings: Settings): PublicSettings {
     model: settings.model,
     ...(settings.imageInput !== undefined ? { imageInput: settings.imageInput } : {}),
     hasKey: Boolean(settings.apiKey),
+    ...(settings.tavilyApiKey ? { hasTavilyKey: true } : {}),
     ...(settings.jevApiKey ? { hasJevKey: true } : {}),
   };
 }

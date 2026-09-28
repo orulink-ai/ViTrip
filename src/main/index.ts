@@ -1,3 +1,4 @@
+import { configureWebSearch } from './web-search';
 import { listCodexModels } from './codex-models';
 import { NotebookDocuments } from './notebook-documents';
 import { regenerateFrom, selectBranch } from '../shared/conversation-branches';
@@ -125,6 +126,10 @@ app
         );
         return { image: image.toPNG(), preview: thumbnail.toPNG() };
       },
+    );
+    await configureWebSearch(
+      path.join(app.getPath('userData'), 'web-search'),
+      store.settings.tavilyApiKey,
     );
     const control = new RunControl();
     let current = store.trips[0] || store.create();
@@ -844,7 +849,7 @@ app
       }
     });
     handle('codexModels', () => listCodexModels(app.getPath('userData')));
-    handle('settings', (value) => {
+    handle('settings', async (value) => {
       if (task) throw new Error('请先停止任务再修改模型设置');
       const settings = settingsSchema.parse(value);
       const url = new URL(allowedURL(settings.baseURL));
@@ -854,6 +859,8 @@ app
         runtime: settings.runtime ?? store.settings.runtime,
         codexModel: settings.codexModel ?? store.settings.codexModel,
         codexEffort: settings.codexEffort ?? store.settings.codexEffort,
+        tavilyApiKey:
+          settings.tavilyApiKey === undefined ? store.settings.tavilyApiKey : settings.tavilyApiKey,
         jevApiKey: settings.jevApiKey === undefined ? store.settings.jevApiKey : settings.jevApiKey,
         baseURL: url.href.replace(/\/$/, ''),
         model: settings.model,
@@ -862,6 +869,10 @@ app
           : store.settings.imageInput,
         apiKey: settings.apiKey === undefined ? store.settings.apiKey : settings.apiKey,
       });
+      await configureWebSearch(
+        path.join(app.getPath('userData'), 'web-search'),
+        store.settings.tavilyApiKey,
+      );
       return redactSettings(store.settings);
     });
     handle('browse', async (url) => {

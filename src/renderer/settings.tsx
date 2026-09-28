@@ -35,6 +35,10 @@ export function SettingsDialog({
   config: PublicSettings;
   onSave: (value: PublicSettings) => void;
 }) {
+  const [tavilyKey, setTavilyKey] = useState('');
+  useEffect(() => {
+    if (open) setTavilyKey('');
+  }, [open]);
   const [runtime, setRuntime] = useState<'pi' | 'codex'>(config.runtime ?? 'pi');
   const [codexModel, setCodexModel] = useState(config.codexModel ?? '');
   const [codexEffort, setCodexEffort] = useState(config.codexEffort ?? '');
@@ -104,6 +108,7 @@ export function SettingsDialog({
                   baseURL,
                   model,
                   imageInput,
+                  ...(tavilyKey ? { tavilyApiKey: tavilyKey } : {}),
                   ...(key ? { apiKey: key } : {}),
                   ...(jevKey ? { jevApiKey: jevKey } : {}),
                 }),
@@ -264,6 +269,39 @@ export function SettingsDialog({
                 </Button>
               )}
             </>
+          )}
+          {runtime === 'pi' && (
+            <label>
+              Tavily Search API Key
+              <Input
+                type="password"
+                aria-label="Tavily Search API Key"
+                autoComplete="off"
+                value={tavilyKey}
+                onChange={(event) => setTavilyKey(event.target.value)}
+                placeholder={
+                  config.hasTavilyKey ? t('已保存，留空保留') : t('未配置时使用 Exa 搜索')
+                }
+              />
+              <span className="text-sm text-muted-foreground">
+                {t('普通资料先搜索和读取正文，需要网页交互时再打开浏览器。')}
+              </span>
+              {config.hasTavilyKey && (
+                <Button
+                  variant="ghost"
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      onSave(await window.vitrip.settings({ baseURL, model, tavilyApiKey: '' }));
+                    } catch (e) {
+                      setError(String(e));
+                    }
+                  }}
+                >
+                  {t('清除搜索密钥')}
+                </Button>
+              )}
+            </label>
           )}
           <label>
             Jev · OpenRouter Key{' '}

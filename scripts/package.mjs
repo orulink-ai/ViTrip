@@ -23,6 +23,7 @@ writeFileSync(
     dependencies: {
       '@earendil-works/pi-coding-agent': manifest.dependencies['@earendil-works/pi-coding-agent'],
       'sanitize-html': manifest.dependencies['sanitize-html'],
+      'pi-web-access': manifest.dependencies['pi-web-access'],
     },
   }),
 );

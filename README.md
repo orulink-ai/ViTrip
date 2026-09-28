@@ -155,6 +155,14 @@ Jev 动态操作与元素候选方案参考并适配自 [browser-use/jev-ultrafa
 
 assistant-ui 的 MIT 许可证保留于 docs/ASSISTANT-UI-LICENSE。依赖版本由 package-lock.json 锁定。
 
+## Pi 联网搜索
+
+复用 [pi-web-access](https://github.com/nicobailon/pi-web-access) 扩展（固定版本 0.32.0），提供 `web_enable`、`web_search`、`fetch_content` 和 `get_search_content`。Pi 按需启用工具，直接获取带来源链接的搜索结果、提取网页正文并回读长结果；调用与结果沿用聊天执行过程展示。普通资料查询优先搜索和正文读取，登录、交互或读取失败时再使用本地浏览器。
+
+默认使用 Exa 的无密钥 MCP 搜索。可在「模型设置」选择 Pi 后填写 **Tavily Search API Key**，保存后下一轮对话改用 Tavily；清除搜索密钥后恢复 Exa。无密钥服务可能限流，搜索摘要也不代表已核实正文。此次接入只作用于 Pi，Codex 保留自己的搜索能力。
+
+密钥通过系统安全存储加密后保存，前端只接收是否已配置的状态；扩展的独立 `web-search/web-search.json` 仅包含环境变量引用，不修改用户的 `~/.pi` 配置。每次工具调用最多 60 秒，并受当前会话的检索预算和停止操作控制。未启用扩展的终端命令、Curator 工作流或远程正文代抓取服务。
+
 ## 本机工具与飞书 CLI
 
 普通对话可以用 Pi 官方内置工具执行命令、读写文件、查找文件及搜索内容；调用和结果会显示在执行过程中，停止生成会取消正在执行的命令。默认工作目录为当前会话目录，可按任务使用其他路径。这些工具使用当前系统用户权限，工作目录不构成文件系统沙箱；远程网页仍不能访问应用 preload API。

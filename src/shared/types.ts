@@ -15,6 +15,7 @@ export interface Settings {
   model: string;
   apiKey: string;
   jevApiKey?: string;
+  tavilyApiKey?: string;
 }
 export interface PublicSettings {
   runtime?: 'pi' | 'codex';
@@ -25,6 +26,7 @@ export interface PublicSettings {
   model: string;
   hasKey: boolean;
   hasJevKey?: boolean;
+  hasTavilyKey?: boolean;
 }
 export interface ToolActivity {
   id: string;
@@ -211,6 +213,7 @@ export interface API {
     model: string;
     apiKey?: string;
     jevApiKey?: string;
+    tavilyApiKey?: string;
   }): Promise<PublicSettings>;
   browse(url: string): Promise<void>;
   history(action: 'back' | 'forward' | 'reload'): Promise<void>;

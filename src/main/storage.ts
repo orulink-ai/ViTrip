@@ -118,6 +118,7 @@ export class Storage {
           imageInput: z.boolean().optional(),
           encryptedKey: z.string(),
           encryptedJevKey: z.string().optional(),
+          encryptedTavilyKey: z.string().optional(),
         })
         .parse(JSON.parse(config));
       this.settings = {
@@ -125,6 +126,9 @@ export class Storage {
         codexModel: value.codexModel,
         codexEffort: value.codexEffort,
         imageInput: value.imageInput,
+        tavilyApiKey: value.encryptedTavilyKey
+          ? cipher.decrypt(Buffer.from(value.encryptedTavilyKey, 'base64'))
+          : '',
         jevApiKey: value.encryptedJevKey
           ? cipher.decrypt(Buffer.from(value.encryptedJevKey, 'base64'))
           : '',
@@ -220,6 +224,9 @@ export class Storage {
       baseURL: settings.baseURL,
       model: settings.model,
       encryptedKey,
+      encryptedTavilyKey: settings.tavilyApiKey
+        ? this.cipher.encrypt(settings.tavilyApiKey).toString('base64')
+        : '',
       encryptedJevKey: settings.jevApiKey
         ? this.cipher.encrypt(settings.jevApiKey).toString('base64')
         : '',

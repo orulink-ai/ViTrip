@@ -1,3 +1,4 @@
+import { loadWebSearch, webToolNames } from './web-search';
 import type { AgentImage } from '../shared/attachments';
 import type { ToolResult } from '../shared/photos';
 import { ResearchBudget } from './research-budget';
@@ -104,7 +105,12 @@ export async function runTravelAgent(
   const model = runtime.getModel('vitrip', options.settings.model);
   if (!model) throw new Error('Pi 模型注册失败');
   const host = await resolveHostEnvironment();
+  const budget = new ResearchBudget();
+  const extensions = options.toolNames
+    ? undefined
+    : await loadWebSearch(options.sessionDir, signal, (name) => budget.check(name));
   const resourceLoader = createTravelResources({
+    extensions,
     cwd: options.sessionDir,
     prompt: travelPrompt,
     cliPath: host.cliPath,
@@ -119,7 +125,6 @@ export async function runTravelAgent(
       ? path.join(options.sessionDir, 'branches', options.contextKey)
       : options.sessionDir,
   );
-  const budget = new ResearchBudget();
   const boundedExecute: ToolOptions['execute'] = async (name, args) => {
     budget.check(
       name,
@@ -180,7 +185,7 @@ export async function runTravelAgent(
     modelRuntime: runtime,
     thinkingLevel: 'off',
     resourceLoader,
-    tools: options.toolNames ?? [...builtinToolNames, ...Object.keys(toolsSchema)],
+    tools: options.toolNames ?? [...builtinToolNames, ...webToolNames, ...Object.keys(toolsSchema)],
     customTools: [...boundedTools, ...travelTools({ ...options, execute: boundedExecute, signal })],
     sessionManager: manager,
     settingsManager: SettingsManager.inMemory({
@@ -197,6 +202,7 @@ export async function runTravelAgent(
   const tracker = createActivityTracker(options.onActivity ?? (() => {}), [
     options.settings.apiKey,
     options.settings.jevApiKey ?? '',
+    options.settings.tavilyApiKey ?? '',
   ]);
   const unsubscribe = session.subscribe((event) => {
     if (signal.aborted && event.type === 'tool_execution_end') tracker.finish();

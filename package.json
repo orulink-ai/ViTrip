@@ -6,7 +6,7 @@
   "license": "MIT",
   "main": "dist/main.mjs",
   "scripts": {
-    "build": "tsc --noEmit && vite build && esbuild src/main/index.ts --bundle --platform=node --format=esm --external:electron --external:@earendil-works/* --external:sanitize-html --outfile=dist/main.mjs && esbuild src/main/preload.ts --bundle --platform=node --format=cjs --external:electron --outfile=dist/preload.cjs",
+    "build": "tsc --noEmit && vite build && esbuild src/main/index.ts --bundle --platform=node --format=esm --external:electron --external:@earendil-works/* --external:sanitize-html --external:pi-web-access --outfile=dist/main.mjs && esbuild src/main/preload.ts --bundle --platform=node --format=cjs --external:electron --outfile=dist/preload.cjs",
     "start": "npm run build && electron .",
     "test": "vitest run --config vitest.config.ts",
     "test:e2e": "playwright test",
@@ -39,6 +39,7 @@
     "lucide-react": "0.468.0",
     "maplibre-gl": "6.11.2",
     "nanoid": "6.0.1",
+    "pi-web-access": "0.32.0",
     "radix-ui": "1.6.7",
     "react": "19.3.0",
     "react-dom": "19.3.0",

@@ -1,4 +1,11 @@
 export const translations: Record<string, string> = {
+  '未配置时使用 Exa 搜索': 'Uses Exa search when no key is configured',
+  '普通资料先搜索和读取正文，需要网页交互时再打开浏览器。':
+    'Search and read sources first; open the browser when interaction is needed.',
+  清除搜索密钥: 'Clear search key',
+  启用联网检索: 'Enable web access',
+  读取网页正文: 'Read webpage content',
+  读取检索结果: 'Read search results',
   探索地图: 'Explore map',
   探索地图入口: 'Explore map entry',
   展开探索地图: 'Open explore map',

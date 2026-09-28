@@ -104,6 +104,7 @@ export const settingsSchema = z.object({
   model: z.string().min(1).max(200),
   apiKey: z.string().max(10000).optional(),
   jevApiKey: z.string().max(10000).optional(),
+  tavilyApiKey: z.string().max(10000).optional(),
 });
 export const boundsSchema = z.object({
   x: z.number().finite(),

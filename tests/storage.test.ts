@@ -42,6 +42,7 @@ describe('local data and exported plans', () => {
         model: 'test',
         apiKey: 'do-not-store-in-plain-text',
         jevApiKey: 'jev-never-plain',
+        tavilyApiKey: 'search-never-plain',
       });
       first.close();
       expect(
@@ -61,6 +62,10 @@ describe('local data and exported plans', () => {
       expect(second.settings.jevApiKey).toBe('jev-never-plain');
       expect(
         readFileSync(join(directory, 'vitrip.sqlite')).includes(Buffer.from('jev-never-plain')),
+      ).toBe(false);
+      expect(second.settings.tavilyApiKey).toBe('search-never-plain');
+      expect(
+        readFileSync(join(directory, 'vitrip.sqlite')).includes(Buffer.from('search-never-plain')),
       ).toBe(false);
       second.close();
     } finally {
