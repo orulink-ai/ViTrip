@@ -61,6 +61,7 @@ export function JourneyMap({
         : itineraryStops(plan).filter((stop) => stop.dayIndex !== selection.day),
     [plan, selection.day],
   );
+  const [mapTools, setMapTools] = useState<HTMLDivElement | null>(null);
   const [preference, setPreference] = useState('');
   const [sourcesOpen, setSourcesOpen] = useState(false);
   const [listOpen, setListOpen] = useState(false);
@@ -87,7 +88,7 @@ export function JourneyMap({
     >
       <div
         className={
-          expanded ? 'absolute left-3 right-14 top-3 z-10 flex items-start gap-2' : 'flex gap-2 p-3'
+          'relative z-10 flex shrink-0 flex-wrap items-center gap-2 border-b bg-background p-3'
         }
       >
         <Button
@@ -154,6 +155,11 @@ export function JourneyMap({
             ))}
           </nav>
         </div>
+        <div
+          ref={setMapTools}
+          aria-label="地图工具栏"
+          className="ml-auto flex flex-wrap items-center gap-2"
+        />
       </div>
       <div className={expanded ? 'relative flex min-h-0 flex-1 flex-col' : ''}>
         <div className={expanded ? 'flex min-h-0 flex-1 flex-col' : ''}>
@@ -170,6 +176,7 @@ export function JourneyMap({
                 stops={stops}
                 contextStops={contextStops}
                 selectedId={selection.stopId}
+                controlsHost={mapTools}
                 expanded={expanded}
                 onSelect={(stopId) => onSelection({ ...selection, stopId })}
                 onBrowse={onBrowse}
@@ -186,7 +193,7 @@ export function JourneyMap({
           hidden={!listOpen}
           className={
             expanded
-              ? 'absolute left-3 top-16 z-10 max-h-[calc(100%-10rem)] w-80 max-w-[calc(100%-4rem)] space-y-3 overflow-y-auto rounded-xl border bg-background p-4 shadow-sm'
+              ? 'absolute left-3 top-3 z-10 max-h-[calc(100%-10rem)] w-80 max-w-[calc(100%-4rem)] space-y-3 overflow-y-auto rounded-xl border bg-background p-4 shadow-sm'
               : 'space-y-3 p-4'
           }
         >

@@ -26,12 +26,13 @@ test('引用保留草稿，单页笔记与画板在重启后恢复', async () =>
     await selectReply(page);
     await page.getByRole('button', { name: '添加到对话', exact: true }).click();
     await expect(page.getByLabel('旅行需求', { exact: true })).toHaveValue('行李怎么办？');
-    await expect(page.locator('.composer-quote')).toContainText('这是一份示例行程');
-    await page.getByRole('button', { name: '移除引用' }).click();
+    await expect(page.getByLabel('待发送的引用')).toContainText('这是一份示例行程');
+    await page.getByRole('button', { name: '移除批注 1', exact: true }).click();
     await selectReply(page);
     await page.getByRole('button', { name: '标记到笔记本', exact: true }).click();
     await expect(page.getByRole('button', { name: /标记过的内容/ })).toBeVisible();
-    await page.getByRole('button', { name: /标记过的内容/ }).click();
+    if (!(await page.locator('.bookmark-card').first().isVisible()))
+      await page.getByRole('button', { name: /标记过的内容/ }).click();
     await expect(page.locator('.bookmark-card')).toHaveCount(1);
     await page.getByRole('button', { name: '编辑 Markdown', exact: true }).click();
     await page.getByLabel('我的笔记 Markdown').fill('# 出发清单\n\n- [ ] 护照\n\n自己的记录');
@@ -157,7 +158,8 @@ test('引用发送给模型并保留来源，跨会话共享笔记且不混入�
     await page.getByLabel('我的笔记 Markdown').fill('私人笔记不要自动发给模型');
     await selectReply(page);
     await page.getByRole('button', { name: '标记到笔记本', exact: true }).click();
-    await page.getByRole('button', { name: /标记过的内容/ }).click();
+    if (!(await page.locator('.bookmark-card').first().isVisible()))
+      await page.getByRole('button', { name: /标记过的内容/ }).click();
     await expect(page.locator('.bookmark-card')).toHaveCount(1);
     const original = await page.evaluate(async () => {
       const state = await window.vitrip.init();
@@ -171,7 +173,8 @@ test('引用发送给模型并保留来源，跨会话共享笔记且不混入�
     await expect(page.getByRole('article', { name: '旅行笔记页面' })).toContainText(
       '私人笔记不要自动发给模型',
     );
-    await page.getByRole('button', { name: /标记过的内容/ }).click();
+    if (!(await page.locator('.bookmark-card').first().isVisible()))
+      await page.getByRole('button', { name: /标记过的内容/ }).click();
     await page.getByRole('button', { name: '继续提问', exact: true }).click();
     await page.getByLabel('旅行需求', { exact: true }).fill('这个方案带行李方便吗？');
     await page.getByRole('button', { name: '发送', exact: true }).click();
@@ -189,7 +192,9 @@ test('引用发送给模型并保留来源，跨会话共享笔记且不混入�
     await page.reload();
     await expect(page.locator('.message-quote')).toBeVisible();
     await page.locator('.message-quote').click();
-    await expect(page.locator(`#message-${original.messages[0].id}`)).toBeFocused();
+    await expect(
+      page.locator(`#message-${original.messages[0].id} [data-bookmark-link]`).first(),
+    ).toBeFocused();
     await page.getByRole('tab', { name: '笔记本', exact: true }).click();
     await page.evaluate(async () => {
       await window.vitrip.create();

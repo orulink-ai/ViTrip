@@ -82,9 +82,12 @@ export type ThreadGroupPart = MessagePrimitive.GroupedParts.GroupPart;
  */
 export type ThreadComponents = {
   ComposerQuote?: ComponentType;
+  ComposerSend?: ComponentType;
   ComposerTools?: ComponentType;
   ComposerSendWhileRunning?: ComponentType;
   MessageHeader?: ComponentType;
+  MessageArtifacts?: ComponentType;
+  MessageText?: ComponentType;
   MessageError?: ComponentType;
   MessageActions?: ComponentType;
   MessageMenuActions?: ComponentType;
@@ -444,7 +447,8 @@ const Composer: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
 };
 
 const ComposerAction: FC = () => {
-  const { ComposerTools, ComposerSendWhileRunning } = useContext(ThreadComponentsContext);
+  const { ComposerTools, ComposerSendWhileRunning, ComposerSend } =
+    useContext(ThreadComponentsContext);
   // The stop control only cancels the send while no run it could stop is going.
   const isSending = useAuiState(
     (s) =>
@@ -497,19 +501,23 @@ const ComposerAction: FC = () => {
             (s.thread.voice !== undefined && s.composer.submission === undefined)
           }
         >
-          <ComposerPrimitive.Send asChild>
-            <TooltipIconButton
-              tooltip={t('发送')}
-              side="bottom"
-              type="button"
-              variant="default"
-              size="icon"
-              className="aui-composer-send size-7 rounded-full"
-              aria-label={t('发送')}
-            >
-              <ArrowUpIcon className="aui-composer-send-icon size-4" />
-            </TooltipIconButton>
-          </ComposerPrimitive.Send>
+          {ComposerSend ? (
+            <ComposerSend />
+          ) : (
+            <ComposerPrimitive.Send asChild>
+              <TooltipIconButton
+                tooltip={t('发送')}
+                side="bottom"
+                type="button"
+                variant="default"
+                size="icon"
+                className="aui-composer-send size-7 rounded-full"
+                aria-label={t('发送')}
+              >
+                <ArrowUpIcon className="aui-composer-send-icon size-4" />
+              </TooltipIconButton>
+            </ComposerPrimitive.Send>
+          )}
         </AuiIf>
         <AuiIf
           condition={(s) =>
@@ -536,7 +544,8 @@ const ComposerAction: FC = () => {
 
 const AssistantMessage: FC = () => {
   const id = useAuiState((s) => s.message.id);
-  const { MessageHeader, MessageError } = useContext(ThreadComponentsContext);
+  const { MessageHeader, MessageArtifacts, MessageError, MessageText } =
+    useContext(ThreadComponentsContext);
   const {
     ToolFallback: ToolFallbackComponent = ToolFallback,
     ToolGroup,
@@ -599,7 +608,7 @@ const AssistantMessage: FC = () => {
                   );
                 }
                 case 'text':
-                  return <MarkdownText />;
+                  return MessageText ? <MessageText /> : <MarkdownText />;
                 case 'reasoning':
                   return <Reasoning {...part} />;
                 case 'tool-call':
@@ -634,6 +643,7 @@ const AssistantMessage: FC = () => {
             }}
           </MessagePrimitive.GroupedParts>
         </div>
+        {MessageArtifacts && <MessageArtifacts />}
         {MessageError && <MessageError />}
       </div>
 

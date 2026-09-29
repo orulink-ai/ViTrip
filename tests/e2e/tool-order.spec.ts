@@ -48,7 +48,7 @@ test('工具随回复按顺序出现、原位完成，重启仍保留交错顺�
         expect(text.indexOf(ordered[i])).toBeGreaterThan(text.indexOf(ordered[i - 1]));
       await expect(row.getByTestId('agent-activity')).toHaveCount(2);
       await expect(row.locator('[data-slot="tool-call"]')).toHaveCount(2);
-      await row.getByRole('button', { name: /人民币价格.md/ }).click();
+      await row.getByRole('button', { name: /保存笔记.*人民币价格.md/ }).click();
       await expect(row.getByText(/人民币价格.md/).first()).toBeVisible();
     };
     await checkOrder();

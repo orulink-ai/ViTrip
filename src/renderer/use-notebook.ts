@@ -52,6 +52,7 @@ export function useNotebook(journeyId?: string) {
       if (active.current === id && version.current === generation) {
         if (fields === 'bookmarks') setValue((n) => (n ? { ...n, bookmarks: saved.bookmarks } : n));
         setError('');
+        return saved;
       }
     } catch (e) {
       if (active.current === id && version.current === generation) setError(String(e));

@@ -1,6 +1,6 @@
 'use client';
 
-import { BotIcon, ChevronDownIcon } from 'lucide-react';
+import { MessageCircleIcon, MinusIcon } from 'lucide-react';
 
 import {
   type ComponentPropsWithoutRef,
@@ -175,8 +175,17 @@ export const AssistantModal: FC<{
   children: ReactNode;
   openRequest?: unknown;
   title: string;
+  expandLabel?: string;
+  collapseLabel?: string;
   onOpenChange?: (open: boolean) => void;
-}> = ({ children, title, onOpenChange, openRequest }) => {
+}> = ({
+  children,
+  title,
+  onOpenChange,
+  openRequest,
+  expandLabel = 'Open Assistant',
+  collapseLabel = 'Close Assistant',
+}) => {
   const [open, setOpen] = useState(true);
   useEffect(() => {
     if (openRequest) setOpen(true);
@@ -226,9 +235,16 @@ export const AssistantModal: FC<{
       }}
     >
       <PopoverPrimitive.Portal keepMounted>
-        <div className="aui-root aui-modal-anchor fixed end-4 bottom-4 size-11">
+        <div className="aui-root aui-modal-anchor fixed end-4 bottom-4 z-50 size-11">
           <PopoverPrimitive.Trigger
-            render={(props, state) => <AssistantModalButton {...props} open={state.open} />}
+            render={(props, state) => (
+              <AssistantModalButton
+                {...props}
+                open={state.open}
+                expandLabel={expandLabel}
+                collapseLabel={collapseLabel}
+              />
+            )}
           />
         </div>
         <PopoverPrimitive.Positioner
@@ -281,6 +297,18 @@ export const AssistantModal: FC<{
               >
                 {title}
               </button>
+              <TooltipIconButton
+                tooltip={collapseLabel}
+                aria-label={collapseLabel}
+                onClick={() => {
+                  setOpen(false);
+                  requestAnimationFrame(() =>
+                    document.querySelector<HTMLButtonElement>('.aui-modal-button')?.focus(),
+                  );
+                }}
+              >
+                <MinusIcon />
+              </TooltipIconButton>
             </div>
             <div className="aui-modal-body relative min-h-0 flex-1">
               <div
@@ -315,11 +343,13 @@ type AssistantModalButtonProps = Omit<
   'tooltip'
 > & {
   open: boolean;
+  expandLabel: string;
+  collapseLabel: string;
 };
 
 const AssistantModalButton = forwardRef<HTMLButtonElement, AssistantModalButtonProps>(
-  ({ open, ...rest }, ref) => {
-    const tooltip = open ? 'Close Assistant' : 'Open Assistant';
+  ({ open, expandLabel, collapseLabel, ...rest }, ref) => {
+    const tooltip = open ? collapseLabel : expandLabel;
 
     return (
       <TooltipIconButton
@@ -328,20 +358,13 @@ const AssistantModalButton = forwardRef<HTMLButtonElement, AssistantModalButtonP
         side="left"
         {...rest}
         aria-label={tooltip}
+        aria-hidden={open || undefined}
+        tabIndex={open ? -1 : 0}
+        style={{ opacity: open ? 0 : 1, pointerEvents: open ? 'none' : 'auto' }}
         className="aui-modal-button bg-background text-foreground border-border/60 hover:border-border hover:bg-background size-full rounded-full border transition-[border-color,scale] duration-150 ease-out active:scale-96 motion-reduce:transition-none"
         ref={ref}
       >
-        <BotIcon
-          data-open={open ? '' : undefined}
-          data-closed={open ? undefined : ''}
-          className="aui-modal-button-closed-icon absolute size-5 transition-[scale,opacity,filter] duration-200 ease-[cubic-bezier(0.2,0,0,1)] data-closed:scale-100 data-closed:opacity-100 data-closed:blur-[0px] data-open:scale-25 data-open:opacity-0 data-open:blur-[4px] motion-reduce:transition-none"
-        />
-
-        <ChevronDownIcon
-          data-open={open ? '' : undefined}
-          data-closed={open ? undefined : ''}
-          className="aui-modal-button-open-icon absolute size-5 transition-[scale,opacity,filter] duration-200 ease-[cubic-bezier(0.2,0,0,1)] data-closed:scale-25 data-closed:opacity-0 data-closed:blur-[4px] data-open:scale-100 data-open:opacity-100 data-open:blur-[0px] motion-reduce:transition-none"
-        />
+        <MessageCircleIcon className="size-5" />
         <span className="aui-sr-only sr-only">{tooltip}</span>
       </TooltipIconButton>
     );

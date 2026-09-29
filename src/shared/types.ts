@@ -173,12 +173,22 @@ export interface Bounds {
 }
 export interface API {
   codexModels(): Promise<CodexModel[]>;
+  listDocumentFolders(journeyId: string): Promise<string[]>;
+  createDocumentFolder(
+    journeyId: string,
+    name: string,
+  ): Promise<{ name: string; created: boolean }>;
+  moveDocument(
+    journeyId: string,
+    input: import('./notebook-documents').DocumentMove,
+  ): Promise<{ from: string; to: string }>;
   listDocuments(journeyId: string): Promise<NotebookDocumentInfo[]>;
   readDocument(journeyId: string, name: string): Promise<NotebookDocument>;
   writeDocument(journeyId: string, input: DocumentWrite): Promise<NotebookDocument>;
   copyLink(target: LinkTarget): Promise<void>;
   openLink(url: string): Promise<{ target: LinkTarget; trip: Trip }>;
   editItinerary(journeyId: string, revision: number, edit: ItineraryEdit): Promise<Journey>;
+  notebookImage(journeyId: string, source: string): Promise<string | null>;
   photo(journeyId: string, photoId: string): Promise<string | null>;
   init(): Promise<{
     link?: string;

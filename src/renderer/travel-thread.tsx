@@ -1,3 +1,10 @@
+import { SelectionQuotation } from './selection-quotation';
+import type { QuoteHandler } from './quote-actions';
+import { AnnotationList } from './annotation-list';
+import { bookmarkMarkdown } from './bookmark-markdown';
+import { compactQuote } from '../shared/bookmark-ranges';
+import { MarkdownText } from './components/assistant-ui/elements/markdown-text';
+import type { Notebook } from '../shared/notebook';
 import { createPortal } from 'react-dom';
 import { TravelMessageError } from './message-error';
 import { MessageQueue } from './components/assistant-ui/elements/message-queue';
@@ -5,8 +12,18 @@ import { AssistantModal } from './components/assistant-ui/elements/assistant-mod
 import { ConversationMapAui } from './components/assistant-ui/elements/conversation-map.aui';
 import { createAttachmentAdapter } from './attachment-adapter';
 import { AgentSelector } from './agent-selector';
+import { savedNotebookArtifacts } from '../shared/notebook-artifacts';
+import { File } from './components/assistant-ui/elements/file';
 import { CopyLink } from './copy-link';
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import {
   AssistantRuntimeProvider,
   useExternalStoreRuntime,
@@ -15,19 +32,18 @@ import {
   useThreadViewport,
   type QuoteInfo,
 } from '@assistant-ui/react';
-import { Thread, type ThreadComponents } from './components/assistant-ui/elements/thread.aui';
 import {
-  SelectionToolbar,
-  ComposerQuotePreview,
-  QuoteBlock,
-} from './components/assistant-ui/elements/quote.aui';
+  Thread,
+  type ThreadComponents,
+} from './components/assistant-ui/elements/thread.aui';
+import { QuoteBlock } from './components/assistant-ui/elements/quote.aui';
 import { Button } from './components/ui/button';
 import { ActivityPart, ActivityGroup } from './components/agent-activity';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, ArrowUp } from 'lucide-react';
 import { t } from './i18n';
 import { toThreadMessages, resolveQuote, toBranchRepository } from './thread-adapter';
 import { TravelOverview } from './travel-overview';
-import type { Journey, Trip, PublicSettings } from '../shared/types';
+import type { Journey, Trip, PublicSettings, ToolActivity } from '../shared/types';
 import type { Quote } from '../shared/notebook';
 
 type Props = {
@@ -42,6 +58,8 @@ type Props = {
   draft: string;
   running: boolean;
   quoteRequest?: Quote;
+  onQuote: QuoteHandler;
+  onQuoteChange: (quote: Quote | undefined) => void;
   config: PublicSettings;
   onRuntimeChange: (runtime: 'pi' | 'codex') => Promise<void>;
   footer: ReactNode;
@@ -50,9 +68,12 @@ type Props = {
   onStop: () => Promise<void>;
   onSource: (quote: Quote) => void;
   onBookmark: (quote: Quote) => void;
+  bookmarks: Notebook['bookmarks'];
+  onOpenBookmark: (id: string) => void;
   onSettings: () => void;
   onDemo: () => void;
   onBrowse: (url: string) => void;
+  onOpenDocument: (name: string) => void;
 };
 const Context = createContext<Props | null>(null);
 function useTravel() {
@@ -156,6 +177,13 @@ export function TravelThread(props: Props) {
         <div
           className="min-h-0 flex-1"
           onKeyDownCapture={(event) => {
+            const mark = (event.target as HTMLElement).closest<HTMLElement>('[data-bookmark-link]');
+            if (mark && (event.key === 'Enter' || event.key === ' ')) {
+              event.preventDefault();
+              event.stopPropagation();
+              props.onOpenBookmark(mark.dataset.bookmarkLink!);
+              return;
+            }
             if (
               props.running &&
               event.key === 'Enter' &&
@@ -169,6 +197,13 @@ export function TravelThread(props: Props) {
             }
           }}
           onClickCapture={(event) => {
+            const mark = (event.target as HTMLElement).closest<HTMLElement>('[data-bookmark-link]');
+            if (mark && !window.getSelection()?.toString()) {
+              event.preventDefault();
+              event.stopPropagation();
+              props.onOpenBookmark(mark.dataset.bookmarkLink!);
+              return;
+            }
             const anchor = (event.target as HTMLElement).closest('a[href]');
             const href = anchor?.getAttribute('href');
             if (href && /^https?:\/\//.test(href)) {
@@ -182,6 +217,8 @@ export function TravelThread(props: Props) {
           {props.floating ? (
             <AssistantModal
               title={props.trip?.title || '旅行助手'}
+              expandLabel={t('展开聊天')}
+              collapseLabel={t('收起聊天')}
               openRequest={props.quoteRequest}
               onOpenChange={props.onFloatingOpenChange}
             >
@@ -199,12 +236,11 @@ function QuoteRequest() {
   const { quoteRequest } = useTravel();
   const aui = useAui();
   useEffect(() => {
-    if (quoteRequest) {
-      aui.composer().setQuote({ messageId: quoteRequest.messageId, text: quoteRequest.text });
-      requestAnimationFrame(() =>
-        document.querySelector<HTMLTextAreaElement>('.aui-composer-input')?.focus(),
+    aui
+      .composer()
+      .setQuote(
+        quoteRequest ? { messageId: quoteRequest.messageId, text: quoteRequest.text } : undefined,
       );
-    }
   }, [quoteRequest, aui]);
   return null;
 }
@@ -269,50 +305,89 @@ function Tools() {
     />
   );
 }
-function QueueSend() {
-  const { running } = useTravel();
+function SendAction({ queue = false }: { queue?: boolean }) {
+  const { running, quoteRequest, onSend, onError } = useTravel();
   const aui = useAui();
-  const canSend = useAuiState((s) => s.composer.canSend && !s.thread.isDisabled);
-  if (!running) return null;
+  const canSend = useAuiState((s) => s.composer.canSend);
+  const hasAttachments = useAuiState((s) => s.composer.attachments.length > 0);
+  const disabled = useAuiState((s) => s.thread.isDisabled || s.composer.submission !== undefined);
+  const [sending, setSending] = useState(false);
+  if (queue !== running) return null;
   return (
     <Button
       type="button"
-      variant="outline"
-      size="sm"
-      disabled={!canSend}
-      onClick={() => aui.composer().send()}
+      variant={queue ? 'outline' : 'default'}
+      size={queue ? 'sm' : 'icon'}
+      className={queue ? undefined : 'aui-composer-send size-7 rounded-full'}
+      aria-label={t(queue ? '加入队列' : '发送')}
+      disabled={disabled || sending || (!canSend && (!quoteRequest || hasAttachments))}
+      onClick={() => {
+        if (canSend) {
+          aui.composer().send();
+          return;
+        }
+        if (!quoteRequest) return;
+        setSending(true);
+        void onSend('', quoteRequest, [])
+          .catch((error: Error) => onError(error.message))
+          .finally(() => setSending(false));
+      }}
     >
-      {t('加入队列')}
+      {queue ? t('加入队列') : <ArrowUp className="size-4" />}
     </Button>
   );
 }
+function QueueSend() {
+  return <SendAction queue />;
+}
+function Send() {
+  return <SendAction />;
+}
 function Preview() {
-  const { trips, quoteRequest, onSource } = useTravel();
+  const { trips, quoteRequest, onSource, onQuoteChange } = useTravel();
+  const aui = useAui();
   const quote = useAuiState((s) => s.composer.quote);
   const local = resolveQuote(quote, trips, quoteRequest);
+  if (!local) return null;
   return (
-    <ComposerQuotePreview.Root className="composer-quote" aria-label={t('待发送的引用')}>
-      <ComposerQuotePreview.Icon />
-      <button
-        type="button"
-        className="min-w-0 flex-1 text-left"
-        onClick={() => local && onSource(local)}
-        title={t(
-          local?.source?.kind === 'itinerary'
-            ? '回到行程'
-            : local?.source?.kind === 'notebook'
-              ? '回到笔记'
-              : '回到原对话',
-        )}
-      >
-        <ComposerQuotePreview.Text />
-      </button>
-      <ComposerQuotePreview.Dismiss>
-        <button type="button" aria-label={t('移除引用')}>
-          ×
-        </button>
-      </ComposerQuotePreview.Dismiss>
-    </ComposerQuotePreview.Root>
+    <div className="px-3 pt-3" aria-label={t('待发送的引用')}>
+      <AnnotationList
+        quote={local}
+        onSource={onSource}
+        onChange={(value) => {
+          onQuoteChange(value);
+          aui
+            .composer()
+            .setQuote(value ? { messageId: value.messageId, text: value.text } : undefined);
+        }}
+      />
+    </div>
+  );
+}
+function NotebookArtifacts() {
+  const { onOpenDocument } = useTravel();
+  const activities = useAuiState((s) => s.message.metadata.custom.activities) as
+    ToolActivity[] | undefined;
+  const documents = savedNotebookArtifacts(activities ?? []);
+  if (!documents.length) return null;
+  return (
+    <div aria-label={t('本次保存的笔记')} className="my-3 flex flex-col gap-2">
+      {documents.map((doc) => (
+        <File.Root key={doc.name}>
+          <File.Icon mimeType="text/markdown" />
+          <File.Name title={doc.name}>{doc.name}</File.Name>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={t('在右侧打开笔记：') + doc.name}
+            title={t('在右侧打开笔记')}
+            onClick={() => onOpenDocument(doc.name)}
+          >
+            <ArrowRight />
+          </Button>
+        </File.Root>
+      ))}
+    </div>
   );
 }
 function MessageActions() {
@@ -332,53 +407,79 @@ function Header() {
   const quote = custom.quote as Quote | undefined;
   return (
     <>
-      {quote && (
-        <button
-          type="button"
-          className="message-quote block w-full text-left"
-          title={t(
-            quote.source?.kind === 'itinerary'
-              ? '回到行程'
-              : quote.source?.kind === 'notebook'
-                ? '回到笔记'
-                : '回到原对话',
-          )}
-          onClick={() => onSource(quote)}
-        >
-          <QuoteBlock text={quote.text} messageId={quote.messageId} />
-        </button>
-      )}
+      {quote &&
+        (quote.annotations || quote.comment ? (
+          <AnnotationList quote={quote} onSource={onSource} />
+        ) : (
+          <button
+            type="button"
+            className="message-quote block w-full text-left"
+            title={t(
+              quote.source?.kind === 'itinerary'
+                ? '回到行程'
+                : quote.source?.kind === 'notebook'
+                  ? '回到笔记'
+                  : '回到原对话',
+            )}
+            onClick={() => onSource(quote)}
+          >
+            <QuoteBlock text={quote.text} messageId={quote.messageId} />
+          </button>
+        ))}
     </>
   );
 }
 function Selection() {
-  const { trip, onBookmark } = useTravel();
+  const { trip, onBookmark, onQuote } = useTravel();
+  const root = useRef<HTMLElement | null>(null);
+  const messageElement = (node: Node | null) =>
+    (node instanceof Element ? node : node?.parentElement)?.closest<HTMLElement>(
+      '[data-message-id]',
+    );
   return (
-    <SelectionToolbar.Root role="toolbar" aria-label={t('选中文字操作')}>
-      <SelectionToolbar.Quote>{t('添加到对话')}</SelectionToolbar.Quote>
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => {
-          const selected = window.getSelection();
-          const node = selected?.anchorNode;
-          const element = node instanceof Element ? node : node?.parentElement;
-          const messageId = element?.closest('[data-message-id]')?.getAttribute('data-message-id');
-          const text = selected?.toString().trim();
-          if (
-            trip &&
-            messageId &&
-            text &&
-            trip.messages.some((m) => m.id === messageId && m.role === 'assistant')
-          ) {
-            onBookmark({ tripId: trip.id, messageId, text });
-            selected?.removeAllRanges();
-          }
-        }}
-      >
-        {t('标记到笔记本')}
-      </Button>
-    </SelectionToolbar.Root>
+    <SelectionQuotation
+      root={root}
+      label={t('选中文字操作')}
+      onQuote={onQuote}
+      onBookmark={onBookmark}
+      acceptsOutsideSelection={(selection) => {
+        const start = messageElement(selection.anchorNode);
+        return Boolean(
+          start &&
+          start === messageElement(selection.focusNode) &&
+          trip?.messages.some(
+            (message) => message.id === start.dataset.messageId && message.role === 'assistant',
+          ),
+        );
+      }}
+      createQuote={(text, selection) => {
+        const range = selection.getRangeAt(0);
+        const element =
+          selection.anchorNode instanceof Element
+            ? selection.anchorNode
+            : selection.anchorNode?.parentElement;
+        const markdown = element?.closest('.aui-md');
+        let anchor: Quote['anchor'];
+        if (markdown?.contains(range.endContainer)) {
+          const prefix = range.cloneRange();
+          prefix.selectNodeContents(markdown);
+          prefix.setEnd(range.startContainer, range.startOffset);
+          const suffix = range.cloneRange();
+          suffix.selectNodeContents(markdown);
+          suffix.setStart(range.endContainer, range.endOffset);
+          anchor = {
+            prefix: compactQuote(prefix.toString()).slice(-80),
+            suffix: compactQuote(suffix.toString()).slice(0, 80),
+          };
+        }
+        return {
+          tripId: trip!.id,
+          messageId: messageElement(selection.anchorNode)!.dataset.messageId!,
+          text,
+          anchor,
+        };
+      }}
+    />
   );
 }
 function MessageError() {
@@ -402,7 +503,11 @@ function Footer() {
             }
             queued={queued.map((m) => ({
               id: m.id,
-              text: m.content || m.attachments?.map((f) => f.name).join('、') || t('附件'),
+              text:
+                m.content ||
+                m.quote?.text ||
+                m.attachments?.map((f) => f.name).join('、') ||
+                t('附件'),
             }))}
             onCancel={(id) => {
               void window.vitrip.cancelQueuedMessage(id).catch((e: Error) => onError(e.message));
@@ -438,7 +543,22 @@ function Navigation() {
   }, [viewport]);
   return fits && count > 1 ? <ConversationMapAui /> : null;
 }
+function BookmarkedText() {
+  const { trip, bookmarks } = useTravel();
+  const messageId = useAuiState((s) => s.message.id);
+  const plugins = useMemo(
+    () => [
+      bookmarkMarkdown(
+        bookmarks.filter((mark) => mark.tripId === trip?.id && mark.messageId === messageId),
+        t('已标记，打开笔记'),
+      ),
+    ],
+    [bookmarks, trip?.id, messageId],
+  );
+  return <MarkdownText rehypePlugins={plugins} />;
+}
 const components: ThreadComponents = {
+  MessageText: BookmarkedText,
   MessageError,
   ToolFallback: ActivityPart,
   ToolGroup: ActivityGroup,
@@ -447,8 +567,10 @@ const components: ThreadComponents = {
   WelcomeFooter,
   ComposerTools: Tools,
   ComposerSendWhileRunning: QueueSend,
+  ComposerSend: Send,
   ComposerQuote: Preview,
   MessageHeader: Header,
+  MessageArtifacts: NotebookArtifacts,
   MessageActions,
   MessageMenuActions,
   Selection,

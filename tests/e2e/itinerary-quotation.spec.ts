@@ -6,7 +6,7 @@ import http from 'node:http';
 import { Storage } from '../../src/main/storage';
 import { demoPlan } from '../../src/shared/demo';
 async function quoteActivity(page: Page) {
-  const closeChat = page.getByRole('button', { name: 'Close Assistant', exact: true });
+  const closeChat = page.getByRole('button', { name: '收起聊天', exact: true });
   if (await closeChat.isVisible()) await closeChat.click();
   const openList = page.getByRole('button', { name: '展开地点列表', exact: true });
   if (await openList.isVisible()) await openList.click();

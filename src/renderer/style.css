@@ -372,8 +372,8 @@
 
 @custom-variant data-closed (&:where([data-state="closed"], [data-closed]:not([data-closed="false"])));
 
-.workspace[data-expanded-plan='true'] > .chat-panel,
-.workspace[data-expanded-plan='true'] > .resize-handle {
+.workspace[data-expanded-workspace='true'] > .chat-panel,
+.workspace[data-expanded-workspace='true'] > .resize-handle {
   display: none;
 }
 
@@ -464,3 +464,13 @@
     transition: none;
   }
 }
+
+/* User-requested persistent bookmark indicator; text remains selectable. */
+.notebook-bookmark-link {
+  text-decoration-line: underline;
+  text-decoration-color: #2563eb;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
+.notebook-bookmark-link:focus-visible { outline: 2px solid #2563eb; outline-offset: 3px; }

@@ -1,3 +1,4 @@
+import { selectNotebook } from './notebook-navigation';
 import { test, expect, _electron as electron } from '@playwright/test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -32,8 +33,7 @@ test('打开、切换和重新打开笔记默认预览，主动编辑后内容�
       await expect(page.getByRole('button', { name: '编辑 Markdown', exact: true })).toBeVisible();
     };
     const select = async (name: string) => {
-      await page.getByRole('combobox', { name: '选择笔记文档' }).click();
-      await page.getByRole('option', { name, exact: true }).click();
+      await selectNotebook(page, name);
     };
     await assertPreview('随手记录');
     await select('酒店对比.md');

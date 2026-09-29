@@ -21,25 +21,30 @@ import {
 } from '../shared/map-appearance';
 
 setWorkerUrl(workerURL);
+const emptyContextStops: ItineraryStop[] = [];
 
 export default function MapCanvas({
   stops,
   journeyId,
-  contextStops = [],
+  contextStops = emptyContextStops,
+  showConnections = true,
   viewportKey,
   selectedId,
   onSelect,
   onBrowse,
   expanded,
+  controlsHost,
 }: {
   stops: ItineraryStop[];
   journeyId?: string;
   viewportKey?: string;
   contextStops?: ItineraryStop[];
+  showConnections?: boolean;
   selectedId?: string;
   onSelect: (id: string) => void;
   onBrowse: (url: string) => void;
   expanded: boolean;
+  controlsHost?: HTMLDivElement | null;
 }) {
   const locale = useLocale();
   const [appearance, setAppearance] = useState(() => readMapAppearance(localStorage, journeyId));
@@ -279,12 +284,13 @@ export default function MapCanvas({
     });
     (instance.getSource('itinerary') as GeoJSONSource).setData({
       type: 'FeatureCollection',
-      features: [...new Set(stops.map((stop) => stop.dayIndex))].flatMap((day) =>
-        routeSegments(stops.filter((stop) => stop.dayIndex === day)).map((coordinates) => ({
-          type: 'Feature' as const,
-          properties: { color: '#737373' },
-          geometry: { type: 'LineString' as const, coordinates },
-        })),
+      features: [...new Set((showConnections ? stops : []).map((stop) => stop.dayIndex))].flatMap(
+        (day) =>
+          routeSegments(stops.filter((stop) => stop.dayIndex === day)).map((coordinates) => ({
+            type: 'Feature' as const,
+            properties: { color: '#737373' },
+            geometry: { type: 'LineString' as const, coordinates },
+          })),
       ),
     });
     function drawMarkers() {
@@ -354,7 +360,7 @@ export default function MapCanvas({
     return () => {
       instance.off('moveend', drawMarkers);
     };
-  }, [stops, contextStops, selectedId, readyMap, styleRevision]);
+  }, [stops, contextStops, selectedId, readyMap, styleRevision, showConnections]);
 
   const previousSelection = useRef(selectedId);
   const focusStop = (id: string | undefined) => {
@@ -376,7 +382,7 @@ export default function MapCanvas({
   }, [selectedId, stops, ready]);
 
   return (
-    <div className={expanded ? 'relative flex min-h-0 flex-1 flex-col' : ''}>
+    <div className={expanded ? 'relative flex min-h-0 flex-1 flex-col' : 'relative'}>
       {markerSlots.map(({ stop, element }) =>
         createPortal(
           <MapStopMarker
@@ -395,72 +401,75 @@ export default function MapCanvas({
         ),
       )}
       <p
-        className="absolute bottom-16 right-3 z-10 flex flex-wrap gap-3 rounded-md border bg-background px-3 py-2 text-xs shadow-sm"
+        className="absolute bottom-10 left-3 z-10 flex max-w-[calc(100%-5rem)] flex-wrap gap-3 rounded-md border bg-background px-3 py-2 text-xs shadow-sm"
         aria-label="地图安排状态"
       >
         <span style={{ color: '#15803d' }}>● 已确定</span>
         <span style={{ color: '#a16207' }}>● 待确定</span>
         <span className="text-muted-foreground">悬浮查看引用 · 点击固定</span>
       </p>
-      <div className="absolute bottom-7 right-3 z-10 flex flex-wrap items-center gap-2">
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={!ready}
-          onClick={() => {
-            changeAppearance({ style: 'liberty', view: 'flat' });
-            const bounds = mapBounds(stops);
-            if (bounds)
-              map.current?.fitBounds(bounds, {
-                padding: 90,
-                maxZoom: 14,
-                pitch: 0,
-                bearing: 0,
-                duration: 0,
-              });
-          }}
-        >
-          {t('查看全部地点')}
-        </Button>
-        <MapAppearancePicker
-          value={appearance}
-          onChange={changeAppearance}
-          onDefault={() => saveDefaultMapAppearance(localStorage, appearance)}
-        />
-        {saveProblem && (
-          <span role="status" className="text-xs text-muted-foreground">
-            {t('外观暂时无法保存')}
-          </span>
-        )}
-        {tilted && (
-          <Badge variant="secondary">
-            {t(
-              appliedStyle === 'liberty'
-                ? '支持立体建筑，放大至街区查看'
-                : '倾斜预览 · 不含建筑高度',
+      {controlsHost &&
+        createPortal(
+          <>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!ready}
+                onClick={() => {
+                  changeAppearance({ style: 'liberty', view: 'flat' });
+                  const bounds = mapBounds(stops);
+                  if (bounds)
+                    map.current?.fitBounds(bounds, {
+                      padding: 90,
+                      maxZoom: 14,
+                      pitch: 0,
+                      bearing: 0,
+                      duration: 0,
+                    });
+                }}
+              >
+                {t('查看全部地点')}
+              </Button>
+              <MapAppearancePicker
+                value={appearance}
+                onChange={changeAppearance}
+                onDefault={() => saveDefaultMapAppearance(localStorage, appearance)}
+              />
+              {saveProblem && (
+                <span role="status" className="text-xs text-muted-foreground">
+                  {t('外观暂时无法保存')}
+                </span>
+              )}
+              {tilted && (
+                <Badge variant="secondary">
+                  {t(
+                    appliedStyle === 'liberty'
+                      ? '支持立体建筑，放大至街区查看'
+                      : '倾斜预览 · 不含建筑高度',
+                  )}
+                </Badge>
+              )}
+            </div>
+            {loadingTiles && !problem && (
+              <p role="status" className="text-xs text-muted-foreground">
+                {t('正在加载地图底图…')}
+              </p>
             )}
-          </Badge>
+            {problem && (
+              <div
+                role="status"
+                className="flex max-w-[calc(100%-1.5rem)] items-center justify-between gap-2 text-xs text-muted-foreground"
+              >
+                <span>{t(problem)}</span>
+                <Button size="xs" variant="outline" onClick={() => setRetry((n) => n + 1)}>
+                  {t('重试底图')}
+                </Button>
+              </div>
+            )}
+          </>,
+          controlsHost,
         )}
-      </div>
-      {loadingTiles && !problem && (
-        <p
-          role="status"
-          className="absolute bottom-28 right-3 z-10 rounded-md border bg-background px-3 py-2 text-xs text-muted-foreground"
-        >
-          {t('正在加载地图底图…')}
-        </p>
-      )}
-      {problem && (
-        <div
-          role="status"
-          className="absolute bottom-28 right-3 z-10 flex max-w-[calc(100%-1.5rem)] items-center justify-between gap-2 rounded-md border bg-background px-3 py-2 text-xs text-muted-foreground"
-        >
-          <span>{t(problem)}</span>
-          <Button size="xs" variant="outline" onClick={() => setRetry((n) => n + 1)}>
-            {t('重试底图')}
-          </Button>
-        </div>
-      )}
       <div
         ref={container}
         aria-label="行程交互地图"

@@ -11,7 +11,7 @@ import {
   useIsMarkdownCodeBlock,
 } from '@assistant-ui/react-markdown';
 import remarkGfm from 'remark-gfm';
-import { type FC, memo, useMemo, useRef } from 'react';
+import { type FC, type ComponentProps, memo, useMemo, useRef } from 'react';
 import type { TextMessagePartProps } from '@assistant-ui/react';
 import { CheckIcon, CopyIcon } from 'lucide-react';
 
@@ -20,6 +20,7 @@ import { useCopyToClipboard } from '~/hooks/use-copy-to-clipboard';
 import { cn } from '~/utils';
 
 type MarkdownTextProps = Partial<TextMessagePartProps> & {
+  rehypePlugins?: ComponentProps<typeof MarkdownTextPrimitive>['rehypePlugins'];
   components?: Parameters<typeof memoizeMarkdownComponents>[0];
 };
 
@@ -37,7 +38,7 @@ const useShallowStable = <T extends Record<string, unknown> | undefined>(value: 
   return ref.current;
 };
 
-const MarkdownTextImpl: FC<MarkdownTextProps> = ({ components }) => {
+const MarkdownTextImpl: FC<MarkdownTextProps> = ({ components, rehypePlugins }) => {
   const stableComponents = useShallowStable(components);
   const markdownComponents = useMemo(() => {
     if (!stableComponents) return defaultComponents;
@@ -51,6 +52,7 @@ const MarkdownTextImpl: FC<MarkdownTextProps> = ({ components }) => {
     <MarkdownTextPrimitive
       urlTransform={referenceUrlTransform}
       remarkPlugins={[remarkGfm]}
+      rehypePlugins={rehypePlugins}
       className="aui-md"
       components={markdownComponents}
       defer

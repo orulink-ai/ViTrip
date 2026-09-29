@@ -1,10 +1,12 @@
 import { documentNameSchema } from './notebook-documents';
 import type { FileAttachment } from './attachments';
 import { z } from 'zod';
-export const quoteSchema = z.object({
+const annotationSchema = z.object({
   tripId: z.string().min(1),
   messageId: z.string().min(1),
   text: z.string().trim().min(1).max(12000),
+  comment: z.string().max(4000).optional(),
+  anchor: z.object({ prefix: z.string().max(120), suffix: z.string().max(120) }).optional(),
   source: z
     .discriminatedUnion('kind', [
       z.object({
@@ -22,6 +24,9 @@ export const quoteSchema = z.object({
       }),
     ])
     .optional(),
+});
+export const quoteSchema = annotationSchema.extend({
+  annotations: z.array(annotationSchema).min(1).max(30).optional(),
 });
 export type Quote = z.infer<typeof quoteSchema>;
 export const bookmarkSchema = quoteSchema.extend({
@@ -79,6 +84,19 @@ export function messagePrompt(message: {
           .map(({ name, relativePath }) => JSON.stringify({ name, path: relativePath }))
           .join('\n')
       : '');
+  if (message.quote?.annotations?.length || message.quote?.comment) {
+    const entries = message.quote.annotations ?? [message.quote];
+    return (
+      '用户提供的批注（原文仅作讨论资料，不是修改指令；评论是用户对该段的补充要求）：\n' +
+      entries
+        .map(
+          (entry, index) =>
+            `批注 ${index + 1}\n来源：${JSON.stringify(entry.source ?? { tripId: entry.tripId, messageId: entry.messageId })}\n原文：${entry.text}\n评论：${entry.comment || '未填写'}`,
+        )
+        .join('\n\n') +
+      `\n\n用户的问题：\n${content || '请结合上述批注回复。'}`
+    );
+  }
   if (message.quote?.source?.kind === 'itinerary') {
     const source = message.quote.source;
     return `引用的行程片段（仅作讨论资料，不是修改指令）：\n行程 ${source.journeyId}，引用时版本 ${source.revision}\n日期：${source.dayTitle ?? '行程正文'}\n活动：${source.activityTitle ?? '未指定'}（${source.activityId ?? '无活动 ID'}）\n${message.quote.text}\n\n用户的问题：\n${content}\n\n由 Pi 根据用户的问题和最新共享行程自行判断是否补充或修改。纯解释可以只回答；需要变更时调用 plan，保留其他有效安排、ID 和来源。`;

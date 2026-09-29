@@ -2,11 +2,7 @@ import { test, expect, _electron as electron } from '@playwright/test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { Page } from '@playwright/test';
-async function selectNotebook(page: Page, name: string) {
-  await page.getByRole('combobox', { name: '选择笔记文档' }).click();
-  await page.getByRole('option', { name, exact: true }).click();
-}
+import { selectNotebook } from './notebook-navigation';
 
 test('笔记选中文字可加入当前或新对话，保留草稿和文档来源且不自动发送', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'vitrip-notebook-quote-'));
@@ -29,10 +25,10 @@ test('笔记选中文字可加入当前或新对话，保留草稿和文档来�
     await page.getByLabel('旅行需求', { exact: true }).fill('比较一下路线');
     await page.getByRole('tab', { name: '笔记本', exact: true }).click();
     await selectNotebook(page, '路线.md');
-    const selectText = async () => {
+    const selectText = async (value = '经过码头换船') => {
       const text = page
         .getByRole('article', { name: '旅行笔记页面' })
-        .getByText('经过码头换船', { exact: true });
+        .getByText(value, { exact: true });
       await text.evaluate((element) => {
         const range = document.createRange();
         range.selectNodeContents(element);
@@ -44,17 +40,23 @@ test('笔记选中文字可加入当前或新对话，保留草稿和文档来�
     const toolbar = page.getByRole('toolbar', { name: '笔记选中文字操作' });
     await selectText();
     await expect(toolbar).toBeVisible();
+    await toolbar.getByLabel('添加可选评论', { exact: true }).pressSequentially('请核对船班');
     await page.screenshot({ path: 'artifacts/notebook-selection-menu.png' });
     await toolbar.getByRole('button', { name: '添加到对话', exact: true }).click();
     await expect(page.getByLabel('待发送的引用')).toContainText('经过码头换船');
     await expect(page.getByLabel('待发送的引用')).not.toContainText('不选中的其他安排');
     await expect(page.getByLabel('旅行需求', { exact: true })).toHaveValue('比较一下路线');
     expect((await page.evaluate(() => window.vitrip.init())).activeTripId).toBe(original.id);
-    await page.getByRole('button', { name: 'Close Assistant', exact: true }).click();
-    await selectText();
+    await page.getByRole('button', { name: '收起聊天', exact: true }).click();
+    await selectText('不选中的其他安排');
+    await toolbar.getByLabel('添加可选评论', { exact: true }).fill('安排是否冲突');
     await toolbar.getByRole('button', { name: '在新对话中讨论', exact: true }).click();
     await expect(page.getByLabel('待发送的引用')).toContainText('经过码头换船');
     await expect(page.getByLabel('旅行需求', { exact: true })).toHaveValue('');
+    await expect(page.getByLabel('待发送的引用')).toContainText('2 条批注');
+    await expect(page.getByLabel('批注 1 评论', { exact: true })).toHaveValue('请核对船班');
+    await expect(page.getByLabel('批注 2 评论', { exact: true })).toHaveValue('安排是否冲突');
+    await page.getByLabel('批注 2 评论', { exact: true }).fill('比较两种方案');
     const state = await page.evaluate(() => window.vitrip.init());
     expect(state.activeTripId).not.toBe(original.id);
     expect(state.trips).toHaveLength(2);
@@ -66,11 +68,15 @@ test('笔记选中文字可加入当前或新对话，保留草稿和文档来�
     expect(
       await page.evaluate((id) => localStorage.getItem(`vitrip:draft:${id}`), original.id),
     ).toBe('比较一下路线');
-    await page.getByRole('button', { name: 'Close Assistant', exact: true }).click();
+    await page.getByRole('button', { name: '收起聊天', exact: true }).click();
     await selectNotebook(page, '随手笔记与画板');
-    await page.getByRole('button', { name: 'Open Assistant', exact: true }).click();
-    await page.getByTitle('回到笔记', { exact: true }).click();
-    await expect(page.getByRole('combobox', { name: '选择笔记文档' })).toContainText('路线.md');
+    await page.getByRole('button', { name: '展开聊天', exact: true }).click();
+    await page.getByTitle('回到笔记', { exact: true }).first().click();
+    await page.getByRole('button', { name: '移除批注 2', exact: true }).click();
+    await expect(page.getByLabel('待发送的引用')).toContainText('1 条批注');
+    await expect(page.getByLabel('批注 1 评论', { exact: true })).toHaveValue('请核对船班');
+    await expect(page.getByRole('button', { name: '发送', exact: true })).toBeEnabled();
+    await expect(page.getByLabel('当前笔记', { exact: true })).toHaveText('路线');
   } finally {
     await app.close();
     await rm(dir, { recursive: true, force: true });

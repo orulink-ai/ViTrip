@@ -33,7 +33,7 @@ it('refuses stale writes, accidental replacement and paths outside the notebook'
   docs.write('journey-a', { ...first, markdown: '用户手动修改' });
   expect(() => docs.write('journey-a', { ...first, markdown: '旧版覆盖' })).toThrow('已更新');
   expect(() => docs.write('journey-a', { ...first, revision: null })).toThrow('已存在');
-  for (const name of ['../outside.md', '/tmp/out.md', '.hidden.md', 'x.txt', 'nested/x.md'])
+  for (const name of ['../outside.md', '/tmp/out.md', '.hidden.md', 'x.txt', 'nested/../x.md'])
     expect(() => docs.write('journey-a', { name, markdown: 'bad', revision: null })).toThrow();
   expect(docs.read('journey-a', first.name).markdown).toBe('用户手动修改');
 });

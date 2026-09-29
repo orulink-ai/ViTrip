@@ -1,6 +1,8 @@
 import type { Settings } from '../shared/types';
 import { conversationSettingsSchema } from '../shared/schemas';
 import { enqueueMessage, cancelQueuedMessage, nextQueuedMessage } from '../shared/message-queue';
+import { NotebookMedia } from './notebook-media';
+import { downloadNotebookImage } from './download-notebook-image';
 import { configureWebSearch } from './web-search';
 import { listCodexModels } from './codex-models';
 import { NotebookDocuments } from './notebook-documents';
@@ -113,6 +115,15 @@ app
     }
     const documents = new NotebookDocuments(path.join(app.getPath('userData'), 'journeys'));
     const photos = new PhotoCache(path.join(app.getPath('userData'), 'photos'));
+    const notebookMedia = new NotebookMedia(
+      path.join(app.getPath('userData'), 'journeys'),
+      documents,
+      downloadNotebookImage,
+      (journeyId, id) =>
+        store.journeys.find((j) => j.id === journeyId)?.photos?.some((p) => p.id === id)
+          ? photos.read(id)
+          : null,
+    );
     const attachments = new AttachmentStore(
       path.join(app.getPath('userData'), 'sessions'),
       (bytes) => {
@@ -247,8 +258,8 @@ app
       }
       return id;
     }
-    function writeDocument(id: string, input: unknown) {
-      const saved = documents.write(documentJourney(id), input);
+    async function writeDocument(id: string, input: unknown) {
+      const saved = await notebookMedia.write(documentJourney(id), input);
       emit({ type: 'documents', journeyId: id });
       return saved;
     }
@@ -382,14 +393,34 @@ app
           const input = toolsSchema.notebook.parse(args);
           const id = documentJourney(trip.journeyId);
           if (input.action === 'list') return JSON.stringify(documents.list(id));
+          if (input.action === 'list_folders') return JSON.stringify(documents.folders(id));
+          if (input.action === 'mkdir' || input.action === 'move') {
+            const result =
+              input.action === 'mkdir'
+                ? documents.createFolder(id, z.string().parse(input.folder))
+                : documents.move(id, input);
+            emit({ type: 'documents', journeyId: id });
+            return JSON.stringify(result);
+          }
           if (input.action === 'read')
-            return JSON.stringify(documents.read(id, z.string().parse(input.name)));
-          const saved = writeDocument(id, input);
+            return JSON.stringify(await notebookMedia.read(id, z.string().parse(input.name)));
+          const saved =
+            input.action === 'upsert_map' || input.action === 'remove_map'
+              ? documents.editMap(id, {
+                  ...input,
+                  action: input.action,
+                  name: z.string().parse(input.name),
+                  revision: z.string().parse(input.revision),
+                })
+              : await writeDocument(id, input);
+          if (input.action === 'upsert_map' || input.action === 'remove_map')
+            emit({ type: 'documents', journeyId: id });
           return JSON.stringify({
             name: saved.name,
             revision: saved.revision,
             saved: true,
             location: '笔记本',
+            imageWarnings: saved.imageWarnings,
           });
         }
         case 'journal': {
@@ -448,10 +479,12 @@ app
       if (!message) return;
       current.messages.push(message);
       if (current.messages.length === 1 && !current.customTitle)
-        current.title = (message.content || message.attachments?.[0]?.name || '新的旅行').slice(
-          0,
-          26,
-        );
+        current.title = (
+          message.content ||
+          message.quote?.text ||
+          message.attachments?.[0]?.name ||
+          '新的旅行'
+        ).slice(0, 26);
       save(current);
       begin();
     }
@@ -487,7 +520,10 @@ app
         const result = await execute(name, args, trip, signal, runSettings);
         // Record only successful durable writes; older journey revisions are irrelevant.
         if (name === 'plan' || name === 'journal') outcome.saved(name);
-        if (name === 'notebook' && args.action === 'write') {
+        if (
+          name === 'notebook' &&
+          ['write', 'upsert_map', 'remove_map'].includes(String(args.action))
+        ) {
           documentsSaved = true;
           outcome.saved('journal');
         }
@@ -537,7 +573,7 @@ app
             '此前对话：' +
             JSON.stringify(
               trip.messages
-                .filter((m) => m.content || m.attachments?.length)
+                .filter((m) => m.content || m.quote || m.attachments?.length)
                 .slice(0, -1)
                 .map((message) => ({ role: message.role, content: messagePrompt(message) })),
             ) +
@@ -806,9 +842,25 @@ app
         force: true,
       });
     });
+    handle('notebookImage', (id, source) =>
+      notebookMedia.image(documentJourney(id), z.string().parse(source)),
+    );
+    handle('listDocumentFolders', (id) => documents.folders(documentJourney(id)));
+    handle('createDocumentFolder', (id, name) => {
+      const journey = documentJourney(id);
+      const result = documents.createFolder(journey, z.string().parse(name));
+      emit({ type: 'documents', journeyId: journey });
+      return result;
+    });
+    handle('moveDocument', (id, input) => {
+      const journey = documentJourney(id);
+      const result = documents.move(journey, input);
+      emit({ type: 'documents', journeyId: journey });
+      return result;
+    });
     handle('listDocuments', (id) => documents.list(documentJourney(id)));
     handle('readDocument', (id, name) =>
-      documents.read(documentJourney(id), z.string().parse(name)),
+      notebookMedia.read(documentJourney(id), z.string().parse(name)),
     );
     handle('writeDocument', (id, input) => writeDocument(documentJourney(id), input));
     handle('notebook', (id) => store.notebook(z.string().parse(id)));
@@ -873,7 +925,8 @@ app
         const trip = current;
         const value = z.string().trim().max(12000).parse(text);
         const ids = attachmentIdsSchema.parse(rawIds ?? []);
-        if (!value && !ids.length) throw new Error('请输入消息或上传文件');
+        if (!value && !ids.length && quotation === undefined)
+          throw new Error('请输入消息或上传文件');
         if (new Set(ids).size !== ids.length) throw new Error('不能重复发送同一附件');
         const quote = quotation === undefined ? undefined : quoteSchema.parse(quotation);
         const files = await Promise.all(ids.map((id) => attachments.get(trip.id, id)));

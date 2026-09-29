@@ -1,3 +1,4 @@
+import { appendAnnotation, packAnnotations, annotationsOf } from '../shared/quote-annotations';
 import { lazy, Suspense } from 'react';
 const HomeGlobe = lazy(() => import('./home-globe'));
 
@@ -105,11 +106,17 @@ function App() {
     hasKey: false,
   });
   const [browser, setBrowser] = useState(initialBrowser);
-  const [expandedPlan, setExpandedPlan] = useState(false);
+  const [expandedWorkspace, setExpandedWorkspace] = useState(false);
   const [floatingChat, setFloatingChat] = useState(false);
   const [floatingOpen, setFloatingOpen] = useState(false);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [tab, setActiveTab] = useState<'browser' | 'plan' | 'notebook'>('plan');
+  // Native WebContentsView renders above DOM popovers. Keep both surfaces usable
+  // by docking chat in the browser workspace, while retaining the user's preference.
+  const browserWorkspace = workspaceOpen && tab === 'browser';
+  const showFloatingChat =
+    (floatingChat || (workspaceOpen && expandedWorkspace && tab === 'notebook')) &&
+    !browserWorkspace;
   function setTab(value: 'browser' | 'plan' | 'notebook') {
     if (value !== 'notebook') setDocumentRequest(undefined);
     setActiveTab(value);
@@ -124,6 +131,7 @@ function App() {
   const [documentRequest, setDocumentRequest] = useState<NotebookOpenRequest>();
   const [itinerarySource, setItinerarySource] = useState<Quote['source']>();
   const [sourceTarget, setSourceTarget] = useState<string>();
+  const [sourceBookmark, setSourceBookmark] = useState<string>();
   const notebook = useNotebook(trip?.journeyId);
   useEffect(() => {
     setQuote((value) => (value?.tripId === trip?.id ? value : undefined));
@@ -132,11 +140,16 @@ function App() {
   useEffect(() => {
     if (!sourceTarget) return;
     const locate = () => {
-      const target = document.getElementById('message-' + sourceTarget);
+      const message = document.getElementById('message-' + sourceTarget);
+      const target =
+        (sourceBookmark
+          ? message?.querySelector<HTMLElement>(`[data-bookmark-link="${sourceBookmark}"]`)
+          : null) ?? message;
       if (!target) return false;
       target.scrollIntoView({ block: 'center' });
       target.focus({ preventScroll: true });
       setSourceTarget(undefined);
+      setSourceBookmark(undefined);
       return true;
     };
     const frame = requestAnimationFrame(locate);
@@ -148,21 +161,41 @@ function App() {
       cancelAnimationFrame(frame);
       observer.disconnect();
     };
-  }, [sourceTarget, trip]);
+  }, [sourceTarget, sourceBookmark, trip]);
+  function openBookmark(id: string) {
+    if (!trip) return;
+    setDocumentRequest((previous) => ({
+      journeyId: trip.journeyId,
+      name: '',
+      bookmarkId: id,
+      token: (previous?.token ?? 0) + 1,
+    }));
+    setTab('notebook');
+  }
   function quoteReply(value: Quote) {
-    setFloatingChat(true);
-    setQuote(value);
+    if (value.source) setFloatingChat(true);
+    try {
+      setQuote(appendAnnotation(quote?.tripId === value.tripId ? quote : undefined, value));
+    } catch {
+      setNotice(t('最多添加 30 条批注，请先发送或移除部分批注。'));
+    }
     requestAnimationFrame(() =>
       document.querySelector<HTMLTextAreaElement>('.aui-composer-input')?.focus(),
     );
   }
   function quoteWorkspace(value: Quote, newConversation = false) {
-    if (!newConversation || !value.source) return quoteReply(value);
+    if (!newConversation) return quoteReply(value);
     void perform(async () => {
-      const created = await window.vitrip.create(value.source!.journeyId);
+      const bundle = appendAnnotation(quote, value);
+      const journeyId =
+        value.source?.journeyId ?? trips.find((item) => item.id === value.tripId)?.journeyId;
+      if (!journeyId) throw new Error('来源对话不存在');
+      const created = await window.vitrip.create(journeyId);
       updateTrip(created);
       setDraft('');
-      quoteReply({ ...value, tripId: created.id });
+      const entries = annotationsOf(bundle);
+      setFloatingChat(true);
+      setQuote(packAnnotations(entries, created.id));
     });
   }
   async function showSource(value: Quote) {
@@ -204,6 +237,16 @@ function App() {
       updateTrip(await window.vitrip.select(source.id));
       setDraft('');
     }
+    setExpandedWorkspace(false);
+    setFloatingChat(false);
+    setSourceBookmark(
+      notebook.value?.bookmarks.find(
+        (mark) =>
+          mark.tripId === value.tripId &&
+          mark.messageId === value.messageId &&
+          mark.text === value.text,
+      )?.id,
+    );
     setSourceTarget(value.messageId);
   }
   const [address, setAddress] = useState('');
@@ -228,7 +271,7 @@ function App() {
     const result = await window.vitrip.openLink(url);
     updateTrip(result.trip);
     setDraft('');
-    setExpandedPlan(false);
+    setExpandedWorkspace(false);
     setSourceTarget(result.target.kind === 'message' ? result.target.messageId : undefined);
     setTab(result.target.kind === 'notebook' ? 'notebook' : 'plan');
     setLinkOpen(false);
@@ -308,7 +351,7 @@ function App() {
             tab === 'browser' &&
             !settingsOpen &&
             !organizeOpen &&
-            !floatingOpen &&
+            !(showFloatingChat && floatingOpen) &&
             !linkOpen &&
             Boolean(browser.url) &&
             Boolean(rect),
@@ -323,9 +366,19 @@ function App() {
       observer.disconnect();
       window.removeEventListener('resize', sync);
     };
-  }, [tab, workspaceOpen, settingsOpen, organizeOpen, linkOpen, browser.url, panel, floatingOpen]);
+  }, [
+    tab,
+    workspaceOpen,
+    settingsOpen,
+    organizeOpen,
+    linkOpen,
+    browser.url,
+    panel,
+    floatingOpen,
+    showFloatingChat,
+  ]);
   async function send(text: string, quoted?: Quote, attachmentIds: string[] = []) {
-    if (!text.trim() && !attachmentIds.length) return;
+    if (!text.trim() && !attachmentIds.length && !quoted) return;
     if (config.runtime !== 'codex' && !config.model) {
       setSettingsOpen(true);
       setNotice(t('先连接一个支持工具调用的模型，就可以开始规划。'));
@@ -390,15 +443,21 @@ function App() {
             <Button
               size="sm"
               variant="ghost"
+              disabled={browserWorkspace}
+              title={
+                browserWorkspace
+                  ? t('浏览网页时聊天自动停靠，切换到其他标签后恢复原来的布局。')
+                  : undefined
+              }
               onClick={() => {
-                setFloatingChat(!floatingChat);
-                setExpandedPlan(false);
-                if (!floatingChat) {
+                setFloatingChat(!showFloatingChat);
+                setExpandedWorkspace(false);
+                if (!showFloatingChat) {
                   setWorkspaceOpen(true);
                 }
               }}
             >
-              {floatingChat ? '停靠聊天' : '浮动聊天'}
+              {browserWorkspace ? t('聊天已停靠') : showFloatingChat ? '停靠聊天' : '浮动聊天'}
             </Button>
           </div>
           <Sidebar
@@ -446,13 +505,13 @@ function App() {
           <div
             className="workspace"
             data-workspace-open={workspaceOpen}
-            data-floating-chat={floatingChat}
-            data-expanded-plan={workspaceOpen && expandedPlan && tab === 'plan'}
+            data-floating-chat={showFloatingChat}
+            data-expanded-workspace={workspaceOpen && expandedWorkspace && tab !== 'browser'}
             ref={layout}
             style={{ '--chat-width': panel + '%' } as React.CSSProperties}
           >
             <main className="chat-panel" data-empty={!trip?.messages.length}>
-              {!trip?.messages.length && !workspaceOpen && !floatingChat && (
+              {!trip?.messages.length && !workspaceOpen && !showFloatingChat && (
                 <Suspense fallback={null}>
                   <HomeGlobe />
                 </Suspense>
@@ -471,7 +530,7 @@ function App() {
               </div>
               <TravelThread
                 key={trip?.id || 'new'}
-                floating={floatingChat}
+                floating={showFloatingChat}
                 onFloatingOpenChange={setFloatingOpen}
                 trip={trip}
                 trips={trips}
@@ -493,6 +552,8 @@ function App() {
                 running={running}
                 disabled={switchingTrip || switchingRuntime}
                 quoteRequest={quote}
+                onQuoteChange={setQuote}
+                onQuote={quoteWorkspace}
                 config={config}
                 onRuntimeChange={async (runtime) => {
                   if (!trip || switchingRuntime || runtime === (config.runtime ?? 'pi')) return;
@@ -505,11 +566,32 @@ function App() {
                     setSwitchingRuntime(false);
                   }
                 }}
+                onOpenDocument={(name) => {
+                  if (!trip) return;
+                  setDocumentRequest((previous) => ({
+                    journeyId: trip.journeyId,
+                    name,
+                    token: (previous?.token ?? 0) + 1,
+                  }));
+                  setTab('notebook');
+                }}
                 onSend={send}
                 onError={setNotice}
                 onStop={() => window.vitrip.stop()}
                 onSource={(value) => void perform(() => showSource(value))}
-                onBookmark={(value) => void notebook.add(value).then(() => setTab('notebook'))}
+                bookmarks={notebook.value?.bookmarks ?? []}
+                onOpenBookmark={openBookmark}
+                onBookmark={(value) =>
+                  void notebook.add(value).then((saved) => {
+                    const mark = saved?.bookmarks.find(
+                      (item) =>
+                        item.tripId === value.tripId &&
+                        item.messageId === value.messageId &&
+                        item.text === value.text,
+                    );
+                    if (mark) openBookmark(mark.id);
+                  })
+                }
                 onSettings={() => setSettingsOpen(true)}
                 onDemo={demo}
                 onBrowse={(url) => void browse(url)}
@@ -597,19 +679,25 @@ function App() {
                   onClick={() => {
                     setWorkspaceOpen(false);
                     setFloatingChat(false);
-                    setExpandedPlan(false);
+                    setExpandedWorkspace(false);
                   }}
                 >
                   <X size={16} />
                 </Button>
-                {tab === 'plan' && (
+                {tab !== 'browser' && (
                   <Button
                     variant="ghost"
                     size="icon"
-                    aria-label={t(expandedPlan ? '恢复对话布局' : '展开行程工作区')}
-                    onClick={() => setExpandedPlan(!expandedPlan)}
+                    aria-label={t(
+                      expandedWorkspace
+                        ? '恢复对话布局'
+                        : tab === 'notebook'
+                          ? '展开笔记工作区'
+                          : '展开行程工作区',
+                    )}
+                    onClick={() => setExpandedWorkspace(!expandedWorkspace)}
                   >
-                    {expandedPlan ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+                    {expandedWorkspace ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
                   </Button>
                 )}
                 {tab === 'notebook' ? null : tab === 'plan' ? (
@@ -635,6 +723,7 @@ function App() {
                 <NotebookWorkspace
                   journeyId={trip.journeyId}
                   tripId={trip.id}
+                  photos={journey?.photos ?? []}
                   openRequest={documentRequest}
                   key={trip?.journeyId}
                   notebook={notebook}

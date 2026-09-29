@@ -1,3 +1,4 @@
+import { openNotebookDirectory, selectNotebook } from './notebook-navigation';
 import { test, expect, _electron as electron } from '@playwright/test';
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -40,6 +41,9 @@ test('Agent 与用户共享独立 Markdown 文档，补充不覆盖，跨会话�
       await expect(page.getByRole('button', { name: '发送', exact: true })).toBeVisible();
     };
     await send('整理旅行文档');
+    await expect(
+      page.getByRole('button', { name: '在右侧打开笔记：酒店对比.md', exact: true }),
+    ).toBeVisible();
     const initial = await page.evaluate(() => window.vitrip.init());
     const journey = initial.trips[0].journeyId;
     await expect
@@ -49,8 +53,7 @@ test('Agent 与用户共享独立 Markdown 文档，补充不覆盖，跨会话�
       .toBe(2);
     await page.getByRole('tab', { name: '笔记本', exact: true }).click();
     const select = async (name: string) => {
-      await page.getByRole('combobox', { name: '选择笔记文档' }).click();
-      await page.getByRole('option', { name, exact: true }).click();
+      await selectNotebook(page, name);
     };
     await select('酒店对比.md');
     const editor = page.getByLabel('我的笔记 Markdown');
@@ -60,6 +63,9 @@ test('Agent 与用户共享独立 Markdown 文档，补充不覆盖，跨会话�
     await editor.fill('# 酒店对比\n\n我手动补充：需要双床房。');
     await expect(page.getByText('已保存到本地', { exact: true })).toBeVisible();
     await send('更新酒店文档');
+    await expect(
+      page.getByRole('button', { name: '在右侧打开笔记：酒店对比.md', exact: true }),
+    ).toHaveCount(2);
     await expect(editor).toHaveValue(/双床房。[\s\S]*免费取消/);
     expect((await page.evaluate((id) => window.vitrip.listDocuments(id), journey)).length).toBe(2);
     await select('旅行预算.md');
@@ -83,7 +89,7 @@ test('Agent 与用户共享独立 Markdown 文档，补充不覆盖，跨会话�
     await select('机场交通.md');
     await expect(page.getByRole('article', { name: '旅行笔记页面' })).toContainText('轨道交通');
     await expect(editor).toHaveCount(0);
-    await page.getByRole('combobox', { name: '选择笔记文档' }).click();
+    await openNotebookDirectory(page);
     await page.screenshot({ animations: 'disabled', path: 'artifacts/notebook-documents.png' });
     await page.keyboard.press('Escape');
     await page.getByRole('button', { name: '旅行操作 新的旅行', exact: true }).click();
@@ -103,8 +109,12 @@ test('Agent 与用户共享独立 Markdown 文档，补充不覆盖，跨会话�
     await page.getByLabel('名称', { exact: true }).fill('另一趟旅行');
     await page.getByRole('button', { name: '保存', exact: true }).click();
     await page.getByRole('tab', { name: '笔记本', exact: true }).click();
-    await page.getByRole('combobox', { name: '选择笔记文档' }).click();
-    await expect(page.getByRole('option', { name: '酒店对比.md' })).toHaveCount(0);
+    await openNotebookDirectory(page);
+    await expect(
+      page
+        .getByRole('navigation', { name: '笔记目录' })
+        .getByRole('button', { name: '酒店对比', exact: true }),
+    ).toHaveCount(0);
   } finally {
     await app.close();
     await rm(dir, { recursive: true, force: true });
@@ -180,8 +190,7 @@ test('Pi 保存文档，旧知识首次导入且不覆盖用户编辑', async ()
   try {
     const page = await app.firstWindow();
     await page.getByRole('tab', { name: '笔记本', exact: true }).click();
-    await page.getByRole('combobox', { name: '选择笔记文档' }).click();
-    await page.getByRole('option', { name: '已有旅行资料.md', exact: true }).click();
+    await selectNotebook(page, '已有旅行资料.md');
     await expect(page.getByRole('article', { name: '旅行笔记页面' })).toContainText('住在哪里');
     await page.getByRole('button', { name: '编辑 Markdown', exact: true }).click();
     await page.getByLabel('我的笔记 Markdown').fill('# 我核对过的住宿资料');
@@ -199,8 +208,7 @@ test('Pi 保存文档，旧知识首次导入且不覆盖用户编辑', async ()
     await page.getByLabel('旅行需求', { exact: true }).fill('请整理一篇交通说明');
     await page.getByRole('button', { name: '发送', exact: true }).click();
     await expect(page.getByText('已保存交通说明.md。', { exact: true })).toBeVisible();
-    await page.getByRole('combobox', { name: '选择笔记文档' }).click();
-    await page.getByRole('option', { name: '交通说明.md', exact: true }).click();
+    await page.getByRole('button', { name: '在右侧打开笔记：交通说明.md', exact: true }).click();
     await expect(page.getByRole('article', { name: '旅行笔记页面' })).toContainText('票价待核对');
     const legacy = await page.evaluate(
       (id) => window.vitrip.readDocument(id, '已有旅行资料.md'),

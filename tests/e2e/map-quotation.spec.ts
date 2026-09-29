@@ -59,7 +59,7 @@ test('地图引用浮层选中文字可加入对话且不修改行程', async ()
     await page.getByLabel('旅行需求', { exact: true }).fill('这个地点有问题，请核实后修改一下');
     if (process.env.VITRIP_MAP_VISUAL) await page.waitForTimeout(12000);
     await page.screenshot({ path: 'artifacts/map-ux/map-quote-floating.png' });
-    await page.getByRole('button', { name: 'Close Assistant', exact: true }).click();
+    await page.getByRole('button', { name: '收起聊天', exact: true }).click();
     await page.getByRole('button', { name: '地图地点 1 清水寺', exact: true }).click();
     await expect(page.getByRole('button', { name: '讨论或修改', exact: true })).toHaveCount(0);
     await page.keyboard.press('Escape');
@@ -72,7 +72,7 @@ test('地图引用浮层选中文字可加入对话且不修改行程', async ()
     await expect(page.getByLabel('旅行需求', { exact: true })).toHaveValue(
       '这个地点有问题，请核实后修改一下',
     );
-    await page.getByRole('button', { name: 'Close Assistant', exact: true }).click();
+    await page.getByRole('button', { name: '收起聊天', exact: true }).click();
     await page.getByRole('button', { name: '第 1 天对话操作', exact: true }).click();
     await page.getByRole('menuitem', { name: '在新对话中讨论', exact: true }).click();
     await expect(page.getByLabel('待发送的引用')).toContainText('从清水寺走进东山');
@@ -87,7 +87,7 @@ test('地图引用浮层选中文字可加入对话且不修改行程', async ()
     expect(await page.evaluate((id) => localStorage.getItem(`vitrip:draft:${id}`), trip.id)).toBe(
       '这个地点有问题，请核实后修改一下',
     );
-    await page.getByRole('button', { name: 'Close Assistant', exact: true }).click();
+    await page.getByRole('button', { name: '收起聊天', exact: true }).click();
     await page.getByRole('button', { name: '地图地点 1 清水寺', exact: true }).click();
     await title.evaluate((element) => {
       const range = document.createRange();
@@ -101,7 +101,8 @@ test('地图引用浮层选中文字可加入对话且不修改行程', async ()
       .getByRole('button', { name: '在新对话中讨论', exact: true })
       .click();
     await expect(page.getByLabel('待发送的引用')).toContainText('清水寺');
-    await expect(page.getByLabel('待发送的引用')).not.toContainText('把黄昏留给鸭川');
+    await expect(page.getByLabel('待发送的引用')).toContainText('4 条批注');
+    await expect(page.getByLabel('待发送的引用')).toContainText('把黄昏留给鸭川');
     await expect
       .poll(async () => (await page.evaluate(() => window.vitrip.init())).trips.length)
       .toBe(3);

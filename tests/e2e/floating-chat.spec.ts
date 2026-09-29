@@ -37,9 +37,20 @@ test('侧边栏可收起，浮动聊天保留草稿、可移动缩放和恢复�
     await expect
       .poll(async () => (await popup.boundingBox())!.width)
       .toBeGreaterThan(before!.width);
-    await page.getByRole('button', { name: 'Close Assistant', exact: true }).click();
+    await popup.getByRole('button', { name: '收起聊天', exact: true }).click();
     await expect(popup).not.toBeVisible();
-    await page.getByRole('button', { name: 'Open Assistant', exact: true }).click();
+    const launcher = page.getByRole('button', { name: '展开聊天', exact: true });
+    await expect(launcher).toBeVisible();
+    const tools = await page.getByLabel('地图工具栏', { exact: true }).boundingBox();
+    const map = await page.getByLabel('行程交互地图', { exact: true }).boundingBox();
+    expect(tools!.y + tools!.height).toBeLessThanOrEqual(map!.y);
+    const legend = await page.getByLabel('地图安排状态').boundingBox();
+    expect(legend!.x).toBeLessThan(map!.x + map!.width / 2);
+    const compact = await launcher.boundingBox();
+    expect(compact!.width).toBeLessThanOrEqual(48);
+    expect(compact!.height).toBeLessThanOrEqual(48);
+    await page.screenshot({ path: 'artifacts/map-ux/floating-chat-collapsed.png' });
+    await launcher.click();
     await expect(popup.getByLabel('旅行需求', { exact: true })).toHaveValue('保留这段旅行草稿');
     await page.screenshot({ path: 'artifacts/map-ux/floating-chat.png' });
     await page.getByRole('button', { name: '停靠聊天', exact: true }).click();

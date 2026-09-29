@@ -2,11 +2,15 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type { API, Event } from '../shared/types';
 const api: API = {
   codexModels: () => ipcRenderer.invoke('vitrip:codexModels'),
+  listDocumentFolders: (id) => ipcRenderer.invoke('vitrip:listDocumentFolders', id),
+  createDocumentFolder: (id, name) => ipcRenderer.invoke('vitrip:createDocumentFolder', id, name),
+  moveDocument: (id, input) => ipcRenderer.invoke('vitrip:moveDocument', id, input),
   listDocuments: (id) => ipcRenderer.invoke('vitrip:listDocuments', id),
   readDocument: (id, name) => ipcRenderer.invoke('vitrip:readDocument', id, name),
   writeDocument: (id, input) => ipcRenderer.invoke('vitrip:writeDocument', id, input),
   editItinerary: (id, revision, edit) =>
     ipcRenderer.invoke('vitrip:editItinerary', id, revision, edit),
+  notebookImage: (id, source) => ipcRenderer.invoke('vitrip:notebookImage', id, source),
   photo: (id, photoId) => ipcRenderer.invoke('vitrip:photo', id, photoId),
   copyLink: (target) => ipcRenderer.invoke('vitrip:copyLink', target),
   openLink: (url) => ipcRenderer.invoke('vitrip:openLink', url),

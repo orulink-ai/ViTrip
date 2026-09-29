@@ -69,8 +69,7 @@ export function resolveQuote(
   fallback?: Quote,
 ): Quote | undefined {
   if (!quote) return undefined;
-  if (fallback?.messageId === quote.messageId && fallback.source)
-    return { ...fallback, text: quote.text };
+  if (fallback?.messageId === quote.messageId) return { ...fallback, text: quote.text };
   const source = trips.find((trip) =>
     trip.messages.some((message) => message.id === quote.messageId),
   );
