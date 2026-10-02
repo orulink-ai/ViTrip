@@ -39,12 +39,27 @@ const config = {
   npmRebuild: false,
   asar: true,
   directories: { output: path.join(root, 'release'), buildResources: path.join(root, 'build') },
-  files: ['dist/**/*', 'skills/**/*', '!dist/*-check.mjs', '!dist/main.cjs', 'package.json'],
+  files: [
+    'dist/**/*',
+    'skills/**/*',
+    '!dist/*-check.mjs',
+    '!dist/main.cjs',
+    '!dist/ViTrip Calendar.app/**/*',
+    'package.json',
+  ],
+  extraResources: [
+    { from: path.join(root, 'dist', 'ViTrip Calendar.app'), to: 'calendar/ViTrip Calendar.app' },
+  ],
   mac: {
     category: 'public.app-category.travel',
     entitlements: path.join(root, 'build/entitlements.mac.plist'),
     entitlementsInherit: path.join(root, 'build/entitlements.mac.plist'),
-    extendInfo: { NSMicrophoneUsageDescription: 'ViTrip 使用麦克风进行你主动开启的语音聊天。' },
+    extendInfo: {
+      NSMicrophoneUsageDescription: 'ViTrip 使用麦克风进行你主动开启的语音聊天。',
+      NSCalendarsFullAccessUsageDescription:
+        'ViTrip 将你选择的旅行安排同步到日历，并更新已有日程。',
+      NSCalendarsUsageDescription: 'ViTrip 将你选择的旅行安排同步到日历，并更新已有日程。',
+    },
     icon: path.join(root, 'build/icon.icns'),
     target: 'dir',
     identity: '-',

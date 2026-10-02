@@ -283,6 +283,16 @@ export interface API {
   stop(): Promise<void>;
   approve(id: string, allow: boolean): Promise<void>;
   export(): Promise<string | null>;
+  calendarConnect(journeyId: string): Promise<import('./calendar').CalendarConnection>;
+  openCalendarPrivacySettings(): Promise<void>;
+  openAppleCalendar(): Promise<void>;
+  calendarPreview(
+    journeyId: string,
+    options: import('./calendar').CalendarOptions,
+  ): Promise<import('./calendar').CalendarPreview>;
+  calendarSync(
+    input: import('./calendar').CalendarSyncInput,
+  ): Promise<import('./calendar').CalendarSyncResult>;
   onEvent(listener: (event: Event) => void): () => void;
 }
 declare global {

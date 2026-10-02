@@ -6,6 +6,8 @@ const HomeGlobe = lazy(() =>
 );
 
 import { RunStatus } from './run-status';
+import { CalendarSyncDialog } from './calendar-sync-dialog';
+import { calendarErrorMessage } from '../shared/calendar-permissions';
 import { TooltipIconButton } from './components/assistant-ui/elements/tooltip-icon-button';
 import {
   DropdownMenu,
@@ -37,6 +39,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   ArrowDownToLine,
+  CalendarDays,
   ArrowLeft,
   ArrowRight,
   ArrowUpRight,
@@ -141,6 +144,7 @@ function App() {
     setWorkspaceOpen(true);
   }
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [running, setRunning] = useState(false);
   const [voiceActive, setVoiceActive] = useState(false);
   const [canSteer, setCanSteer] = useState(false);
@@ -270,7 +274,24 @@ function App() {
     setSourceTarget(value.messageId);
   }
   const [address, setAddress] = useState('');
-  const [notice, setNotice] = useState('');
+  const [noticeState, setNoticeState] = useState<{ message: string; openCalendar?: boolean }>({
+    message: '',
+  });
+  const notice = noticeState.message;
+  function setNotice(message: string) {
+    setNoticeState({ message });
+  }
+  const [openingCalendar, setOpeningCalendar] = useState(false);
+  async function openCalendar() {
+    setOpeningCalendar(true);
+    try {
+      await window.vitrip.openAppleCalendar();
+    } catch (cause) {
+      setNotice(calendarErrorMessage(cause));
+    } finally {
+      setOpeningCalendar(false);
+    }
+  }
   const [approval, setApproval] = useState<Event['approval']>(null);
   const [panel, setPanel] = useState(49);
   const viewport = useRef<HTMLDivElement>(null);
@@ -359,10 +380,10 @@ function App() {
     });
   }, []);
   useEffect(() => {
-    if (!notice) return;
+    if (!notice || noticeState.openCalendar) return;
     const timeout = setTimeout(() => setNotice(''), 8000);
     return () => clearTimeout(timeout);
-  }, [notice]);
+  }, [notice, noticeState.openCalendar]);
   useEffect(() => {
     const sync = () => {
       const rect = viewport.current?.getBoundingClientRect();
@@ -776,6 +797,13 @@ function App() {
                           <>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
+                              disabled={!journey?.plan}
+                              onSelect={() => setCalendarOpen(true)}
+                            >
+                              <CalendarDays />
+                              {t('同步到苹果日历')}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
                               disabled={!journey}
                               onSelect={() =>
                                 void perform(async () => {
@@ -1018,6 +1046,15 @@ function App() {
         {notice && (
           <Alert className="fixed top-16 left-1/2 z-50 flex w-auto max-w-xl -translate-x-1/2 items-center gap-4">
             <span>{notice}</span>
+            {noticeState.openCalendar && (
+              <Button
+                variant="outline"
+                disabled={openingCalendar}
+                onClick={() => void openCalendar()}
+              >
+                {t('打开苹果日历')}
+              </Button>
+            )}
             <Button variant="ghost" aria-label={t('关闭提示')} onClick={() => setNotice('')}>
               <X size={16} />
             </Button>
@@ -1051,6 +1088,14 @@ function App() {
             </form>
           </DialogContent>
         </Dialog>
+        {calendarOpen && journey && (
+          <CalendarSyncDialog
+            key={journey.id}
+            journey={journey}
+            onClose={() => setCalendarOpen(false)}
+            onSuccess={(message) => setNoticeState({ message, openCalendar: true })}
+          />
+        )}
         <SettingsDialog
           tripId={trip?.id}
           onAutoSave={setConfig}

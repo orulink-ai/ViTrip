@@ -1,4 +1,55 @@
 export const translations: Record<string, string> = {
+  打开苹果日历: 'Open Apple Calendar',
+  日历授权: 'Calendar permission',
+  '需要允许日历完整访问，才能创建旅行日历并更新日程。':
+    'Allow full calendar access to create the travel calendar and update events.',
+  '打开日历隐私设置，找到 ViTrip 日历同步或 ViTrip Calendar，允许完整访问。完成后回到这里重新连接，当前日期和活动选择会保留。':
+    'Open Calendar privacy settings and allow full access for ViTrip Calendar. Then return here and reconnect. Your date and selected activities will be preserved.',
+  打开日历隐私设置: 'Open Calendar privacy settings',
+  '已授权，重新连接': 'Permission granted, reconnect',
+  同步到苹果日历: 'Sync to Apple Calendar',
+  '将所选活动写入独立的旅行日历。Mac 和 iPhone 需使用同一 Apple 账号，并开启 iCloud 日历。':
+    'Save selected activities to a separate travel calendar. Use the same Apple Account and enable iCloud Calendar on your Mac and iPhone.',
+  '出发日期（用于没有日期的行程天）': 'Departure date (for days without a date)',
+  出发日期: 'Departure date',
+  旅行时区: 'Travel time zone',
+  '默认活动时长（分钟）': 'Default duration (minutes)',
+  提醒时间: 'Alert',
+  不提醒: 'No alert',
+  活动开始时: 'At start time',
+  '提前 15 分钟': '15 minutes before',
+  '提前 30 分钟': '30 minutes before',
+  '提前 1 小时': '1 hour before',
+  '提前 1 天': '1 day before',
+  '行程中的明确日期和活动时区优先。只有开始时间的活动使用默认时长；跨时区航班请先拆分为起飞和抵达安排。':
+    'Dates and time zones specified in the itinerary take priority. Activities with only a start time use the default duration. Split flights across time zones into departure and arrival activities.',
+  '正在连接日历…': 'Connecting to Calendar…',
+  连接苹果日历: 'Connect Apple Calendar',
+  日历账户: 'Calendar account',
+  '请选择 iCloud 账户，以同步到你的苹果手机。': 'Choose iCloud to sync to your iPhone.',
+  '没有可同步的日历账户。请在 Mac 系统设置中开启 iCloud 日历，并打开一次日历 App，再重试连接。':
+    'No syncable calendar account found. Enable iCloud Calendar in Mac System Settings, open Calendar once, then try connecting again.',
+  重新连接日历: 'Reconnect Calendar',
+  日历同步预览: 'Calendar sync preview',
+  '已选择 {count} 项活动': '{count} activities selected',
+  默认时长: 'Default duration',
+  未同步: 'Skipped',
+  '再次同步会更新相同活动。取消勾选或从行程删除活动，不会删除已经写入的日程；可在苹果日历中删除。手机上的修改不会回传 ViTrip。':
+    'Syncing again updates the same activities. Deselecting or removing an activity does not delete events already saved; delete them in Apple Calendar. Changes on your phone do not sync back to ViTrip.',
+  '正在同步日历…': 'Syncing Calendar…',
+  确认同步: 'Confirm sync',
+  '请检查日期、时区和活动时长。': 'Check the date, time zone and duration.',
+  '已写入「{calendar}」：新增 {created} 条，更新 {updated} 条。iPhone 将通过日历账户同步。':
+    'Saved to “{calendar}”: {created} added, {updated} updated. Your iPhone will sync through the calendar account.',
+  '缺少明确日期，请填写出发日期': 'No date specified. Enter a departure date.',
+  '备选活动，请先在行程中确定安排': 'Alternative activity. Confirm it in the itinerary first.',
+  '时间尚未确定，请在行程中填写 HH:mm 或 HH:mm-HH:mm':
+    'Time is unconfirmed. Set HH:mm or HH:mm-HH:mm in the itinerary.',
+  '活动时区无效，请先修正行程中的时区':
+    'Invalid activity time zone. Correct it in the itinerary first.',
+  '该时间受夏令时切换影响，请调整为明确的时间':
+    'This time is ambiguous or missing due to daylight saving. Choose an unambiguous time.',
+  '开始和结束时间相同，请确认活动时长': 'Start and end times are identical. Confirm the duration.',
   '{count} 个待定位': '{count} awaiting location',
   保存连接设置: 'Save connection settings',
   '当前会话 · 自动保存': 'Current conversation · Auto-save',

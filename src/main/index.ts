@@ -16,6 +16,14 @@ import { attachmentIdsSchema, type FileAttachment } from '../shared/attachments'
 import { backgroundTest } from './test-window-policy';
 import { createHash } from 'node:crypto';
 import { PhotoCache } from './photo-cache';
+import { CalendarSync, eventKitNative } from './calendar-sync';
+import { openCalendarPrivacySettings } from './calendar-permissions';
+import { openAppleCalendar } from './calendar-app';
+import {
+  buildCalendarPreview,
+  calendarOptionsSchema,
+  calendarSyncSchema,
+} from '../shared/calendar';
 import type { ToolResult } from '../shared/photos';
 import { itineraryEditSchema } from '../shared/journey-editing';
 import { createDeepLink, resolveDeepLink, type LinkTarget } from '../shared/deep-link';
@@ -119,6 +127,14 @@ app
       return;
     }
     const documents = new NotebookDocuments(path.join(app.getPath('userData'), 'journeys'));
+    const calendar = new CalendarSync(
+      path.join(app.getPath('userData'), 'calendar'),
+      eventKitNative(
+        app.isPackaged
+          ? path.join(process.resourcesPath, 'calendar', 'ViTrip Calendar.app')
+          : path.join(__dirname, 'ViTrip Calendar.app'),
+      ),
+    );
     const photos = new PhotoCache(path.join(app.getPath('userData'), 'photos'));
     const notebookMedia = new NotebookMedia(
       path.join(app.getPath('userData'), 'journeys'),
@@ -1236,6 +1252,37 @@ app
       if (result.canceled || !result.filePath) return null;
       await fs.writeFile(result.filePath, html, 'utf8');
       return result.filePath;
+    });
+    function calendarJourney(rawId: unknown) {
+      const id = z.string().min(1).max(100).parse(rawId);
+      const journey = store.journeys.find((j) => j.id === id);
+      if (!journey?.plan) throw new Error('当前旅行还没有可同步的行程');
+      return journey;
+    }
+    handle('calendarConnect', (rawId) => calendar.connect(calendarJourney(rawId).id));
+    handle('openCalendarPrivacySettings', () =>
+      openCalendarPrivacySettings((url) => shell.openExternal(url)),
+    );
+    handle('openAppleCalendar', () => openAppleCalendar((path) => shell.openPath(path)));
+    handle('calendarPreview', (rawId, rawOptions) => {
+      const options = calendarOptionsSchema.parse(rawOptions);
+      let journey = calendarJourney(rawId);
+      if (journey.plan!.days.some((day) => day.activities.some((activity) => !activity.id))) {
+        const plan = structuredClone(journey.plan!);
+        for (const day of plan.days)
+          for (const activity of day.activities) activity.id ??= randomUUID();
+        journey = store.updatePlan(journey.id, plan);
+        emit({ type: 'journey', journey });
+      }
+      return buildCalendarPreview(journey, options);
+    });
+    handle('calendarSync', (raw) => {
+      const input = calendarSyncSchema.parse(raw);
+      const journey = calendarJourney(input.journeyId);
+      return calendar.sync(journey, input, () => {
+        if (calendarJourney(input.journeyId).revision !== input.revision)
+          throw new Error('行程已变化，请关闭并重新打开同步预览');
+      });
     });
     win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     win.webContents.on('will-navigate', (event) => event.preventDefault());

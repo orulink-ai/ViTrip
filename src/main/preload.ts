@@ -62,6 +62,11 @@ const api: API = {
   stop: () => ipcRenderer.invoke('vitrip:stop'),
   approve: (id, allow) => ipcRenderer.invoke('vitrip:approve', id, allow),
   export: () => ipcRenderer.invoke('vitrip:export'),
+  calendarConnect: (id) => ipcRenderer.invoke('vitrip:calendarConnect', id),
+  openCalendarPrivacySettings: () => ipcRenderer.invoke('vitrip:openCalendarPrivacySettings'),
+  openAppleCalendar: () => ipcRenderer.invoke('vitrip:openAppleCalendar'),
+  calendarPreview: (id, options) => ipcRenderer.invoke('vitrip:calendarPreview', id, options),
+  calendarSync: (input) => ipcRenderer.invoke('vitrip:calendarSync', input),
   onEvent: (listener) => {
     const handler = (_event: Electron.IpcRendererEvent, event: Event) => listener(event);
     ipcRenderer.on('vitrip:event', handler);

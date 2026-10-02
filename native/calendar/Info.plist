@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>CFBundleIdentifier</key><string>com.vitrip.calendar</string>
+  <key>CFBundleName</key><string>ViTrip Calendar</string>
+  <key>CFBundleDisplayName</key><string>ViTrip 日历同步</string>
+  <key>CFBundleExecutable</key><string>ViTripCalendar</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleVersion</key><string>1</string>
+  <key>CFBundleShortVersionString</key><string>1.0</string>
+  <key>LSUIElement</key><true/>
+  <key>LSMinimumSystemVersion</key><string>12.0</string>
+  <key>NSCalendarsFullAccessUsageDescription</key><string>ViTrip 将你选择的旅行安排同步到独立的旅行日历，并在再次同步时更新已有日程，需要日历完整访问权限。</string>
+  <key>NSCalendarsUsageDescription</key><string>ViTrip 将你选择的旅行安排同步到独立的旅行日历，并在再次同步时更新已有日程。</string>
+</dict></plist>
