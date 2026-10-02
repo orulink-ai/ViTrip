@@ -1,4 +1,9 @@
-import { coordinate, type Coordinate, type ItineraryStop } from './itinerary-map';
+import {
+  coordinate,
+  isItineraryCandidate,
+  type Coordinate,
+  type ItineraryStop,
+} from './itinerary-map';
 /** Screen-space groups keep the selected stop individually accessible. */
 export function clusterStops(
   stops: ItineraryStop[],
@@ -40,6 +45,9 @@ export function clusterStops(
 export function filterCandidates(stops: ItineraryStop[], preference: string): ItineraryStop[] {
   return stops.filter(
     (stop) =>
-      !preference || !stop.recommendation || stop.recommendation.preferences.includes(preference),
+      !preference ||
+      !isItineraryCandidate(stop) ||
+      !stop.recommendation ||
+      stop.recommendation.preferences.includes(preference),
   );
 }

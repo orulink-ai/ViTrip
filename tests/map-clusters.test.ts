@@ -40,3 +40,10 @@ it('groups overlapping name labels even across old grid boundaries', () => {
   );
   expect(groups).toHaveLength(1);
 });
+
+it('选定的餐厅保留推荐理由，不会被其他偏好筛掉', () => {
+  const stops = itineraryStops(demoPlan);
+  stops[0].origin = 'user';
+  stops[0].recommendation = { reason: '用户已选择海鲜晚餐', preferences: ['海鲜'] };
+  expect(filterCandidates(stops, '户外')).toContain(stops[0]);
+});

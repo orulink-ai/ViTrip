@@ -161,7 +161,7 @@ it('自定义 HTML 也带有离线地点摘要，导出保留安全边界', () =
   expect(html).toContain("script-src 'none'");
 });
 
-it('备选和可选活动不会串成路线，也不跨过备选空隙连线', () => {
+it('跳过未选备选，已安排的地点仍按顺序连接', () => {
   const value: Plan = plan();
   const base = {
     time: '',
@@ -170,7 +170,7 @@ it('备选和可选活动不会串成路线，也不跨过备选空隙连线', (
     location: { ...location, precision: 'place' as const },
   };
   value.days[0].activities = [
-    { ...base },
+    { ...base, location: { ...base.location, longitude: 135 } },
     { ...base, optionGroup: 'choice' },
     { ...base, optionGroup: 'choice' },
     { ...base },
@@ -179,6 +179,10 @@ it('备选和可选活动不会串成路线，也不跨过备选空隙连线', (
     { ...base, location: { ...base.location, longitude: 136 } },
   ];
   expect(routeSegments(itineraryStops(value, 0))).toEqual([
+    [
+      [135, 34.9949],
+      [135.785, 34.9949],
+    ],
     [
       [135.785, 34.9949],
       [136, 34.9949],
@@ -221,4 +225,24 @@ it('机场间夹着转机和托运仍连线，相同坐标不重复且近距离�
   ]);
   value.days[1].activities.unshift(item('取行李'));
   expect(routeSegments(itineraryStops(value))).toHaveLength(3);
+});
+
+it('用户选定的餐厅保留推荐理由也属于当天路线，未选候选仍不连线', () => {
+  const value = plan();
+  const hotel = value.days[0].activities[0];
+  const dinner = {
+    ...value.days[0].activities[2],
+    title: 'SIAM 晚餐',
+    origin: 'user' as const,
+    kind: 'meal' as const,
+    recommendation: { reason: '三家中评分最高', preferences: ['海鲜'] },
+  };
+  value.days[0].activities = [hotel, dinner];
+  expect(routeSegments(itineraryStops(value, 0))).toHaveLength(1);
+  value.days[0].activities[1] = { ...dinner, optional: true };
+  expect(routeSegments(itineraryStops(value, 0))).toEqual([]);
+  value.days[0].activities[1] = { ...dinner, optionGroup: 'dinner-choice' };
+  expect(routeSegments(itineraryStops(value, 0))).toEqual([]);
+  value.days[0].activities[1] = { ...dinner, origin: 'suggestion' };
+  expect(routeSegments(itineraryStops(value, 0))).toEqual([]);
 });

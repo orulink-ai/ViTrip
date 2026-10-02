@@ -18,7 +18,7 @@ export const descriptions: Record<ToolName, string> = {
   google_search:
     '在本地真实浏览器进行 Google 网页搜索，query 为完整搜索词；适用于官网、门票、预订平台及用户明确要求 Google 搜索的场景。返回导航状态不是搜索结果，随后 observe 阅读页面并保留来源。遇验证码交用户接管，不绕过；失败换来源并明确说明。',
   google_maps:
-    '在本地真实浏览器打开 Google Maps。action=search 配 query 查询餐厅、酒店、景点；action=directions 配 origin、destination 和可选 travelmode(driving/walking/transit/bicycling/two-wheeler) 查询路线。起终点须明确，地名带城市以减少歧义。随后 observe 核实页面；路线时长、营业时间、评分仅引用实际页面，不把导航成功当成查询成功。酒店余房、价格、预订与交通班次需官网进一步核实。',
+    '在本地真实浏览器打开 Google Maps。action=search 配 query 查询餐厅、酒店、景点；action=directions 配 origin、destination 和可选 travelmode(driving/walking/transit/bicycling/two-wheeler) 查询路线。起终点须明确，地名带城市以减少歧义。随后 observe 核实页面；路线时长、营业时间、评分仅引用实际页面，不把导航成功当成查询成功。酒店余房、价格、预订与交通班次需官网进一步核实。搜索结果不会自动更新行程地图：查询后主动询问是否加入地图并安排到某天；用户已明确要求加入则直接调用 plan，成功后再告知已保存。',
   navigate: '在右侧本地浏览器打开 HTTP/HTTPS 网页或搜索结果网址。',
   observe: '读取当前网页正文和交互元素。页面变化后重新观察。',
   computer_use:
@@ -27,7 +27,7 @@ export const descriptions: Record<ToolName, string> = {
   type: '向普通输入框填入文字，不填写密码或支付信息。',
   press: '按键，Enter 需要用户确认。',
   scroll: '向上或向下滚动。',
-  plan: '活动可带 timeLabel（抵达/出发等明确时间含义）、timeZone（有依据的当地时区）、notes（航班号、航站楼、交通或其他已知细节）、warnings（需要注意或核实的事项）。对话确认的新细节应更新到对应活动，保留未改变的备注。有明确日期时用 day.date 保存 YYYY-MM-DD，day.title 保留主题和原有日期说明；日期缺乏依据时不填写 day.date，跨日必须写明实际日期；时间和时区仅采用用户或来源明确提供的信息，不猜测，不把建议或待确认事项写成事实；确认后更新或移除过期提醒。更新完整可视化旅行计划，每次都必须包含顶层 title、subtitle、budget、days；局部改一天也必须保留其他日期及整体来源。保留来源网址并标记估算。Plan.source 保存整体攻略出处(url 可选、excerpt 必填原文摘录)，packing 保存原攻略准备清单候选，不表示已完成或已加入待办。每天 stay 记录当晚住宿(name、status: planned 原攻略安排但预订未确认/booked 有预订证据/pending 待确认、sourceUrl 可选)，issues 只列影响执行且尚未解决的问题；用户已明确的决定必须移出 issues，住宿预订状态已有 stay 展示，不重复写入 issues。活动 origin 为 source(原攻略)/suggestion(AI建议)/user(用户新决定)，不可将AI补充标为原攻略。活动 kind 为 transport/activity/meal/stay，互斥候选共享 optionGroup，非必选活动 optional=true；source 保存活动原文依据(url 可选、excerpt 必填)。所有新增字段可省略，不猜测缺失值。活动可含 location（name、latitude、longitude、precision、sourceUrl），用于共享行程地图。只使用用户提供或网页证据中的 WGS84 经纬度，保留坐标来源；不要根据地名猜坐标，不要混用 GCJ-02/BD-09。precision=place 表示具体地点，approximate 表示大致区域。没有可靠坐标就省略 location，活动会显示待定位。地图由应用按天连接顺序中的已定位地点，无坐标事项不截断连线；相同坐标不重复画线。候选不串为必经路线，不跨天连线。不要为连线编造坐标或删除无坐标事项。机场参考坐标不等于航站楼、巴士站或上车点；具体点位须独立核实，楼层及出口保存在备注。虚线不代表实际交通路线或时长。更新时保留仍有效的 location，地点改变时必须同步更新或移除旧坐标。',
+  plan: '活动可带 timeLabel（抵达/出发等明确时间含义）、timeZone（有依据的当地时区）、notes（航班号、航站楼、交通或其他已知细节）、warnings（需要注意或核实的事项）。对话确认的新细节应更新到对应活动，保留未改变的备注。有明确日期时用 day.date 保存 YYYY-MM-DD，day.title 保留主题和原有日期说明；日期缺乏依据时不填写 day.date，跨日必须写明实际日期；时间和时区仅采用用户或来源明确提供的信息，不猜测，不把建议或待确认事项写成事实；确认后更新或移除过期提醒。更新完整可视化旅行计划，每次都必须包含顶层 title、subtitle、budget、days；局部改一天也必须保留其他日期及整体来源。保留来源网址并标记估算。Plan.source 保存整体攻略出处(url 可选、excerpt 必填原文摘录)，packing 保存原攻略准备清单候选，不表示已完成或已加入待办。每天 stay 记录当晚住宿(name、status: planned 原攻略安排但预订未确认/booked 有预订证据/pending 待确认、sourceUrl 可选)，issues 只列影响执行且尚未解决的问题；用户已明确的决定必须移出 issues，住宿预订状态已有 stay 展示，不重复写入 issues。活动 origin 为 source(原攻略)/suggestion(AI建议)/user(用户新决定)，不可将AI补充标为原攻略。活动 kind 为 transport/activity/meal/stay，互斥候选共享 optionGroup，非必选活动 optional=true；source 保存活动原文依据(url 可选、excerpt 必填)。所有新增字段可省略，不猜测缺失值。活动可含 location（name、latitude、longitude、precision、sourceUrl），用于共享行程地图。只使用用户提供或网页证据中的 WGS84 经纬度，保留坐标来源；不要根据地名猜坐标，不要混用 GCJ-02/BD-09。precision=place 表示具体地点，approximate 表示大致区域。没有可靠坐标就省略 location，活动会显示待定位。地图由应用按天连接顺序中的已定位地点，无坐标事项不截断连线；相同坐标不重复画线。候选不串为必经路线；跳过未选候选后仍连接同日已安排的地点，不跨天连线。不要为连线编造坐标或删除无坐标事项。机场参考坐标不等于航站楼、巴士站或上车点；具体点位须独立核实，楼层及出口保存在备注。虚线不代表实际交通路线或时长。更新时保留仍有效的 location，地点改变时必须同步更新或移除旧坐标。',
 };
 export const travelPrompt =
   travelAgentCharter +

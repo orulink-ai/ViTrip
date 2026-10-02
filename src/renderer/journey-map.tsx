@@ -10,7 +10,7 @@ import { t } from './i18n';
 import { lazy, Suspense, useMemo, useState, useEffect, useRef } from 'react';
 import { Expand, ArrowLeft, LocateFixed, List, X, MessageSquare } from 'lucide-react';
 import type { Plan } from '../shared/types';
-import { itineraryStops, locationURL } from '../shared/itinerary-map';
+import { itineraryStops, isItineraryCandidate, locationURL } from '../shared/itinerary-map';
 import { Button } from './components/ui/button';
 import {
   DropdownMenu,
@@ -295,8 +295,7 @@ export function JourneyMap({
                             <StopIcon kind={stop.kind} />
                             {stop.number}. {stop.location?.name ?? stop.title}
                             {!stop.location && ' · ' + t('待定位')}
-                            {(stop.optional || stop.optionGroup || stop.recommendation) &&
-                              ' · 候选'}
+                            {isItineraryCandidate(stop) && ' · 候选'}
                           </Button>
                           {(stop.optionGroup ||
                             plan?.days[day].activities[stop.activityIndex].origin ===

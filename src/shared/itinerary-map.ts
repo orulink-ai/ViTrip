@@ -33,12 +33,20 @@ export interface ItineraryStop {
   optional?: boolean;
   optionGroup?: string;
   kind?: 'transport' | 'activity' | 'meal' | 'stay';
+  origin?: 'source' | 'suggestion' | 'user';
   photoIds?: string[];
   source?: ItinerarySource;
   sources?: ItinerarySource[];
   recommendation?: { reason: string; preferences: string[] };
 }
 export type Coordinate = [longitude: number, latitude: number];
+
+/** Keep recommendation evidence after selection without treating the decision as a candidate. */
+export function isItineraryCandidate(stop: ItineraryStop): boolean {
+  return Boolean(
+    stop.optional || stop.optionGroup || (stop.recommendation && stop.origin !== 'user'),
+  );
+}
 
 export function itineraryStops(plan: Plan | null, dayIndex?: number): ItineraryStop[] {
   let number = 0;
@@ -60,16 +68,13 @@ export function coordinate(location: ItineraryLocation): Coordinate {
   return [location.longitude, Math.max(-85.051129, Math.min(85.051129, location.latitude))];
 }
 
-/** Connect ordered located stops within a day; unlocated tasks do not break the sequence. */
+/** Connect scheduled located stops within a day, skipping unlocated tasks and unchosen candidates. */
 export function routeSegments(stops: ItineraryStop[]): Coordinate[][] {
   const segments: Coordinate[][] = [];
   let previous: ItineraryStop | undefined;
   for (const stop of stops) {
     if (previous && previous.dayIndex !== stop.dayIndex) previous = undefined;
-    if (stop.optional || stop.optionGroup || stop.recommendation) {
-      previous = undefined;
-      continue;
-    }
+    if (isItineraryCandidate(stop)) continue;
     if (!stop.location) continue;
     if (previous?.location && stop.location && previous.dayIndex === stop.dayIndex) {
       const start = coordinate(previous.location);
