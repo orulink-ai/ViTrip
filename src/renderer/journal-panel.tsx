@@ -1,7 +1,7 @@
 import { PlaceDetailsProvider } from './place-details-context';
 import { ItineraryQuotation } from './itinerary-quotation';
 import type { Quote } from '../shared/notebook';
-import { normalizeMapSelection } from '../shared/map-selection';
+import { normalizeMapSelection, mapViewSelection } from '../shared/map-selection';
 import { itineraryStops, type ItineraryStop } from '../shared/itinerary-map';
 import { t } from './i18n';
 import type { Todo } from '../shared/notebook';
@@ -12,6 +12,7 @@ import { Map, ListTodo } from 'lucide-react';
 import type { Journey } from '../shared/types';
 import { JourneyMap, type MapSelection } from './journey-map';
 import { PreparationPanel } from './preparation-panel';
+import type { DiscussionFollowControls } from './use-discussion-follow';
 export function JournalPanel({
   journey,
   scratchMarkdown,
@@ -25,6 +26,7 @@ export function JournalPanel({
   building,
   todos,
   onTodos,
+  discussion,
 }: {
   journey: Journey;
   scratchMarkdown?: string;
@@ -38,12 +40,14 @@ export function JournalPanel({
   building: boolean;
   todos?: Todo[];
   onTodos?: (todos: Todo[]) => void;
+  discussion?: DiscussionFollowControls;
 }) {
   // IPC clones Journey even when only knowledge or its title changes.
   const planKey = JSON.stringify(journey.plan);
   const plan = useMemo(() => journey.plan, [planKey]);
   const [mode, setMode] = useState<'map' | 'prepare'>('map');
   const [selection, setSelectionState] = useState<MapSelection>({});
+  const [automaticSelection, setAutomaticSelection] = useState(false);
   function setSelection(value: MapSelection) {
     setSelectionState(value);
     try {
@@ -53,6 +57,29 @@ export function JournalPanel({
     }
   }
   const reading = useRef<HTMLDivElement>(null);
+  const requestedSelection = discussion?.focus
+    ? mapViewSelection(plan, discussion.focus)
+    : undefined;
+  const presentedFocus =
+    automaticSelection &&
+    requestedSelection &&
+    requestedSelection.day === selection.day &&
+    requestedSelection.stopId === selection.stopId
+      ? (discussion?.focus ?? undefined)
+      : undefined;
+  useEffect(() => {
+    const focus = discussion?.focus;
+    if (!focus) return;
+    const next = mapViewSelection(plan, focus);
+    if (!next) return;
+    setAutomaticSelection(true);
+    setSelection(next);
+  }, [discussion?.focus]);
+  function selectManually(value: MapSelection) {
+    discussion?.pause();
+    setAutomaticSelection(false);
+    setSelection(value);
+  }
   useEffect(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(`vitrip-selection:${journey.id}`) ?? '{}');
@@ -133,7 +160,13 @@ export function JournalPanel({
           <ItineraryQuotation root={reading} journey={journey} tripId={tripId} onQuote={onQuote} />
         )}
         <div className="journal-toolbar">
-          <Tabs value={mode} onValueChange={(value) => setMode(value as typeof mode)}>
+          <Tabs
+            value={mode}
+            onValueChange={(value) => {
+              discussion?.pause();
+              setMode(value as typeof mode);
+            }}
+          >
             <TabsList aria-label="行程视图">
               <TabsTrigger value="map">
                 <Map size={14} />
@@ -168,7 +201,10 @@ export function JournalPanel({
                 photos={journey.photos}
                 plan={plan}
                 selection={selection}
-                onSelection={setSelection}
+                onSelection={selectManually}
+                discussion={discussion}
+                discussionFocus={presentedFocus}
+                automaticSelection={automaticSelection}
                 expanded={true}
                 onBrowse={onBrowse}
                 onQuoteDay={tripId && onQuote ? quoteDay : undefined}

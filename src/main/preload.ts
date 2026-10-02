@@ -1,6 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { API, Event } from '../shared/types';
 const api: API = {
+  mapViewResult: (requestId, tripId, status) =>
+    ipcRenderer.invoke('vitrip:mapViewResult', requestId, tripId, status),
   startVoice: (tripId, sdp) => ipcRenderer.invoke('vitrip:startVoice', tripId, sdp),
   stopVoice: (tripId) => ipcRenderer.invoke('vitrip:stopVoice', tripId),
   codexModels: () => ipcRenderer.invoke('vitrip:codexModels'),

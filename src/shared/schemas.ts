@@ -1,3 +1,4 @@
+import { mapViewSchema } from './map-view';
 import { googleSearchSchema, googleMapsSchema } from './google-travel';
 import { prepareToolSchema } from './prepare';
 import { notebookToolSchema } from './notebook-documents';
@@ -136,6 +137,7 @@ export const boundsSchema = z.object({
   visible: z.boolean(),
 });
 export const toolsSchema = {
+  map_view: mapViewSchema,
   prepare: prepareToolSchema,
   notebook: notebookToolSchema,
   photo_candidates: z.object({

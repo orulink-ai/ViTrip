@@ -11,6 +11,8 @@ import { lazy, Suspense, useMemo, useState, useEffect, useRef } from 'react';
 import { Expand, ArrowLeft, LocateFixed, List, X, MessageSquare } from 'lucide-react';
 import type { Plan } from '../shared/types';
 import { itineraryStops, isItineraryCandidate, locationURL } from '../shared/itinerary-map';
+import type { DiscussionFocus } from '../shared/discussion-follow';
+import type { DiscussionFollowControls } from './use-discussion-follow';
 import { Button } from './components/ui/button';
 import {
   DropdownMenu,
@@ -42,6 +44,9 @@ export function JourneyMap({
   onExpand,
   onBrowse,
   onQuoteDay,
+  discussion,
+  discussionFocus,
+  automaticSelection = false,
 }: {
   plan: Plan | null;
   journeyId?: string;
@@ -52,6 +57,9 @@ export function JourneyMap({
   onExpand?: (value: boolean) => void;
   onBrowse: (url: string) => void;
   onQuoteDay?: (day: number, newConversation: boolean) => void;
+  discussion?: DiscussionFollowControls;
+  discussionFocus?: DiscussionFocus;
+  automaticSelection?: boolean;
 }) {
   const allStops = useMemo(() => itineraryStops(plan, selection.day), [plan, selection.day]);
   const contextStops = useMemo(
@@ -63,6 +71,9 @@ export function JourneyMap({
   );
   const [mapTools, setMapTools] = useState<HTMLDivElement | null>(null);
   const [preference, setPreference] = useState('');
+  useEffect(() => {
+    if (discussionFocus) setPreference('');
+  }, [discussionFocus]);
   const [sourcesOpen, setSourcesOpen] = useState(false);
   const [listOpen, setListOpen] = useState(false);
   const preferences = [
@@ -70,10 +81,20 @@ export function JourneyMap({
   ];
   const activePreference = preferences.includes(preference) ? preference : '';
   const stops = useMemo(
-    () => filterCandidates(allStops, activePreference),
-    [allStops, activePreference],
+    () => filterCandidates(allStops, activePreference, discussionFocus?.stopIds),
+    [allStops, activePreference, discussionFocus],
   );
   const located = stops.filter((stop) => stop.location);
+  useEffect(() => {
+    if (
+      discussionFocus?.kind === 'day' &&
+      discussionFocus.dayIndex === selection.day &&
+      !located.length
+    ) {
+      setListOpen(true);
+      discussion?.presented(discussionFocus.revision);
+    }
+  }, [discussionFocus, selection.day, located.length]);
   const selected = stops.find((stop) => stop.id === selection.stopId);
   const listRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -106,6 +127,37 @@ export function JourneyMap({
           {listOpen ? <X /> : <List />} 地点列表
         </Button>
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+          {discussion && (
+            <div className="flex w-full min-w-0 items-center gap-2 @min-[900px]:w-auto @min-[900px]:flex-1">
+              <Button
+                size="sm"
+                variant="outline"
+                aria-pressed={discussion.enabled}
+                onClick={discussion.toggle}
+              >
+                跟随对话
+              </Button>
+              {(discussion.label || discussion.targets.length > 0) && (
+                <span
+                  role="status"
+                  className="min-w-0 flex-1 truncate text-sm text-muted-foreground"
+                  title={
+                    discussion.label ??
+                    discussion.targets.map((stop) => stop.location?.name ?? stop.title).join('、')
+                  }
+                >
+                  正在讨论：
+                  {discussion.label ??
+                    discussion.targets.map((stop) => stop.location?.name ?? stop.title).join('、')}
+                </span>
+              )}
+              {discussion.enabled && discussion.paused && (
+                <Button size="sm" variant="outline" onClick={discussion.resume}>
+                  继续跟随
+                </Button>
+              )}
+            </div>
+          )}
           {!!preferences.length && (
             <Select
               value={activePreference || 'all'}
@@ -143,7 +195,7 @@ export function JourneyMap({
             <SelectTrigger
               aria-label={t('地图日期')}
               size="sm"
-              className="min-w-0 max-w-full flex-1"
+              className="min-w-[min(100%,14rem)] max-w-full flex-1"
             >
               <SelectValue>
                 {selection.day === undefined ? (
@@ -198,6 +250,10 @@ export function JourneyMap({
                 stops={stops}
                 contextStops={contextStops}
                 selectedId={selection.stopId}
+                discussionFocus={discussionFocus}
+                onPresented={discussion?.presented}
+                automaticSelection={automaticSelection}
+                onManualInteraction={discussion?.pause}
                 controlsHost={mapTools}
                 listOpen={listOpen}
                 expanded={expanded}

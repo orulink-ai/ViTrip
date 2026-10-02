@@ -1,5 +1,6 @@
 import { startCodexVoice } from './codex-voice-start';
 import fs from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { z } from 'zod';
 import type { AgentRunOptions } from './agent-runtime';
@@ -16,7 +17,10 @@ const threadResult = z.object({ thread: z.object({ id: z.string().min(1) }) });
 const toolCall = z.object({ callId: z.string(), tool: z.string(), arguments: z.unknown() });
 const eventParams = z.object({ threadId: z.string().optional() }).passthrough();
 const itemSchema = z.object({ id: z.string(), type: z.string() }).passthrough();
-const sessionSchema = z.object({ threadId: z.string().min(1) });
+const sessionSchema = z.object({
+  threadId: z.string().min(1),
+  toolCatalogFingerprint: z.string().optional(),
+});
 
 /** Each ViTrip conversation owns a Codex thread; Pi session files remain independent. */
 export async function runCodexAgent(options: AgentRunOptions, commandOverride?: CodexCommand) {
@@ -99,6 +103,20 @@ export async function runCodexAgent(options: AgentRunOptions, commandOverride?: 
     options.onActivity?.({ ...step });
   };
   const allowed = new Set<string>(options.toolNames ?? Object.keys(toolsSchema));
+  const dynamicTools = Object.entries(toolsSchema)
+    .filter(([name]) => allowed.has(name))
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([name, schema]) => ({
+      type: 'function',
+      name,
+      description: descriptions[name as ToolName],
+      inputSchema: z.toJSONSchema(schema),
+    }));
+  // Codex retains dynamic tools on its thread. A resumed thread cannot acquire a
+  // changed catalog, so rebuild it with the host's complete conversation context.
+  const toolCatalogFingerprint = createHash('sha256')
+    .update(JSON.stringify(dynamicTools))
+    .digest('hex');
   async function executeTool(raw: unknown) {
     const call = toolCall.parse(raw);
     const step: ToolActivity = {
@@ -362,10 +380,11 @@ export async function runCodexAgent(options: AgentRunOptions, commandOverride?: 
     );
     // A restricted background sync must not change the interactive thread's tool catalog.
     const ephemeral = !!options.toolNames;
-    let saved: { threadId: string } | undefined;
+    let saved: z.infer<typeof sessionSchema> | undefined;
     if (!ephemeral) {
       try {
         saved = sessionSchema.parse(JSON.parse(await fs.readFile(file, 'utf8')));
+        if (saved.toolCatalogFingerprint !== toolCatalogFingerprint) saved = undefined;
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
           throw new Error('Codex 会话记录无法读取，请创建新对话后重试');
@@ -397,14 +416,7 @@ export async function runCodexAgent(options: AgentRunOptions, commandOverride?: 
           : {
               ...config,
               ephemeral,
-              dynamicTools: Object.entries(toolsSchema)
-                .filter(([name]) => allowed.has(name))
-                .map(([name, schema]) => ({
-                  type: 'function',
-                  name,
-                  description: descriptions[name as ToolName],
-                  inputSchema: z.toJSONSchema(schema),
-                })),
+              dynamicTools,
             },
       ),
     );
@@ -413,7 +425,9 @@ export async function runCodexAgent(options: AgentRunOptions, commandOverride?: 
     signal.throwIfAborted();
     if (options.voice) {
       if (!ephemeral) {
-        await fs.writeFile(file + '.tmp', JSON.stringify({ threadId }), { mode: 0o600 });
+        await fs.writeFile(file + '.tmp', JSON.stringify({ threadId, toolCatalogFingerprint }), {
+          mode: 0o600,
+        });
         await fs.rename(file + '.tmp', file);
       }
       await startCodexVoice(rpc, threadId, signal, 30000, {
@@ -463,7 +477,9 @@ export async function runCodexAgent(options: AgentRunOptions, commandOverride?: 
         if (result.turnId !== turnId) throw new Error('引导目标已变化，请重试');
       });
     if (!ephemeral) {
-      await fs.writeFile(file + '.tmp', JSON.stringify({ threadId }), { mode: 0o600 });
+      await fs.writeFile(file + '.tmp', JSON.stringify({ threadId, toolCatalogFingerprint }), {
+        mode: 0o600,
+      });
       await fs.rename(file + '.tmp', file);
     }
     await done;

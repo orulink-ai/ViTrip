@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { runCodexAgent } from '../src/main/codex-agent';
@@ -46,6 +46,71 @@ it('streams replies, executes validated travel tools, and resumes its own saved 
   ).toBe('test-thread');
   await runCodexAgent(options, command);
   expect(options.execute).toHaveBeenCalledTimes(2);
+});
+
+it('rebuilds legacy Codex tool catalogs with current tools and conversation context, then resumes', async () => {
+  const { options } = fixture();
+  const command = {
+    command: process.execPath,
+    args: [path.resolve('tests/fixtures/codex-catalog-server.mjs')],
+  };
+  const sessionFile = path.join(options.sessionDir, 'codex-thread.json');
+  writeFileSync(sessionFile, JSON.stringify({ threadId: 'legacy-thread' }));
+  options.initialContext = '用户已决定明天去大象营，酒店为 Clover';
+  await runCodexAgent(options, command);
+  const requests = () =>
+    readFileSync(path.join(options.sessionDir, 'catalog-requests.jsonl'), 'utf8')
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+  expect(requests()[0].method).toBe('thread/start');
+  expect(requests()[0].params.dynamicTools).toEqual(
+    expect.arrayContaining([expect.objectContaining({ name: 'plan' })]),
+  );
+  expect(readFileSync(path.join(options.sessionDir, 'catalog-inputs.jsonl'), 'utf8')).toContain(
+    options.initialContext,
+  );
+  expect(JSON.parse(readFileSync(sessionFile, 'utf8')).toolCatalogFingerprint).toMatch(
+    /^[a-f0-9]{64}$/,
+  );
+  await runCodexAgent(options, command);
+  expect(requests()[1].method).toBe('thread/resume');
+});
+
+it('rebuilds changed catalogs without losing context and keeps background tools isolated', async () => {
+  const { options } = fixture();
+  const command = {
+    command: process.execPath,
+    args: [path.resolve('tests/fixtures/codex-catalog-server.mjs')],
+  };
+  const sessionFile = path.join(options.sessionDir, 'codex-thread.json');
+  await runCodexAgent(options, command);
+  const saved = JSON.parse(readFileSync(sessionFile, 'utf8'));
+  writeFileSync(
+    sessionFile,
+    JSON.stringify({ ...saved, toolCatalogFingerprint: 'outdated-catalog' }),
+  );
+  options.initialContext = '已新增天花秀，后续讲解必须保留';
+  await runCodexAgent(options, command);
+  const fresh = readFileSync(sessionFile, 'utf8');
+  const requests = () =>
+    readFileSync(path.join(options.sessionDir, 'catalog-requests.jsonl'), 'utf8')
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+  expect(requests()[1].method).toBe('thread/start');
+  expect(readFileSync(path.join(options.sessionDir, 'catalog-inputs.jsonl'), 'utf8')).toContain(
+    options.initialContext,
+  );
+  options.toolNames = ['journal'];
+  await runCodexAgent(options, command);
+  expect(requests()[2].params.dynamicTools.map((tool: { name: string }) => tool.name)).toEqual([
+    'journal',
+  ]);
+  expect(readFileSync(sessionFile, 'utf8')).toBe(fresh);
+  delete options.toolNames;
+  await runCodexAgent(options, command);
+  expect(requests()[3].method).toBe('thread/resume');
 });
 it('uses the host deadline without adding a hidden three minute cutoff', async () => {
   const { options, command } = fixture();

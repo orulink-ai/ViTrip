@@ -529,6 +529,7 @@ export const translations: Record<string, string> = {
   操作键盘: 'Keyboard input',
   浏览页面: 'Scroll page',
   更新行程: 'Update itinerary',
+  展示行程地图: 'Show itinerary map',
   整理旅行手册: 'Update travel journal',
   进行中: 'In progress',
   已完成: 'Completed',

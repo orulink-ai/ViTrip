@@ -148,6 +148,7 @@ export interface BrowserState {
 }
 export interface Event {
   type:
+    | 'map-view'
     | 'voice'
     | 'link'
     | 'browser'
@@ -161,6 +162,7 @@ export interface Event {
     | 'journey'
     | 'documents'
     | 'prepare';
+  mapView?: import('./map-view').MapViewCommand;
   voice?: import('./voice').VoiceEvent;
   link?: string;
   workspace?: 'browser' | 'plan' | 'notebook';
@@ -183,6 +185,11 @@ export interface Bounds {
   visible: boolean;
 }
 export interface API {
+  mapViewResult(
+    requestId: string,
+    tripId: string,
+    status: import('./map-view').MapViewStatus,
+  ): Promise<void>;
   startVoice(tripId: string, sdp: string): Promise<void>;
   stopVoice(tripId: string): Promise<void>;
   codexModels(): Promise<CodexModel[]>;

@@ -13,6 +13,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { Button, buttonVariants } from './components/ui/button';
 import { Badge } from './components/ui/badge';
 import { coordinate, mapBounds, routeSegments, type ItineraryStop } from '../shared/itinerary-map';
+import type { DiscussionFocus } from '../shared/discussion-follow';
 
 import { loadMapStyle, streetStyle, withItineraryLayers } from './map-styles';
 import { MapAppearancePicker } from './map-appearance-picker';
@@ -38,6 +39,10 @@ export default function MapCanvas({
   expanded,
   controlsHost,
   listOpen = false,
+  discussionFocus,
+  onPresented,
+  automaticSelection = false,
+  onManualInteraction,
 }: {
   stops: ItineraryStop[];
   journeyId?: string;
@@ -50,6 +55,10 @@ export default function MapCanvas({
   expanded: boolean;
   controlsHost?: HTMLDivElement | null;
   listOpen?: boolean;
+  discussionFocus?: DiscussionFocus;
+  onPresented?: (revision: number) => void;
+  automaticSelection?: boolean;
+  onManualInteraction?: () => void;
 }) {
   const locale = useLocale();
   const [appearance, setAppearance] = useState(() => readMapAppearance(localStorage, journeyId));
@@ -68,6 +77,7 @@ export default function MapCanvas({
   const loadingTimer = useRef<number | undefined>(undefined);
   const [saveProblem, setSaveProblem] = useState(false);
   const changeAppearance = (value: MapAppearance) => {
+    onManualInteraction?.();
     setAppearance(value);
     if (journeyId) setSaveProblem(!saveMapAppearance(localStorage, journeyId, value));
   };
@@ -76,10 +86,26 @@ export default function MapCanvas({
   const markers = useRef<Marker[]>([]);
   // Keep portal containers stable so camera movement does not reset pinned references.
   const stopElements = useRef(new globalThis.Map<string, HTMLDivElement>());
-  const latest = useRef({ onSelect, stops, selectedId });
-  latest.current = { onSelect, stops, selectedId };
+  const latest = useRef({ onSelect, stops, selectedId, onManualInteraction });
+  latest.current = { onSelect, stops, selectedId, onManualInteraction };
   const [readyMap, setReadyMap] = useState<Map | null>(null);
   const ready = readyMap !== null && readyMap === map.current;
+  useEffect(() => {
+    if (!readyMap) return;
+    const manual = (event: { originalEvent?: unknown }) => {
+      if (event.originalEvent) latest.current.onManualInteraction?.();
+    };
+    readyMap.on('dragstart', manual);
+    readyMap.on('zoomstart', manual);
+    readyMap.on('rotatestart', manual);
+    readyMap.on('pitchstart', manual);
+    return () => {
+      readyMap.off('dragstart', manual);
+      readyMap.off('zoomstart', manual);
+      readyMap.off('rotatestart', manual);
+      readyMap.off('pitchstart', manual);
+    };
+  }, [readyMap]);
   const [problem, setProblem] = useState('');
   const [loadingTiles, setLoadingTiles] = useState(true);
   const [tilted, setTilted] = useState(false);
@@ -302,16 +328,21 @@ export default function MapCanvas({
       markers.current.forEach((marker) => marker.remove());
       markers.current = [];
       const slots: { stop: ItineraryStop; element: HTMLDivElement }[] = [];
-      const groups = clusterStops(stops, (point) => instance!.project(point), selectedId, {
-        width: 184,
-        height: 44,
-      });
+      const groups = clusterStops(
+        stops,
+        (point) => instance!.project(point),
+        discussionFocus?.stopIds ?? selectedId,
+        {
+          width: 184,
+          height: 44,
+        },
+      );
       for (const group of groups) {
         const stop = group[0];
         const element = document.createElement('button');
         element.type = 'button';
         const cluster = group.length > 1;
-        const selected = stop.id === selectedId;
+        const selected = discussionFocus?.stopIds.includes(stop.id) || stop.id === selectedId;
         element.className = buttonVariants({
           variant: selected ? 'default' : 'outline',
           size: 'sm',
@@ -365,7 +396,7 @@ export default function MapCanvas({
     return () => {
       instance.off('moveend', drawMarkers);
     };
-  }, [stops, contextStops, selectedId, readyMap, styleRevision, showConnections]);
+  }, [stops, contextStops, selectedId, readyMap, styleRevision, showConnections, discussionFocus]);
 
   const previousSelection = useRef(selectedId);
   const previousListOpen = useRef(listOpen);
@@ -386,6 +417,7 @@ export default function MapCanvas({
     });
   };
   useEffect(() => {
+    if (automaticSelection) return;
     if (
       !ready ||
       (previousSelection.current === selectedId && previousListOpen.current === listOpen)
@@ -394,7 +426,50 @@ export default function MapCanvas({
     previousSelection.current = selectedId;
     previousListOpen.current = listOpen;
     focusStop(selectedId);
-  }, [selectedId, stops, ready, listOpen]);
+  }, [selectedId, stops, ready, listOpen, automaticSelection]);
+
+  const discussionTargetKey = JSON.stringify(
+    stops
+      .filter((stop) => discussionFocus?.stopIds.includes(stop.id))
+      .map((stop) => [stop.id, stop.location]),
+  );
+  useEffect(() => {
+    if (!ready || !map.current || !discussionFocus) return;
+    const targets = stops.filter(
+      (stop) => discussionFocus.stopIds.includes(stop.id) && stop.location,
+    );
+    const bounds = mapBounds(targets);
+    if (!bounds) return;
+    const instance = map.current;
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const padding = {
+      top: 90,
+      bottom: 90,
+      left: listOpen ? Math.min(320, instance.getContainer().clientWidth * 0.45) + 90 : 90,
+      right: 90,
+    };
+    const complete = () => onPresented?.(discussionFocus.revision);
+    instance.stop();
+    instance.once('moveend', complete);
+    if (targets.length > 1 || discussionFocus.kind === 'day') {
+      instance.fitBounds(bounds, { padding, maxZoom: 15, duration: reducedMotion ? 0 : 450 });
+    } else {
+      instance.easeTo({
+        center: coordinate(targets[0].location!),
+        zoom: targets[0].location!.precision === 'place' ? 15 : 12,
+        offset: [listOpen ? (padding.left - padding.right) / 2 : 0, 0],
+        duration: reducedMotion ? 0 : 450,
+      });
+    }
+    // A no-op camera change (same center/zoom) may not emit moveend.
+    const frame = requestAnimationFrame(() => {
+      if (!instance.isMoving()) complete();
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+      instance.off('moveend', complete);
+    };
+  }, [discussionFocus, ready, styleRevision, discussionTargetKey, listOpen]);
 
   return (
     <div className={expanded ? 'relative flex min-h-0 flex-1 flex-col' : 'relative'}>
@@ -404,7 +479,13 @@ export default function MapCanvas({
             stop={stop}
             collisionBoundary={container.current}
             journeyKey={viewportKey?.replace(/:(all|\d+)$/, '') ?? 'temporary'}
-            selected={stop.id === selectedId}
+            selected={Boolean(discussionFocus?.stopIds.includes(stop.id) || stop.id === selectedId)}
+            automaticSelection={automaticSelection}
+            automaticPopupRevision={
+              discussionFocus?.kind !== 'day' && discussionFocus?.stopIds.length === 1
+                ? discussionFocus.revision
+                : undefined
+            }
             onSelect={() => {
               previousSelection.current = stop.id;
               focusStop(stop.id);
@@ -446,6 +527,7 @@ export default function MapCanvas({
                 aria-label={t('适应视野')}
                 disabled={!ready}
                 onClick={() => {
+                  onManualInteraction?.();
                   const bounds = mapBounds(stops);
                   if (bounds)
                     map.current?.fitBounds(bounds, {
@@ -506,6 +588,12 @@ export default function MapCanvas({
         ref={container}
         aria-label="行程交互地图"
         data-map-ready={ready}
+        data-discussion-focus={discussionFocus?.stopIds.join(',') ?? ''}
+        data-focus-revision={discussionFocus?.revision ?? ''}
+        data-map-view-kind={discussionFocus?.kind ?? ''}
+        onPointerDownCapture={(event) => {
+          if ((event.target as Element).closest('.maplibregl-ctrl')) onManualInteraction?.();
+        }}
         data-map-style={appliedStyle}
         data-tiles-loading={loadingTiles}
         data-projection={projection}

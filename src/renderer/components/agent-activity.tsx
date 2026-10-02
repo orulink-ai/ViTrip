@@ -39,6 +39,7 @@ const labels: Record<string, string> = {
   press: '操作键盘',
   scroll: '浏览页面',
   plan: '更新行程',
+  map_view: '展示行程地图',
   journal: '整理旅行手册',
   notebook: '整理笔记文档',
   photo_candidates: '读取来源照片',

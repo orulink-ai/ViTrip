@@ -17,6 +17,8 @@ export function MapStopMarker({
   collisionBoundary,
   journeyKey,
   selected,
+  automaticSelection = false,
+  automaticPopupRevision,
   onSelect,
   onBrowse,
 }: {
@@ -24,6 +26,8 @@ export function MapStopMarker({
   collisionBoundary?: HTMLElement | null;
   journeyKey: string;
   selected: boolean;
+  automaticSelection?: boolean;
+  automaticPopupRevision?: number;
   onSelect: () => void;
   onBrowse: (url: string) => void;
 }) {
@@ -49,8 +53,20 @@ export function MapStopMarker({
       return false;
     }
   });
-  const [open, setOpen] = useState(selected);
-  const [pinned, setPinned] = useState(selected);
+  const [open, setOpen] = useState(
+    selected && (!automaticSelection || automaticPopupRevision !== undefined),
+  );
+  const [pinned, setPinned] = useState(
+    selected && (!automaticSelection || automaticPopupRevision !== undefined),
+  );
+  useEffect(() => {
+    if (automaticSelection) {
+      clearTimeout(timer.current);
+      const showDetails = selected && automaticPopupRevision !== undefined;
+      setOpen(showDetails);
+      setPinned(showDetails);
+    }
+  }, [automaticSelection, selected, automaticPopupRevision]);
   const [sourcesOpen, setSourcesOpen] = useState(false);
   const [saveError, setSaveError] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);

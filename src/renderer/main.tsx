@@ -71,6 +71,7 @@ import { Input } from './components/ui/input';
 import type { BrowserState, Event, PublicSettings, Trip, Journey } from '../shared/types';
 import { TripSidebar } from './trip-sidebar';
 import { JournalPanel } from './journal-panel';
+import { useDiscussionFollow } from './use-discussion-follow';
 import { BrowserActions } from './browser-actions';
 import './style.css';
 
@@ -448,6 +449,7 @@ function App() {
     await perform(() => window.vitrip.browse(url));
   }
   const journey = journeys.find((j) => j.id === trip?.journeyId);
+  const discussion = useDiscussionFollow(trip, journey, workspaceOpen && tab === 'plan');
   const refreshWorkspace = async (id?: string) => {
     const data = await window.vitrip.init();
     setTrips(data.trips);
@@ -863,6 +865,7 @@ function App() {
                 journey && (journey.html || journey.plan || journey.entries.length) ? (
                   <JournalPanel
                     key={journey.id}
+                    discussion={discussion}
                     journey={journey}
                     scratchMarkdown={notebook.value?.markdown}
                     onFindPhotos={(stop) =>

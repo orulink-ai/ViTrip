@@ -53,6 +53,8 @@ import { Storage } from './storage';
 import { RunControl } from './control';
 import { runTravelAgent, supportsImages } from './agent-runtime';
 import { computerUse } from './jev';
+import { readMapView, resolveMapView } from '../shared/map-view';
+import { MapPresentationBridge } from './map-presentation';
 import { piComputerUse } from './pi-jev-browser';
 import { journalHTML, cleanJournal } from './journal';
 import {
@@ -168,6 +170,7 @@ app
       store.settings.tavilyApiKey,
     );
     const control = new RunControl();
+    const mapPresentation = new MapPresentationBridge();
     let current = store.trips[0] || store.create();
     let controller: AbortController | null = null;
     let task: Promise<void> | null = null;
@@ -334,6 +337,23 @@ app
       // navigation should reveal it, so reading or editing a notebook is uninterrupted.
       if (name === 'plan' || name === 'journal') emit({ type: 'workspace', workspace: 'plan' });
       switch (name) {
+        case 'map_view': {
+          const input = toolsSchema.map_view.parse(args);
+          const journey = store.journeyFor(trip);
+          if (input.action === 'read')
+            return JSON.stringify({ ...readMapView(journey.plan), revision: journey.revision });
+          if (trip.id !== current.id)
+            return JSON.stringify({ status: 'unavailable', reason: '当前会话已变化' });
+          const target = resolveMapView(journey.plan, input);
+          return JSON.stringify(
+            await mapPresentation.present(
+              { tripId: trip.id, journeyId: journey.id, planRevision: journey.revision, target },
+              signal,
+              (command) => emit({ type: 'map-view', mapView: command }),
+            ),
+          );
+        }
+
         case 'photo_candidates': {
           const input = toolsSchema.photo_candidates.parse(args);
           const id =
@@ -807,6 +827,18 @@ app
       emit({ type: 'link', link: url });
     };
     if (app.isPackaged && !process.env.VITRIP_TEST_DATA) app.setAsDefaultProtocolClient('vitrip');
+    handle('mapViewResult', (rawRequest, rawTrip, rawStatus) => {
+      const requestId = z.string().uuid().parse(rawRequest);
+      const tripId = z.string().parse(rawTrip);
+      const status = z
+        .enum(['shown', 'paused', 'disabled', 'hidden', 'unavailable'])
+        .parse(rawStatus);
+      mapPresentation.acknowledge(
+        requestId,
+        tripId,
+        tripId === current.id ? status : 'unavailable',
+      );
+    });
     handle('startVoice', (rawId, rawSdp) => {
       const id = z.string().parse(rawId);
       if (id !== current.id) throw new Error('当前旅行已变化，请重新开启语音');
