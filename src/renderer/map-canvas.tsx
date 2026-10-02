@@ -402,6 +402,7 @@ export default function MapCanvas({
         createPortal(
           <MapStopMarker
             stop={stop}
+            collisionBoundary={container.current}
             journeyKey={viewportKey?.replace(/:(all|\d+)$/, '') ?? 'temporary'}
             selected={stop.id === selectedId}
             onSelect={() => {

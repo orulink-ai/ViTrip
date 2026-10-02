@@ -21,8 +21,17 @@ export const photoSchema = z.object({
   format: z.literal('image/png'),
 });
 export type TravelPhoto = z.infer<typeof photoSchema>;
-export function photosForActivity(activity: { photoIds?: string[] }, photos: TravelPhoto[]) {
-  return photos.filter((photo) => activity.photoIds?.includes(photo.id));
+export function photosForActivity(
+  activity: { photoIds?: string[]; location?: { name: string } },
+  photos: TravelPhoto[],
+) {
+  return photos.filter(
+    (photo) =>
+      activity.photoIds?.includes(photo.id) ||
+      (activity.location &&
+        photo.subject.trim().normalize('NFKC').toLocaleLowerCase() ===
+          activity.location.name.trim().normalize('NFKC').toLocaleLowerCase()),
+  );
 }
 export interface PhotoCandidate {
   ref: number;

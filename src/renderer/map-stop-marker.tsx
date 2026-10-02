@@ -1,3 +1,6 @@
+import { usePlaceDetails, linkedNotebookStops } from './place-details-context';
+import { photosForActivity } from '../shared/photos';
+import { PhotoGallery } from './photo-gallery';
 import { Check, Clock, NotebookPen, TriangleAlert } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { ItineraryStop } from '../shared/itinerary-map';
@@ -11,17 +14,31 @@ import { StopIcon } from './stop-icon';
 
 export function MapStopMarker({
   stop,
+  collisionBoundary,
   journeyKey,
   selected,
   onSelect,
   onBrowse,
 }: {
   stop: ItineraryStop;
+  collisionBoundary?: HTMLElement | null;
   journeyKey: string;
   selected: boolean;
   onSelect: () => void;
   onBrowse: (url: string) => void;
 }) {
+  const {
+    journey,
+    documents,
+    error: linksError,
+    onOpenDocument,
+    onFindPhotos,
+    findingPhotos,
+  } = usePlaceDetails();
+  const linkedDocuments = documents.filter(
+    (doc) => linkedNotebookStops(doc.markdown, [stop]).length,
+  );
+  const photos = photosForActivity(stop, journey?.photos ?? []);
   const key = decisionKey(journeyKey, stop);
   const journeyId = journeyKey.replace(/^vitrip-map:/, '');
   const popup = useRef<HTMLDivElement>(null);
@@ -123,7 +140,9 @@ export function MapStopMarker({
         }}
         aria-label={`${stop.location!.name}的引用`}
         side="top"
-        className="w-96 max-w-[calc(100vw-2rem)] max-h-[min(36rem,70vh)] overflow-y-auto"
+        collisionBoundary={collisionBoundary}
+        collisionPadding={8}
+        className="w-96 max-w-[calc(100vw-2rem)] max-h-[min(36rem,70vh,var(--radix-popover-content-available-height))] overflow-y-auto"
         onOpenAutoFocus={(event) => event.preventDefault()}
         onCloseAutoFocus={(event) => event.preventDefault()}
         onPointerEnter={clear}
@@ -159,6 +178,30 @@ export function MapStopMarker({
               <p className="whitespace-pre-wrap text-sm leading-relaxed">{stop.detail}</p>
             )}
           </div>
+          {journey && (
+            <section aria-label="地点图片" className="space-y-2">
+              <h3 className="text-sm font-medium">地点图片</h3>
+              {photos.length ? (
+                <PhotoGallery journeyId={journey.id} photos={photos} onBrowse={onBrowse} />
+              ) : (
+                <p className="text-sm text-muted-foreground">暂无已保存的地点图片。</p>
+              )}
+              {onFindPhotos && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={findingPhotos}
+                  onClick={() => onFindPhotos(stop)}
+                >
+                  {findingPhotos
+                    ? '正在查找图片…'
+                    : photos.length
+                      ? '补充地点图片'
+                      : '查找地点图片'}
+                </Button>
+              )}
+            </section>
+          )}
           {!!stop.notes?.length && (
             <section aria-label="行程备注" className="space-y-2 border-t pt-3">
               <h3 className="flex items-center gap-2 text-sm font-medium">
@@ -219,6 +262,31 @@ export function MapStopMarker({
               {confirmed ? '已确认安排' : '确认安排'}
             </Button>
           </div>
+          {onOpenDocument && (
+            <section aria-label="相关笔记" className="space-y-2 border-t pt-3">
+              <h3 className="flex items-center gap-2 text-sm font-medium">
+                <NotebookPen className="size-4" />
+                相关笔记
+              </h3>
+              {linksError ? (
+                <p role="status" className="text-sm text-muted-foreground">
+                  {linksError}
+                </p>
+              ) : linkedDocuments.length ? (
+                <ul className="space-y-1">
+                  {linkedDocuments.map((doc) => (
+                    <li key={doc.name}>
+                      <Button variant="link" size="sm" onClick={() => onOpenDocument(doc.name)}>
+                        {doc.name ? doc.name.replace(/\.md$/, '') : '随手笔记与画板'}
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-muted-foreground">还没有提到此地点的笔记。</p>
+              )}
+            </section>
+          )}
           <span role="status" className="sr-only">
             {confirmed ? '安排已确认并保存，可再次点击撤回' : '安排待确定'}
           </span>

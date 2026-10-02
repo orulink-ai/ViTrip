@@ -1,3 +1,4 @@
+import { selectMapDay } from './map-date';
 import { test, expect, _electron as electron } from '@playwright/test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -110,6 +111,16 @@ test('真实浏览器照片经模型工具缓存，图像传入接口，地图�
       .toBe(1);
     await expect.poll(() => visualInput).toBe(true);
     await page.getByRole('tab', { name: '行程', exact: true }).click();
+    await selectMapDay(page, 1);
+    await page.getByRole('button', { name: '地图地点 1 清水寺', exact: true }).click();
+    const popup = page.getByRole('dialog', { name: '清水寺的引用' });
+    await popup.getByRole('button', { name: /^Open image: 清水寺/ }).click();
+    await expect(
+      page.getByRole('dialog', { name: 'Image 1 of 1', exact: true }).locator('img'),
+    ).toHaveJSProperty('naturalWidth', 160);
+    await page.keyboard.press('Escape');
+    await expect(popup).toBeVisible();
+    await page.keyboard.press('Escape');
     await page.getByRole('button', { name: '展开地点列表', exact: true }).click();
     await page
       .getByLabel('地图地点列表')

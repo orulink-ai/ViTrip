@@ -1,7 +1,8 @@
+import { PlaceDetailsProvider } from './place-details-context';
 import { ItineraryQuotation } from './itinerary-quotation';
 import type { Quote } from '../shared/notebook';
 import { normalizeMapSelection } from '../shared/map-selection';
-import { itineraryStops } from '../shared/itinerary-map';
+import { itineraryStops, type ItineraryStop } from '../shared/itinerary-map';
 import { t } from './i18n';
 import type { Todo } from '../shared/notebook';
 import { Button } from './components/ui/button';
@@ -13,6 +14,9 @@ import { JourneyMap, type MapSelection } from './journey-map';
 import { PreparationPanel } from './preparation-panel';
 export function JournalPanel({
   journey,
+  scratchMarkdown,
+  onOpenDocument,
+  onFindPhotos,
   tripId,
   onQuote,
   quoteTarget,
@@ -23,6 +27,9 @@ export function JournalPanel({
   onTodos,
 }: {
   journey: Journey;
+  scratchMarkdown?: string;
+  onOpenDocument?: (name: string) => void;
+  onFindPhotos?: (stop: ItineraryStop) => void;
   tripId?: string;
   onQuote?: (quote: Quote, newConversation?: boolean) => void;
   quoteTarget?: Quote['source'];
@@ -114,62 +121,70 @@ export function JournalPanel({
     if (stop) setSelection({ stopId: stop.id, day: stop.dayIndex });
   }, [quoteTarget]);
   return (
-    <div className="journal-panel">
-      {tripId && onQuote && (
-        <ItineraryQuotation root={reading} journey={journey} tripId={tripId} onQuote={onQuote} />
-      )}
-      <div className="journal-toolbar">
-        <Tabs value={mode} onValueChange={(value) => setMode(value as typeof mode)}>
-          <TabsList aria-label="行程视图">
-            <TabsTrigger value="map">
-              <Map size={14} />
-              行程地图
-            </TabsTrigger>
-            <TabsTrigger value="prepare">
-              <ListTodo size={14} />
-              准备待办
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
-      </div>
-      <div
-        ref={reading}
-        className="flex min-h-0 flex-1 flex-col"
-        data-message-id={`itinerary:${journey.id}`}
-      >
-        {mode === 'map' ? (
-          <>
-            {!plan && (
-              <div className="space-y-3 px-6 py-4">
-                <p className="text-sm text-muted-foreground">
-                  尚未生成行程地图。已有记录会保留，可让助手整理行程。
-                </p>
-                <Button variant="outline" disabled={building} onClick={onBuildPlan}>
-                  {t('整理成交互行程')}
-                </Button>
-              </div>
-            )}
-            <JourneyMap
-              journeyId={journey.id}
-              photos={journey.photos}
-              plan={plan}
-              selection={selection}
-              onSelection={setSelection}
-              expanded={true}
-              onBrowse={onBrowse}
-              onQuoteDay={tripId && onQuote ? quoteDay : undefined}
-            />
-          </>
-        ) : (
-          <PreparationPanel
-            plan={plan}
-            todos={todos ?? []}
-            onChange={onTodos ?? (() => {})}
-            entries={journey.entries}
-            onBrowse={onBrowse}
-          />
+    <PlaceDetailsProvider
+      journey={journey}
+      scratchMarkdown={scratchMarkdown}
+      onOpenDocument={onOpenDocument}
+      onFindPhotos={onFindPhotos}
+      findingPhotos={building}
+    >
+      <div className="journal-panel">
+        {tripId && onQuote && (
+          <ItineraryQuotation root={reading} journey={journey} tripId={tripId} onQuote={onQuote} />
         )}
+        <div className="journal-toolbar">
+          <Tabs value={mode} onValueChange={(value) => setMode(value as typeof mode)}>
+            <TabsList aria-label="行程视图">
+              <TabsTrigger value="map">
+                <Map size={14} />
+                行程地图
+              </TabsTrigger>
+              <TabsTrigger value="prepare">
+                <ListTodo size={14} />
+                准备待办
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+        <div
+          ref={reading}
+          className="flex min-h-0 flex-1 flex-col"
+          data-message-id={`itinerary:${journey.id}`}
+        >
+          {mode === 'map' ? (
+            <>
+              {!plan && (
+                <div className="space-y-3 px-6 py-4">
+                  <p className="text-sm text-muted-foreground">
+                    尚未生成行程地图。已有记录会保留，可让助手整理行程。
+                  </p>
+                  <Button variant="outline" disabled={building} onClick={onBuildPlan}>
+                    {t('整理成交互行程')}
+                  </Button>
+                </div>
+              )}
+              <JourneyMap
+                journeyId={journey.id}
+                photos={journey.photos}
+                plan={plan}
+                selection={selection}
+                onSelection={setSelection}
+                expanded={true}
+                onBrowse={onBrowse}
+                onQuoteDay={tripId && onQuote ? quoteDay : undefined}
+              />
+            </>
+          ) : (
+            <PreparationPanel
+              plan={plan}
+              todos={todos ?? []}
+              onChange={onTodos ?? (() => {})}
+              entries={journey.entries}
+              onBrowse={onBrowse}
+            />
+          )}
+        </div>
       </div>
-    </div>
+    </PlaceDetailsProvider>
   );
 }

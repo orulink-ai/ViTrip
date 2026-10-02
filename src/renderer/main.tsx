@@ -1,3 +1,4 @@
+import { itineraryStops as linkedPlaceStops } from '../shared/itinerary-map';
 import { appendAnnotation, packAnnotations, annotationsOf } from '../shared/quote-annotations';
 import { lazy, Suspense } from 'react';
 const HomeGlobe = lazy(() =>
@@ -810,6 +811,18 @@ function App() {
                   journeyId={trip.journeyId}
                   tripId={trip.id}
                   photos={journey?.photos ?? []}
+                  placeStops={linkedPlaceStops(journey?.plan ?? null)}
+                  onOpenPlace={(stop) => {
+                    if (!journey) return;
+                    setItinerarySource({
+                      kind: 'itinerary',
+                      journeyId: journey.id,
+                      revision: journey.revision,
+                      activityId: stop.id,
+                      dayTitle: stop.dayTitle,
+                    });
+                    setTab('plan');
+                  }}
                   openRequest={documentRequest}
                   key={trip?.journeyId}
                   notebook={notebook}
@@ -823,6 +836,16 @@ function App() {
                   <JournalPanel
                     key={journey.id}
                     journey={journey}
+                    scratchMarkdown={notebook.value?.markdown}
+                    onFindPhotos={(stop) =>
+                      void send(
+                        `请为当前旅行地点「${stop.location!.name}」查找并保存相关真实照片。活动 ID：${stop.id}。先检查本旅行已保存照片，使用真实网页的 photo_candidates 和 save_photo 采集与具体地点、分店一致的图片并关联到该活动；保留来源，不用其他同名地点或生成图片替代，不改变行程安排。`,
+                      )
+                    }
+                    onOpenDocument={(name) => {
+                      setDocumentRequest({ journeyId: journey.id, name, token: Date.now() });
+                      setTab('notebook');
+                    }}
                     tripId={trip?.id}
                     onQuote={quoteWorkspace}
                     quoteTarget={itinerarySource}

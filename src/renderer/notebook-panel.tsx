@@ -1,3 +1,5 @@
+import type { ItineraryStop } from '../shared/itinerary-map';
+import { linkedNotebookStops } from '../shared/place-notebook-links';
 import { NotebookSections } from './notebook-sections';
 import { notebookMapBlocks, notebookMapDefinitions } from '../shared/notebook-map';
 import { NotebookMapBlock } from './notebook-map-block';
@@ -36,6 +38,8 @@ import type { useNotebook } from './use-notebook';
 const Board = lazy(() => import('./notebook-board'));
 export function NotebookPanel({
   notebook,
+  placeStops = [],
+  onOpenPlace,
   journeyId,
   tripId,
   documentName,
@@ -50,6 +54,8 @@ export function NotebookPanel({
   scrollKey,
   bookmarkTarget,
 }: {
+  placeStops?: ItineraryStop[];
+  onOpenPlace?: (stop: ItineraryStop) => void;
   showExtras?: boolean;
   actions?: ReactNode;
   scrollKey?: string;
@@ -262,6 +268,20 @@ export function NotebookPanel({
             onChange={(event) => update({ markdown: event.target.value })}
             placeholder={t('写下旅途中的想法…支持 Markdown')}
           />
+        )}
+        {preview && onOpenPlace && linkedNotebookStops(value.markdown, placeStops).length > 0 && (
+          <section aria-label="相关地点" className="mt-6 space-y-2 border-t pt-3">
+            <h3 className="text-sm font-medium">相关地点</h3>
+            <ul className="space-y-1">
+              {linkedNotebookStops(value.markdown, placeStops).map((stop) => (
+                <li key={stop.id}>
+                  <Button variant="link" size="sm" onClick={() => onOpenPlace(stop)}>
+                    {stop.location!.name} · {stop.dayTitle}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          </section>
         )}
         {showExtras && (
           <div className="mt-6 flex flex-col gap-2">
