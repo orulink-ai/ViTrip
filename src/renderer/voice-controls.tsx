@@ -1,9 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { Mic, MicOff, Phone, PhoneOff, AudioLines } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Mic, MicOff, PhoneOff, AudioLines, ChevronDown, ChevronUp } from 'lucide-react';
 import { Button } from './components/ui/button';
-import { Popover, PopoverAnchor, PopoverContent, PopoverTitle } from './components/ui/popover';
-import { CodexVoice } from './codex-voice';
+import { Card, CardContent } from './components/ui/card';
+import { LiveWaveform } from './components/ui/live-waveform';
+import { CodexVoice, type VoiceStreams } from './codex-voice';
+import type { VoiceCaption } from '../shared/voice-captions';
 import type { VoicePhase } from '../shared/voice';
+import type { Message } from '../shared/types';
 import { t } from './i18n';
 
 const phases: Record<VoicePhase, string> = {
@@ -14,21 +18,36 @@ const phases: Record<VoicePhase, string> = {
 };
 export function VoiceControls({
   tripId,
+  messages,
   disabled,
   onError,
   onActiveChange,
 }: {
   tripId: string;
+  messages: Message[];
   disabled: boolean;
   onError: (message: string) => void;
   onActiveChange?: (active: boolean) => void;
 }) {
   const voice = useRef<CodexVoice | undefined>(undefined);
+  const [dock, setDock] = useState<Element | null>(null);
   const [state, setState] = useState<'closed' | 'connecting' | 'connected'>('closed');
   const [phase, setPhase] = useState<VoicePhase>('listening');
   const [muted, setMuted] = useState(false);
+  const [expanded, setExpanded] = useState(true);
+  const [caption, setCaption] = useState<VoiceCaption>();
+  const [streams, setStreams] = useState<VoiceStreams>({});
+  const [error, setError] = useState('');
   const [elapsed, setElapsed] = useState(0);
   const connectedAt = useRef<number | undefined>(undefined);
+  const captionViewport = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    setDock(document.querySelector('[data-voice-dock]'));
+  }, []);
+  useEffect(() => {
+    if (captionViewport.current)
+      captionViewport.current.scrollTop = captionViewport.current.scrollHeight;
+  }, [caption, messages, expanded]);
   useEffect(
     () => () => {
       void voice.current?.stop();
@@ -45,97 +64,176 @@ export function VoiceControls({
   }, [state]);
   const start = () => {
     if (voice.current && state !== 'closed') return;
+    setError('');
     setMuted(false);
+    setCaption(undefined);
     setElapsed(0);
+    setExpanded(true);
     connectedAt.current = undefined;
     setPhase('listening');
-    const session = new CodexVoice(
+    voice.current = new CodexVoice(
       window.vitrip,
       tripId,
       (next) => {
-        if (next === 'connected' && connectedAt.current === undefined)
+        if (next === 'connected' && connectedAt.current === undefined) {
           connectedAt.current = Date.now();
+          setExpanded(false);
+        }
         setState(next);
         onActiveChange?.(next !== 'closed');
       },
-      onError,
+      (message) => {
+        setError(message);
+        onError(message);
+      },
       setPhase,
+      undefined,
+      setCaption,
+      setStreams,
     );
-    voice.current = session;
-    void session.start();
+    void voice.current.start();
   };
-  if (state === 'closed')
-    return (
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        aria-label={t('开启语音聊天')}
-        title={t('开启语音聊天')}
-        disabled={disabled}
-        onClick={start}
-      >
-        <AudioLines size={16} />
-      </Button>
-    );
+  const lastCallId = messages.findLast((m) => m.voiceCallId)?.voiceCallId;
+  const history = messages.filter(
+    (m) =>
+      m.voiceCallId === lastCallId && (m.origin === 'voice-user' || m.origin === 'voice-assistant'),
+  );
   const duration = `${String(Math.floor(elapsed / 60)).padStart(2, '0')}:${String(elapsed % 60).padStart(2, '0')}`;
-  return (
-    <Popover open modal={false}>
-      <PopoverAnchor asChild>
-        <div className="fixed left-4 top-20 size-px" />
-      </PopoverAnchor>
-      <PopoverContent
-        role="dialog"
-        aria-label={t('语音通话')}
-        align="start"
-        side="bottom"
-        className="w-80 max-w-[calc(100vw-2rem)]"
-        onOpenAutoFocus={(e) => e.preventDefault()}
-        onInteractOutside={(e) => e.preventDefault()}
-        onEscapeKeyDown={(e) => e.preventDefault()}
-      >
-        <div className="flex items-center gap-3">
-          <Phone size={20} aria-hidden="true" />
-          <div className="min-w-0 flex-1">
-            <PopoverTitle>{t('与 Codex 通话')}</PopoverTitle>
-            <p role="status" className="text-sm text-muted-foreground">
-              {t(state === 'connecting' ? '正在连接语音…' : muted ? '麦克风已静音' : phases[phase])}
-            </p>
+  const active = state !== 'closed';
+  // Select the real remote stream while the assistant speaks; otherwise use the
+  // already-authorized mic. A null stream must never open a second microphone.
+  const stream = phase === 'speaking' ? streams.output : streams.input;
+  const waveformActive =
+    state === 'connected' && !!stream && (phase === 'speaking' || (!muted && phase !== 'thinking'));
+  const panel =
+    active || error || history.length ? (
+      <Card role="region" aria-label={t('语音通话')} className="gap-2 py-3">
+        <CardContent className="px-3 space-y-2">
+          <div className="flex items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium">{t('Codex Live 通话')}</p>
+              <p role="status" className="text-xs text-muted-foreground">
+                {error
+                  ? t('语音连接失败')
+                  : state === 'closed'
+                    ? t('通话已结束')
+                    : state === 'connecting'
+                      ? t('正在连接语音…')
+                      : `${t(phases[phase])}${muted ? ` · ${t('麦克风已静音')}` : ''} · ${t('通话中')}`}
+              </p>
+            </div>
+            <span aria-label={t('通话时长')} className="text-xs tabular-nums text-muted-foreground">
+              {connectedAt.current ? duration : '—'}
+            </span>
+            {active && (
+              <>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  disabled={state === 'connecting'}
+                  aria-label={t(muted ? '取消静音' : '静音麦克风')}
+                  aria-pressed={muted}
+                  onClick={() => {
+                    voice.current?.mute(!muted);
+                    setMuted(!muted);
+                  }}
+                >
+                  {muted ? <MicOff /> : <Mic />}
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="icon"
+                  aria-label={t('结束语音聊天')}
+                  title={t(state === 'connecting' ? '取消连接' : '挂断')}
+                  onClick={() => void voice.current?.stop()}
+                >
+                  <PhoneOff />
+                </Button>
+              </>
+            )}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label={t(expanded ? '收起语音面板' : '展开语音面板')}
+              aria-expanded={expanded}
+              onClick={() => setExpanded(!expanded)}
+            >
+              {expanded ? <ChevronDown /> : <ChevronUp />}
+            </Button>
           </div>
-          <span aria-label={t('通话时长')} className="text-sm tabular-nums text-muted-foreground">
-            {state === 'connected' ? duration : '—'}
-          </span>
-        </div>
-        <div className="mt-4 flex gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            className="flex-1"
-            disabled={state === 'connecting'}
-            aria-label={t(muted ? '取消静音' : '静音麦克风')}
-            onClick={() => {
-              voice.current?.mute(!muted);
-              setMuted(!muted);
-            }}
-          >
-            {muted ? <MicOff size={16} /> : <Mic size={16} />}
-            {t(muted ? '取消静音' : '静音')}
-          </Button>
-          <Button
-            type="button"
-            variant="destructive"
-            className="flex-1"
-            aria-label={t('结束语音聊天')}
-            onClick={() => void voice.current?.stop()}
-          >
-            <PhoneOff size={16} />
-            {t(state === 'connecting' ? '取消连接' : '挂断')}
-          </Button>
-        </div>
-        <p className="mt-3 text-xs text-muted-foreground">
-          {t('可以直接说话，随时打断；网页与笔记仍可操作。')}
-        </p>
-      </PopoverContent>
-    </Popover>
+          {active && (
+            <LiveWaveform
+              aria-label={t(phase === 'speaking' ? '助手声音波形' : '麦克风声音波形')}
+              stream={stream ?? null}
+              active={waveformActive}
+              processing={state === 'connecting' || phase === 'thinking'}
+              height={expanded ? 48 : 24}
+            />
+          )}
+          {caption && active && (
+            <div
+              ref={captionViewport}
+              className={expanded ? 'max-h-28 overflow-y-auto text-sm' : 'line-clamp-2 text-sm'}
+              aria-label={t('实时语音转写')}
+            >
+              <span className="text-muted-foreground">
+                {t(caption.role === 'user' ? '你说：' : '助手说：')}
+              </span>
+              {caption.text}
+            </div>
+          )}
+          {expanded && history.length > 0 && (
+            <div
+              className="max-h-48 overflow-y-auto space-y-2 text-sm"
+              aria-label={t('本次语音记录')}
+            >
+              {history.map((m) => (
+                <p key={m.id}>
+                  <span className="text-muted-foreground">
+                    {t(m.role === 'user' ? '你说：' : '助手说：')}
+                  </span>
+                  {m.content}
+                </p>
+              ))}
+            </div>
+          )}
+          {error && (
+            <>
+              <p className="text-sm" role="alert">
+                {error}
+              </p>
+              <Button type="button" variant="outline" disabled={disabled} onClick={start}>
+                {t('重新连接语音')}
+              </Button>
+            </>
+          )}
+          {expanded && active && (
+            <p className="text-xs text-muted-foreground">
+              {t(muted ? '麦克风已静音，取消静音后可继续说话。' : '通话仍在继续，可以继续说话。')}
+            </p>
+          )}
+        </CardContent>
+      </Card>
+    ) : null;
+  return (
+    <>
+      {!active && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label={t('开启语音聊天')}
+          title={t('开启语音聊天')}
+          disabled={disabled}
+          onClick={start}
+        >
+          <AudioLines size={16} />
+        </Button>
+      )}
+      {dock && panel && createPortal(panel, dock)}
+    </>
   );
 }

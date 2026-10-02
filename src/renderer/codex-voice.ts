@@ -1,5 +1,11 @@
+import { VoiceCaptions, type VoiceCaption } from '../shared/voice-captions';
+import { CallTones, type CallFeedback } from './call-tones';
 import { voicePhaseForEvent, type VoicePhase } from '../shared/voice';
 import type { API } from '../shared/types';
+export interface VoiceStreams {
+  input?: MediaStream;
+  output?: MediaStream;
+}
 /** Browser owns media; the main process owns authentication and Codex/tool execution. */
 export class CodexVoice {
   private peer?: RTCPeerConnection;
@@ -9,9 +15,19 @@ export class CodexVoice {
   private unsubscribe?: () => void;
   private ended = false;
   private sessionReady = false;
+  private connected = false;
+  private captions = new VoiceCaptions();
+  private output?: MediaStream;
   private ready() {
-    if (this.sessionReady && this.peer?.connectionState === 'connected' && !this.ended) {
+    if (
+      this.sessionReady &&
+      this.peer?.connectionState === 'connected' &&
+      !this.ended &&
+      !this.connected
+    ) {
+      this.connected = true;
       clearTimeout(this.timer);
+      this.feedback.connected();
       this.status('connected');
       this.phase?.('listening');
     }
@@ -23,9 +39,13 @@ export class CodexVoice {
     private status: (state: 'connecting' | 'connected' | 'closed', text?: string) => void,
     private error: (message: string) => void,
     private phase?: (phase: VoicePhase) => void,
+    private feedback: CallFeedback = new CallTones(),
+    private caption?: (caption: VoiceCaption) => void,
+    private streams?: (streams: VoiceStreams) => void,
   ) {}
   async start() {
     this.status('connecting');
+    this.feedback.connecting();
     try {
       this.stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true },
@@ -35,12 +55,15 @@ export class CodexVoice {
         this.stream.getTracks().forEach((track) => track.stop());
         return;
       }
+      this.streams?.({ input: this.stream });
       const peer = (this.peer = new RTCPeerConnection());
       this.audio = new Audio();
       this.audio.autoplay = true;
       peer.ontrack = (event) => {
         if (this.audio) {
-          this.audio.srcObject = event.streams[0] ?? new MediaStream([event.track]);
+          this.output = event.streams[0] ?? new MediaStream([event.track]);
+          this.audio.srcObject = this.output;
+          this.streams?.({ input: this.stream, output: this.output });
           void this.audio.play().catch(() => this.error('声音播放失败，请结束后重新开启语音'));
         }
       };
@@ -58,8 +81,21 @@ export class CodexVoice {
       channel.onmessage = (event) => {
         try {
           const data: unknown = JSON.parse(event.data);
+          const caption = this.captions.accept(data);
+          if (caption) this.caption?.(caption);
           if (data && typeof data === 'object' && 'type' in data && this.sessionReady) {
-            const phase = voicePhaseForEvent(data.type);
+            const turn =
+              'turn' in data && data.turn && typeof data.turn === 'object' && 'role' in data.turn
+                ? data.turn.role
+                : undefined;
+            const phase =
+              data.type === 'turn.done' && turn === 'user'
+                ? undefined
+                : data.type === 'turn.created' && turn === 'assistant'
+                  ? 'speaking'
+                  : data.type === 'turn.created' && turn === 'user'
+                    ? 'hearing'
+                    : voicePhaseForEvent(data.type);
             if (phase) this.phase?.(phase);
           }
           if (
@@ -127,6 +163,7 @@ export class CodexVoice {
   async stop() {
     if (this.ended) return;
     this.ended = true;
+    this.feedback.closed();
     clearTimeout(this.timer);
     this.unsubscribe?.();
     if (this.channel) {
@@ -143,6 +180,7 @@ export class CodexVoice {
       this.audio.pause();
       this.audio.srcObject = null;
     }
+    this.streams?.({});
     this.status('closed');
     await this.api.stopVoice(this.tripId).catch(() => {});
   }

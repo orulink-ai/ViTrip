@@ -22,6 +22,8 @@ import { z } from 'zod';
 import { planSchema, journeySchema, journalSchema, nameSchema } from '../shared/schemas';
 import type { Settings, Trip, Journey } from '../shared/types';
 const messageSchema = z.object({
+  origin: z.enum(['agent', 'voice-user', 'voice-assistant', 'call-summary']).optional(),
+  voiceCallId: z.string().optional(),
   settings: conversationSettingsSchema.optional(),
   error: z.string().optional(),
   id: z.string(),

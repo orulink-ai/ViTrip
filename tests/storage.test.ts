@@ -105,3 +105,36 @@ describe('local data and exported plans', () => {
     expect(html).toContain("default-src 'none'");
   });
 });
+it('重启后仍保留 Live 语音与文字结果的来源及通话关联', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'vitrip-voice-origin-'));
+  const cipher = {
+    encrypt: (text: string) => Buffer.from(text),
+    decrypt: (value: Buffer) => value.toString(),
+  };
+  try {
+    const first = new Storage(directory, cipher);
+    const trip = first.create();
+    trip.messages.push(
+      { id: 'work', role: 'assistant', content: '工作结果', origin: 'agent', voiceCallId: 'call' },
+      {
+        id: 'spoken',
+        role: 'assistant',
+        content: '口头表达',
+        origin: 'voice-assistant',
+        voiceCallId: 'call',
+      },
+    );
+    first.save();
+    first.close();
+    const second = new Storage(directory, cipher);
+    expect(
+      second.trips.find((t) => t.id === trip.id)?.messages.map((m) => [m.origin, m.voiceCallId]),
+    ).toEqual([
+      ['agent', 'call'],
+      ['voice-assistant', 'call'],
+    ]);
+    second.close();
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

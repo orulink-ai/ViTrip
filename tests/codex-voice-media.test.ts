@@ -1,8 +1,9 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { CodexVoice } from '../src/renderer/codex-voice';
 import type { Event } from '../src/shared/types';
+import type { CallFeedback } from '../src/renderer/call-tones';
 afterEach(() => vi.unstubAllGlobals());
-function fixture() {
+function fixture(feedback?: CallFeedback) {
   const track = { enabled: true, stop: vi.fn() };
   const stream = { getTracks: () => [track], getAudioTracks: () => [track] };
   const peer = {
@@ -50,7 +51,7 @@ function fixture() {
   };
   const error = vi.fn(),
     status = vi.fn();
-  const voice = new CodexVoice(api, 'trip', status, error);
+  const voice = new CodexVoice(api, 'trip', status, error, undefined, feedback);
   return {
     voice,
     api,
@@ -148,4 +149,49 @@ it('通话根据真实语音事件显示聆听、思考与说话，而不是整�
   send('turn.done');
   expect(phase).toHaveBeenLastCalledWith('listening');
   await voice.stop();
+});
+
+it('等待音只在连接期间播放，重复就绪事件不重复接通提示', async () => {
+  const feedback = { connecting: vi.fn(), connected: vi.fn(), closed: vi.fn() };
+  const f = fixture(feedback);
+  await f.voice.start();
+  expect(feedback.connecting).toHaveBeenCalledOnce();
+  f.peer.connectionState = 'connected';
+  (f.peer.onconnectionstatechange as unknown as () => void)();
+  expect(feedback.connected).not.toHaveBeenCalled();
+  const ready = () =>
+    f.peer.createDataChannel.mock.results[0].value.onmessage!({
+      data: JSON.stringify({ type: 'session.started' }),
+    });
+  ready();
+  ready();
+  expect(feedback.connected).toHaveBeenCalledOnce();
+  await f.voice.stop();
+  await f.voice.stop();
+  expect(feedback.closed).toHaveBeenCalledOnce();
+});
+it('波形复用通话输入和远端输出，挂断时清空，静音不影响输出', async () => {
+  const f = fixture();
+  const streams = vi.fn();
+  const voice = new CodexVoice(
+    f.api,
+    'trip',
+    f.status,
+    f.error,
+    undefined,
+    undefined,
+    undefined,
+    streams,
+  );
+  await voice.start();
+  expect(streams).toHaveBeenCalledWith({ input: f.stream });
+  const remoteTrack = { enabled: true };
+  const output = { getAudioTracks: () => [remoteTrack] };
+  (f.peer.ontrack as unknown as (event: unknown) => void)({ streams: [output] });
+  expect(streams).toHaveBeenLastCalledWith({ input: f.stream, output });
+  voice.mute(true);
+  expect(f.track.enabled).toBe(false);
+  expect(remoteTrack.enabled).toBe(true);
+  await voice.stop();
+  expect(streams).toHaveBeenLastCalledWith({});
 });

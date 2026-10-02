@@ -93,7 +93,9 @@ try {
     });
   }, bytes.toString('base64'));
   await page.getByRole('button', { name: '开启语音聊天', exact: true }).click();
-  await expect(page.getByText('语音已连接', { exact: true })).toBeVisible({ timeout: 60000 });
+  await expect(
+    page.getByRole('region', { name: '语音通话', exact: true }).getByRole('status'),
+  ).toContainText('通话中', { timeout: 60000 });
   console.log('WebRTC connected');
   const deadline = Date.now() + 150000;
   let verified = false;

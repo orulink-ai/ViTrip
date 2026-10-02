@@ -50,6 +50,21 @@ for await (const line of readline.createInterface({ input: process.stdin })) {
   } else if (message.id === 'observe') {
     if (!message.result.success || !JSON.stringify(message.result).includes('步行12分钟'))
       throw Error('Route evidence missing');
+    send({
+      method: 'item/agentMessage/delta',
+      params: {
+        threadId: 'call-thread',
+        itemId: 'route-result',
+        delta: '文字结果：地图显示步行12分钟。',
+      },
+    });
+    send({
+      method: 'item/completed',
+      params: {
+        threadId: 'call-thread',
+        item: { id: 'route-result', type: 'agentMessage', text: '文字结果：地图显示步行12分钟。' },
+      },
+    });
     notify('transcript/done', {
       role: 'assistant',
       text: '地图显示步行12分钟，来源是当前路线页面。',

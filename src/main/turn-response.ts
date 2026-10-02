@@ -2,13 +2,23 @@ import { randomUUID } from 'node:crypto';
 import type { Message, ToolActivity } from '../shared/types';
 
 /** One durable assistant message per turn, including intermediate text and tools. */
-export function createTurnResponse(messages: Message[], publish: (persist: boolean) => void) {
+export function createTurnResponse(
+  messages: Message[],
+  publish: (persist: boolean) => void,
+  voiceCallId?: string,
+) {
   let message: Message | undefined;
   let currentText: { type: 'text'; text: string } | undefined;
   const activityOwners = new Map<string, Message>();
   const ensure = () => {
     if (!message) {
-      message = { id: randomUUID(), role: 'assistant', content: '', parts: [] };
+      message = {
+        id: randomUUID(),
+        role: 'assistant',
+        content: '',
+        parts: [],
+        ...(voiceCallId ? ({ origin: 'agent', voiceCallId } as const) : {}),
+      };
       messages.push(message);
     }
     return message;
@@ -27,7 +37,18 @@ export function createTurnResponse(messages: Message[], publish: (persist: boole
     voiceUser(input: Message) {
       message = undefined;
       currentText = undefined;
-      messages.push(input);
+      messages.push({ ...input, origin: 'voice-user', voiceCallId });
+      publish(true);
+    },
+    voiceAssistant(text: string) {
+      if (!text.trim()) return;
+      messages.push({
+        id: randomUUID(),
+        role: 'assistant',
+        content: text,
+        origin: 'voice-assistant',
+        voiceCallId,
+      });
       publish(true);
     },
     addUser(input: Message) {

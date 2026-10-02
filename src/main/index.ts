@@ -618,10 +618,15 @@ app
         return result;
       };
       const callStartedAt = voiceSdp ? Date.now() : undefined;
-      const response = createTurnResponse(trip.messages, (persist) => {
-        if (persist) save(trip);
-        else emit({ type: 'trip', trip });
-      });
+      const voiceCallId = voiceSdp ? randomUUID() : undefined;
+      const response = createTurnResponse(
+        trip.messages,
+        (persist) => {
+          if (persist) save(trip);
+          else emit({ type: 'trip', trip });
+        },
+        voiceCallId,
+      );
       const onActivity: NonNullable<Parameters<typeof runTravelAgent>[0]['onActivity']> = (
         step,
       ) => {
@@ -676,7 +681,7 @@ app
                   if (event.kind === 'transcript' && event.text.trim()) {
                     if (event.role === 'user')
                       response.voiceUser({ id: randomUUID(), role: 'user', content: event.text });
-                    else response.text(event.text);
+                    else response.voiceAssistant(event.text);
                   }
                 },
               }
@@ -775,6 +780,8 @@ app
               trip.messages.push({
                 id: randomUUID(),
                 role: 'assistant',
+                origin: 'call-summary',
+                voiceCallId,
                 content: `语音通话已结束 · ${Math.floor((Date.now() - callStartedAt) / 1000)} 秒`,
               });
             emit({ type: 'voice', voice: { kind: 'closed' } });

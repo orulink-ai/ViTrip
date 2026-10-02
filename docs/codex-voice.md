@@ -1,6 +1,6 @@
 # Codex 语音聊天
 
-在聊天输入框选择 Codex，然后点击「开启语音聊天」。首次使用需要允许麦克风；通话以悬浮窗显示连接、聆听、思考、说话状态和计时，支持静音与挂断。连接就绪后可直接说出旅行需求；转写按轮次追加，通话中的文字消息在挂断后发送。切换旅行或关闭窗口会结束通话。
+在聊天输入框选择 Codex，然后点击「开启语音聊天」。首次使用需要允许麦克风；输入框上方的通话面板显示连接、聆听、思考、说话状态和计时，支持静音与挂断。接通后面板自动收起，仍保留波形、最近字幕和操作按钮；展开可查看本次语音记录。连接期间循环播放轻量双声等待音，接通时立即停止等待音并播放上扬提示，挂断播放下降提示；取消连接或连接失败会停止等待音并释放音频资源。连接就绪后可直接说出旅行需求；通话中的文字消息在挂断后发送。切换旅行或关闭窗口会结束通话。
 
 语音通过 Codex app-server 的实验性 realtime v3 / WebRTC 接入，身份验证和工具执行保留在主进程，渲染进程只处理音频与信令。复用当前 Codex 登录和 ViTrip 工具，工具执行仍走原有权限与执行记录。默认最长通话 30 分钟。浏览器工具不再受从接通时起计算的 140 秒查询时限限制；保留同站连续失败保护，每次新的语音请求重新计数。
 
@@ -10,7 +10,11 @@
 
 - `npm test -- --maxWorkers=2`
 - `npm run build`
-- `npm run test:e2e -- tests/e2e/voice.spec.ts tests/e2e/voice-permissions.spec.ts tests/e2e/codex.spec.ts`
+- `npm run test:e2e -- tests/e2e/voice-call.spec.ts tests/e2e/voice.spec.ts tests/e2e/voice-permissions.spec.ts tests/e2e/codex.spec.ts`
 - `node scripts/live-vitrip-voice-check.mjs --run /absolute/path/to/generated-speech.wav`
 
 真实测试使用独立临时旅行和合成语音，不录制物理麦克风，不修改用户旅行。测试语音应要求读取「语音测试笔记」中的酒店及测试编号；工具返回需包含 `VTR-VOICE-7319`。测试报告保存到 artifacts 下。
+
+通话面板的实时识别文字与回复字幕来自 realtime v3 数据通道的逐段转写。最终语音转写以独立来源保存，与同次通话的 Agent 文字结果分开：主聊天显示用户问题、工具执行和标注「文字结果 · 供阅读」的结果，助手实际说出的内容显示在语音面板记录中，避免两份回复混排。此分类依据 API 事件来源，不猜测或按文本相似度去重。
+
+波形采用 ElevenLabs 官方 LiveWaveform，复用通话已授权的麦克风流；助手说话时使用 WebRTC 远端音频流。组件仅分析借用的音频，不再次申请麦克风，也不在收起或切换波形时停止通话音轨。静音只影响麦克风，仍能播放助手声音；挂断由 CodexVoice 结束后端会话并释放音频资源。ElevenLabs 组件不参与语音生成或识别。

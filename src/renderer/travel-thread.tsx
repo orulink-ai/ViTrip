@@ -39,6 +39,7 @@ import {
 import {
   Thread,
   Composer,
+  DefaultAssistantActionBar,
   type ThreadComponents,
 } from './components/assistant-ui/elements/thread.aui';
 import { QuoteBlock } from './components/assistant-ui/elements/quote.aui';
@@ -352,6 +353,7 @@ function Tools() {
         <VoiceControls
           key={trip.id}
           tripId={trip.id}
+          messages={trip.messages}
           disabled={running || !!disabled}
           onError={onError}
           onActiveChange={onVoiceActiveChange}
@@ -445,6 +447,10 @@ function NotebookArtifacts() {
     </div>
   );
 }
+function CallAwareMessageActions() {
+  const { voiceActive } = useTravel();
+  return voiceActive ? null : <DefaultAssistantActionBar />;
+}
 function MessageActions() {
   const { trip } = useTravel();
   const messageId = useAuiState((s) => s.message.id);
@@ -462,6 +468,9 @@ function Header() {
   const quote = custom.quote as Quote | undefined;
   return (
     <>
+      {custom.origin === 'agent' && (
+        <p className="text-xs text-muted-foreground mb-2">{t('文字结果 · 供阅读')}</p>
+      )}
       {quote &&
         (quote.annotations || quote.comment ? (
           <AnnotationList quote={quote} onSource={onSource} />
@@ -541,13 +550,26 @@ function MessageError() {
   return <TravelMessageError onSettings={useTravel().onSettings} />;
 }
 function Footer() {
-  const { footer, trip, running, canSteer, onError, editor } = useTravel();
+  const { footer, trip, running, voiceActive, canSteer, onError, editor } = useTravel();
   const [sending, setSending] = useState(false);
 
   const queued = trip?.queuedMessages ?? [];
   return (
     <>
       {footer}
+      {voiceActive && (
+        <p
+          role="status"
+          aria-label={t('通话持续状态')}
+          className="text-sm text-muted-foreground py-2"
+        >
+          {t(
+            trip?.messages.some((m) => m.activities?.some((step) => step.status === 'active'))
+              ? '通话中 · 正在查询资料，完成后继续与你说话。'
+              : '通话中 · 你可以继续说话，随时打断。',
+          )}
+        </p>
+      )}
       {queued.length > 0 && (
         <div className="max-h-44 overflow-y-auto py-2" aria-label={t('待发送消息')}>
           <MessageQueue
@@ -646,7 +668,10 @@ function TravelComposer() {
       onError={onError}
     />
   ) : (
-    <Composer />
+    <div className="flex flex-col gap-2">
+      <div data-voice-dock />
+      <Composer />
+    </div>
   );
 }
 const components: ThreadComponents = {
@@ -665,6 +690,7 @@ const components: ThreadComponents = {
   MessageHeader: Header,
   MessageArtifacts: NotebookArtifacts,
   MessageActions,
+  AssistantMessageActions: CallAwareMessageActions,
   MessageMenuActions,
   Selection,
   Footer,

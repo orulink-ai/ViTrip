@@ -135,3 +135,16 @@ it('新请求复用工具编号时不会修改上一条回复', () => {
   expect(messages[0].activities?.[0].output).toBe('第一轮');
   expect(messages[1].activities?.[0].output).toBe('第二轮');
 });
+it('Live 语音字幕独立保存，不覆盖或拼接 Agent 文字结果', () => {
+  const messages: Message[] = [];
+  const response = createTurnResponse(messages, () => {}, 'call-1');
+  response.voiceUser({ id: 'u', role: 'user', content: 'Big C 是什么' });
+  response.text('Big C 是泰国的大型连锁超市。');
+  response.voiceAssistant('不客气，Big C 就是大型连锁超市。');
+  response.text('还有购买伴手礼的资料。');
+  expect(messages.filter((m) => m.origin === 'voice-assistant')).toHaveLength(1);
+  expect(messages.find((m) => m.origin === 'agent')?.content).toBe(
+    'Big C 是泰国的大型连锁超市。\n\n还有购买伴手礼的资料。',
+  );
+  expect(messages.every((m) => m.voiceCallId === 'call-1')).toBe(true);
+});

@@ -51,6 +51,8 @@ export interface ToolActivity {
   finishedAt?: number;
 }
 export interface Message {
+  origin?: 'agent' | 'voice-user' | 'voice-assistant' | 'call-summary';
+  voiceCallId?: string;
   settings?: ConversationSettings;
   error?: string;
   parts?: ({ type: 'text'; text: string } | { type: 'tool'; toolId: string })[];

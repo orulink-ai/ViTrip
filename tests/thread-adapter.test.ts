@@ -93,3 +93,16 @@ it('exposes persisted failures to the error UI without inserting error prose int
   expect(messages[0].status).toEqual({ type: 'incomplete', reason: 'error', error: '额度耗尽' });
   expect(messages[0].content).toEqual([{ type: 'text', text: '部分结果' }]);
 });
+it('语音字幕保留在通话记录中，主聊天只呈现文字结果，分支仍指向可见消息', () => {
+  const messages = [
+    { id: 'u', role: 'user' as const, content: 'Big C', origin: 'voice-user' as const },
+    { id: 'result', role: 'assistant' as const, content: '文字结果', origin: 'agent' as const },
+    {
+      id: 'speech',
+      role: 'assistant' as const,
+      content: '说出来的话',
+      origin: 'voice-assistant' as const,
+    },
+  ];
+  expect(toThreadMessages(messages, '', false).map((m) => m.id)).toEqual(['u', 'result']);
+});

@@ -92,6 +92,7 @@ export type ThreadComponents = {
   MessageText?: ComponentType;
   MessageError?: ComponentType;
   MessageActions?: ComponentType;
+  AssistantMessageActions?: ComponentType;
   MessageMenuActions?: ComponentType;
   Footer?: ComponentType;
   Navigation?: ComponentType;
@@ -674,6 +675,11 @@ const AssistantMessage: FC = () => {
 };
 
 const AssistantActionBar: FC = () => {
+  const { AssistantMessageActions } = useContext(ThreadComponentsContext);
+  return AssistantMessageActions ? <AssistantMessageActions /> : <DefaultAssistantActionBar />;
+};
+
+export const DefaultAssistantActionBar: FC = () => {
   const { MessageMenuActions } = useContext(ThreadComponentsContext);
   return (
     <ActionBarPrimitive.Root
