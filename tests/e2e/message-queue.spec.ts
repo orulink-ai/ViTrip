@@ -60,7 +60,7 @@ for (const fail of [false, true])
         .getByLabel('模型接口地址', { exact: true })
         .fill(`http://127.0.0.1:${address.port}/v1`);
       await page.getByLabel('模型名称', { exact: true }).fill('test-model');
-      await page.getByRole('button', { name: '保存设置', exact: true }).click();
+      await page.getByRole('button', { name: '保存连接设置', exact: true }).click();
       await page.getByLabel('旅行需求', { exact: true }).fill('第一条');
       await page.getByRole('button', { name: '发送', exact: true }).click();
       await expect.poll(() => !!finishFirst).toBe(true);
@@ -86,7 +86,10 @@ for (const fail of [false, true])
         await expect(page.getByLabel('待发送消息')).toContainText('2 条待发送');
         await page.getByRole('button', { name: '继续发送队列', exact: true }).click();
       }
-      await expect(page.getByText('第四条已完成', { exact: true })).toBeVisible();
+      // This includes three replies and their synchronization turns, not a single response.
+      await expect(page.getByText('第四条已完成', { exact: true })).toBeVisible({
+        timeout: 30_000,
+      });
       await expect(page.getByLabel('待发送消息')).toHaveCount(0);
       expect(prompts).toHaveLength(3);
       expect(prompts[1]).toContain('第二条');

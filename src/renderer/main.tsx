@@ -1,9 +1,19 @@
 import { appendAnnotation, packAnnotations, annotationsOf } from '../shared/quote-annotations';
 import { lazy, Suspense } from 'react';
-const HomeGlobe = lazy(() => import('./home-globe'));
+const HomeGlobe = lazy(() =>
+  import('./home-globe').then((module) => ({ default: module.HomeMapPreview })),
+);
 
 import { RunStatus } from './run-status';
-import { CopyLink } from './copy-link';
+import { TooltipIconButton } from './components/assistant-ui/elements/tooltip-icon-button';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from './components/ui/dropdown-menu';
 import {
   Dialog,
   DialogContent,
@@ -37,6 +47,9 @@ import {
   Map,
   MapPin,
   Maximize2,
+  MoreHorizontal,
+  PanelRightClose,
+  Link2,
   Minimize2,
   Mountain,
   Plus,
@@ -54,6 +67,7 @@ import { Input } from './components/ui/input';
 import type { BrowserState, Event, PublicSettings, Trip, Journey } from '../shared/types';
 import { TripSidebar } from './trip-sidebar';
 import { JournalPanel } from './journal-panel';
+import { BrowserActions } from './browser-actions';
 import './style.css';
 
 const initialBrowser: BrowserState = {
@@ -75,7 +89,7 @@ function WorkspaceTabs({
       value={value}
       onValueChange={(value) => onChange(value as 'plan' | 'browser' | 'notebook')}
     >
-      <TabsList variant={value ? 'default' : 'line'} aria-label={t('旅行工作区')}>
+      <TabsList variant="line" aria-label={t('旅行工作区')}>
         <TabsTrigger value="plan">
           <Map size={15} />
           {t('行程')}
@@ -109,7 +123,9 @@ function App() {
   const [expandedWorkspace, setExpandedWorkspace] = useState(false);
   const [floatingChat, setFloatingChat] = useState(false);
   const [floatingOpen, setFloatingOpen] = useState(false);
+  const [browserHistoryOpen, setBrowserHistoryOpen] = useState(false);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const userChoseWorkspace = useRef(false);
   const [tab, setActiveTab] = useState<'browser' | 'plan' | 'notebook'>('plan');
   // Native WebContentsView renders above DOM popovers. Keep both surfaces usable
   // by docking chat in the browser workspace, while retaining the user's preference.
@@ -118,12 +134,15 @@ function App() {
     (floatingChat || (workspaceOpen && expandedWorkspace && tab === 'notebook')) &&
     !browserWorkspace;
   function setTab(value: 'browser' | 'plan' | 'notebook') {
+    userChoseWorkspace.current = true;
     if (value !== 'notebook') setDocumentRequest(undefined);
     setActiveTab(value);
     setWorkspaceOpen(true);
   }
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [running, setRunning] = useState(false);
+  const [voiceActive, setVoiceActive] = useState(false);
+  const [canSteer, setCanSteer] = useState(false);
   const [paused, setPaused] = useState(false);
   const [status, setStatus] = useState(t('准备好下一段旅程'));
   const [draft, setDraft] = useState('');
@@ -303,6 +322,7 @@ function App() {
         ),
       );
       setRunning(initial.running);
+      setCanSteer(initial.canSteer);
       setPaused(initial.paused);
       setStatus(initial.status);
       setApproval(initial.approval);
@@ -323,11 +343,16 @@ function App() {
           ...previous.filter((j) => j.id !== event.journey!.id),
         ]);
       if (event.type === 'status') {
+        if (event.canSteer !== undefined) setCanSteer(event.canSteer);
         if (event.text) setStatus(event.text);
         if (event.running !== undefined) setRunning(event.running);
         if (event.paused !== undefined) setPaused(event.paused);
       }
-      if (event.type === 'workspace' && event.workspace) setTab(event.workspace);
+      // Reveal an initial itinerary, but never override a tab the user has chosen.
+      if (event.type === 'workspace' && event.workspace === 'plan' && !userChoseWorkspace.current) {
+        setActiveTab('plan');
+        setWorkspaceOpen(true);
+      }
       if (event.type === 'delta') setDraft(event.text || '');
       if (event.type === 'approval') setApproval(event.approval);
     });
@@ -353,6 +378,8 @@ function App() {
             !organizeOpen &&
             !(showFloatingChat && floatingOpen) &&
             !linkOpen &&
+            !browserHistoryOpen &&
+            !browser.error &&
             Boolean(browser.url) &&
             Boolean(rect),
         })
@@ -373,9 +400,11 @@ function App() {
     organizeOpen,
     linkOpen,
     browser.url,
+    browser.error,
     panel,
     floatingOpen,
     showFloatingChat,
+    browserHistoryOpen,
   ]);
   async function send(text: string, quoted?: Quote, attachmentIds: string[] = []) {
     if (!text.trim() && !attachmentIds.length && !quoted) return;
@@ -436,29 +465,10 @@ function App() {
           style={{ '--sidebar-width': '248px' } as React.CSSProperties}
         >
           <div
-            className="fixed top-2 right-32 z-40 flex items-center gap-2"
+            className="fixed left-[204px] top-2 z-40"
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
           >
-            <SidebarTrigger aria-label="切换旅行侧边栏" />
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={browserWorkspace}
-              title={
-                browserWorkspace
-                  ? t('浏览网页时聊天自动停靠，切换到其他标签后恢复原来的布局。')
-                  : undefined
-              }
-              onClick={() => {
-                setFloatingChat(!showFloatingChat);
-                setExpandedWorkspace(false);
-                if (!showFloatingChat) {
-                  setWorkspaceOpen(true);
-                }
-              }}
-            >
-              {browserWorkspace ? t('聊天已停靠') : showFloatingChat ? '停靠聊天' : '浮动聊天'}
-            </Button>
+            <SidebarTrigger aria-label={t('切换旅行侧边栏')} />
           </div>
           <Sidebar
             collapsible="offcanvas"
@@ -517,9 +527,11 @@ function App() {
                 </Suspense>
               )}
               <div className="panel-heading">
-                <div>
+                <div className="min-w-0 flex-1">
                   {trip?.messages.length ? (
-                    <h1>{trip.title}</h1>
+                    <h1 className="truncate" title={trip.title}>
+                      {trip.title}
+                    </h1>
                   ) : (
                     <span className="text-sm text-muted-foreground">
                       {journey?.title || t('新的旅行')}
@@ -527,6 +539,34 @@ function App() {
                   )}
                 </div>
                 {!workspaceOpen && <WorkspaceTabs value="" onChange={setTab} />}
+                <div
+                  className="ml-auto flex shrink-0 items-center gap-2"
+                  style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+                >
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={browserWorkspace}
+                    title={
+                      browserWorkspace
+                        ? t('浏览网页时聊天自动停靠，切换到其他标签后恢复原来的布局。')
+                        : undefined
+                    }
+                    onClick={() => {
+                      setFloatingChat(!showFloatingChat);
+                      setExpandedWorkspace(false);
+                      if (!showFloatingChat) {
+                        setWorkspaceOpen(true);
+                      }
+                    }}
+                  >
+                    {browserWorkspace
+                      ? t('聊天已停靠')
+                      : showFloatingChat
+                        ? '停靠聊天'
+                        : '浮动聊天'}
+                  </Button>
+                </div>
               </div>
               <TravelThread
                 key={trip?.id || 'new'}
@@ -550,6 +590,9 @@ function App() {
                 }
                 draft={draft}
                 running={running}
+                voiceActive={voiceActive}
+                onVoiceActiveChange={setVoiceActive}
+                canSteer={canSteer}
                 disabled={switchingTrip || switchingRuntime}
                 quoteRequest={quote}
                 onQuoteChange={setQuote}
@@ -611,7 +654,7 @@ function App() {
                         </Button>
                       </div>
                     )}
-                    {running && (
+                    {running && !voiceActive && (
                       <RunStatus
                         label={
                           approval
@@ -668,56 +711,99 @@ function App() {
             </div>
             <section className="right-panel" aria-label={t('旅行工作区')}>
               <div className="right-heading">
-                {trip && tab !== 'browser' && (
-                  <CopyLink compact target={{ kind: tab, id: trip.journeyId }} />
-                )}
                 {workspaceOpen && <WorkspaceTabs value={tab} onChange={setTab} />}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label={t('收起工作区')}
-                  onClick={() => {
-                    setWorkspaceOpen(false);
-                    setFloatingChat(false);
-                    setExpandedWorkspace(false);
-                  }}
-                >
-                  <X size={16} />
-                </Button>
-                {tab !== 'browser' && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={t(
-                      expandedWorkspace
-                        ? '恢复对话布局'
-                        : tab === 'notebook'
-                          ? '展开笔记工作区'
-                          : '展开行程工作区',
-                    )}
-                    onClick={() => setExpandedWorkspace(!expandedWorkspace)}
+                <div className="ml-auto flex shrink-0 items-center gap-1">
+                  {showFloatingChat && (
+                    <TooltipIconButton
+                      tooltip={t('停靠聊天')}
+                      aria-label={t('停靠聊天')}
+                      onClick={() => {
+                        setFloatingChat(false);
+                        setExpandedWorkspace(false);
+                      }}
+                    >
+                      <PanelRightClose />
+                    </TooltipIconButton>
+                  )}
+                  {tab !== 'browser' && (
+                    <TooltipIconButton
+                      tooltip={t(
+                        expandedWorkspace
+                          ? '恢复对话布局'
+                          : tab === 'notebook'
+                            ? '展开笔记工作区'
+                            : '展开行程工作区',
+                      )}
+                      aria-label={t(
+                        expandedWorkspace
+                          ? '恢复对话布局'
+                          : tab === 'notebook'
+                            ? '展开笔记工作区'
+                            : '展开行程工作区',
+                      )}
+                      onClick={() => setExpandedWorkspace(!expandedWorkspace)}
+                    >
+                      {expandedWorkspace ? <Minimize2 /> : <Maximize2 />}
+                    </TooltipIconButton>
+                  )}
+                  {trip && tab !== 'browser' && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <TooltipIconButton
+                          tooltip={t('更多工作区操作')}
+                          aria-label={t('更多工作区操作')}
+                        >
+                          <MoreHorizontal />
+                        </TooltipIconButton>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          onSelect={() =>
+                            void perform(async () => {
+                              await window.vitrip.copyLink({ kind: tab, id: trip.journeyId });
+                              setNotice(t('已复制本机链接，仅可在本机打开'));
+                            })
+                          }
+                        >
+                          <Link2 />
+                          {t('复制本机链接')}
+                        </DropdownMenuItem>
+                        <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+                          {t('仅可在本机打开')}
+                        </DropdownMenuLabel>
+                        {tab === 'plan' && (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              disabled={!journey}
+                              onSelect={() =>
+                                void perform(async () => {
+                                  const file = await window.vitrip.export();
+                                  if (file) setNotice(t('行程已导出：') + file);
+                                })
+                              }
+                            >
+                              <ArrowDownToLine />
+                              {t('导出 HTML 行程')}
+                            </DropdownMenuItem>
+                          </>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                  <TooltipIconButton
+                    tooltip={t('收起工作区')}
+                    aria-label={t('收起工作区')}
+                    onClick={() => {
+                      userChoseWorkspace.current = true;
+                      setWorkspaceOpen(false);
+                      setFloatingChat(false);
+                      setExpandedWorkspace(false);
+                    }}
                   >
-                    {expandedWorkspace ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-                  </Button>
-                )}
-                {tab === 'notebook' ? null : tab === 'plan' ? (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={t('导出 HTML 行程')}
-                    disabled={!journey}
-                    onClick={() =>
-                      void perform(async () => {
-                        const file = await window.vitrip.export();
-                        if (file) setNotice(t('行程已导出：') + file);
-                      })
-                    }
-                  >
-                    <ArrowDownToLine size={16} />
-                  </Button>
-                ) : (
-                  <Badge variant="secondary">{t('本地浏览器')}</Badge>
-                )}
+                    <PanelRightClose />
+                  </TooltipIconButton>
+                </div>
               </div>
               {tab === 'notebook' && trip ? (
                 <NotebookWorkspace
@@ -814,6 +900,14 @@ function App() {
                       value={address}
                       onChange={(event) => setAddress(event.target.value)}
                     />
+                    <BrowserActions
+                      key={trip?.journeyId}
+                      journeyId={trip?.journeyId}
+                      url={browser.url}
+                      onBrowse={browse}
+                      onOverlay={setBrowserHistoryOpen}
+                      onError={setNotice}
+                    />
                   </form>
                   <div className="browser-ownership">
                     <span>
@@ -847,7 +941,20 @@ function App() {
                     )}
                   </div>
                   <div className="browser-viewport" ref={viewport}>
-                    {!browser.url && (
+                    {browser.error && (
+                      <div className="browser-empty" role="alert">
+                        <h2>{t('网页加载失败')}</h2>
+                        <p className="max-w-full break-all">{browser.error.url}</p>
+                        <p className="max-w-full break-words">
+                          {browser.error.description} ({browser.error.code})
+                        </p>
+                        <p>{t('请检查网络或代理连接，也可以重新加载或更换网址。')}</p>
+                        <Button variant="outline" onClick={() => void browse(browser.error!.url)}>
+                          {t('重新加载')}
+                        </Button>
+                      </div>
+                    )}
+                    {!browser.url && !browser.error && (
                       <div className="browser-empty">
                         <Globe2 size={42} strokeWidth={1} />
                         <h2>{t('打开世界的一扇窗')}</h2>
@@ -875,11 +982,12 @@ function App() {
                     ? t('旅行笔记本')
                     : tab === 'plan'
                       ? t('行程自动保存在本机')
-                      : browser.loading
-                        ? t('网页加载中…')
-                        : browser.title || t('浏览器就绪')}
+                      : browser.error
+                        ? t('网页加载失败')
+                        : browser.loading
+                          ? t('网页加载中…')
+                          : browser.title || t('浏览器就绪')}
                 </span>
-                <span>ViTrip Workspace</span>
               </div>
             </section>
           </div>

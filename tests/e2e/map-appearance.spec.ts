@@ -1,3 +1,4 @@
+import { selectMapDay } from './map-date';
 import { test, expect, _electron as electron } from '@playwright/test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -28,7 +29,7 @@ test('地图外观即时切换、地球可拖动，按旅行保存并跨日期�
     await setup();
     await page.getByRole('button', { name: '先看看一份示例行程' }).click();
     await page.getByRole('tab', { name: '行程地图', exact: true }).click();
-    await page.getByRole('button', { name: '地图第 1 天', exact: true }).click();
+    await selectMapDay(page, 1);
     await page.getByRole('button', { name: '展开地点列表', exact: true }).click();
     await page.getByLabel('地图地点列表').getByRole('button').filter({ hasText: '清水寺' }).click();
     const map = page.getByLabel('行程交互地图', { exact: true });
@@ -72,7 +73,7 @@ test('地图外观即时切换、地球可拖动，按旅行保存并跨日期�
       .poll(() => page.evaluate((key) => localStorage.getItem(key), viewportKey))
       .not.toBe(beforeDrag);
     await expect(map.locator('canvas')).toBeVisible();
-    await page.getByRole('button', { name: '地图第 2 天', exact: true }).click();
+    await selectMapDay(page, 2);
     await expect(map).toHaveAttribute('data-map-style', 'liberty');
     await expect(map).toHaveAttribute('data-projection', 'globe');
     await page.screenshot({ path: 'test-results/map-appearance-globe.png' });

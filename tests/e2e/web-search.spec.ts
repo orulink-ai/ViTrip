@@ -103,7 +103,7 @@ test('Pi 调用真实搜索扩展、读取正文并显示过程，密钥不外�
     await page.reload();
     await page.getByRole('button', { name: '模型设置', exact: true }).click();
     await page.getByLabel('Tavily Search API Key', { exact: true }).fill('test-search-secret');
-    await page.getByRole('button', { name: '保存设置', exact: true }).click();
+    await page.getByRole('button', { name: '保存连接设置', exact: true }).click();
     await expect(page.getByRole('dialog')).not.toBeVisible();
     // Only the external webpage boundary is replaced; the package, extraction, agent and UI are real.
     const configPath = path.join(dir, 'web-search/web-search.json');
@@ -128,6 +128,15 @@ test('Pi 调用真实搜索扩展、读取正文并显示过程，密钥不外�
         .filter((a) => ['web_search', 'fetch_content'].includes(a.name))
         .map((a) => a.status),
     ).toEqual(['complete', 'complete']);
+    const searchStep = state.trips[0].messages
+      .flatMap((message) => message.activities ?? [])
+      .find((activity) => activity.name === 'web_search');
+    const searchDetail = page.locator(`[data-tool-id="${searchStep!.id}"]`);
+    await searchDetail.getByRole('button', { name: /搜索网页/ }).click();
+    await expect(searchDetail.getByRole('link', { name: /卡塔海滩资料/ })).toHaveAttribute(
+      'href',
+      root + '/article',
+    );
     await page.getByLabel('旅行需求', { exact: true }).fill('停止搜索');
     await page.getByRole('button', { name: '发送', exact: true }).click();
     await expect.poll(() => holding).toBe(true);

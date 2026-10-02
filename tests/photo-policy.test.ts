@@ -11,15 +11,13 @@ it('photos are only linked through saved IDs, not fuzzy hotel names', () => {
   expect(photosForActivity({ photoIds: ['b'] }, [photo])).toEqual([]);
   expect(photosForActivity({ photoIds: ['a'] }, [photo])).toEqual([photo]);
 });
-it('repeated host failures stop and the final period is reserved for saving', () => {
-  let now = 0;
-  const budget = new ResearchBudget(() => now);
+it('repeated host failures stop without preventing other tools or saving', () => {
+  const budget = new ResearchBudget();
   budget.failed('https://a.example/one');
   budget.failed('https://a.example/two');
   expect(() => budget.check('navigate', 'https://a.example/three')).toThrow();
   expect(() => budget.check('navigate', 'https://b.example/')).not.toThrow();
-  now = 145000;
-  expect(() => budget.check('bash')).toThrow();
+  expect(() => budget.check('bash')).not.toThrow();
   expect(() => budget.check('journal')).not.toThrow();
   expect(() => budget.check('save_photo')).not.toThrow();
 });

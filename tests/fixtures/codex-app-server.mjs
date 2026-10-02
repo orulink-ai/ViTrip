@@ -94,6 +94,32 @@ for await (const line of readline.createInterface({ input: process.stdin })) {
         },
       });
     };
+    if (text.startsWith('验证搜索详情')) {
+      notify('item/started', { item: { id: 'search-details', type: 'webSearch' } });
+      notify('item/completed', {
+        item: {
+          id: 'search-details',
+          type: 'webSearch',
+          action: { type: 'search', queries: ['普吉岛 餐厅', 'Kata restaurants'] },
+          sources: [
+            {
+              title: '卡塔餐厅指南',
+              url: text.match(/http:\/\/127\.0\.0\.1:\d+\/kata/)?.[0] || 'https://example.com/kata',
+              snippet: '餐厅位置与营业信息',
+            },
+          ],
+        },
+      });
+      notify('item/completed', {
+        item: {
+          id: 'search-without-results',
+          type: 'webSearch',
+          action: { type: 'search', query: '营业时间核实' },
+        },
+      });
+      finish();
+      continue;
+    }
     if (text.startsWith('验证工具顺序')) {
       const say = (id, text) => {
         notify('item/agentMessage/delta', { itemId: id, delta: text });
@@ -117,7 +143,17 @@ for await (const line of readline.createInterface({ input: process.stdin })) {
         );
       }, 1500);
     } else if (text.startsWith('[VITRIP_JOURNAL_SYNC]')) {
-      if (text.includes('讨论机场交通'))
+      if (text.includes('验证持续研究超时'))
+        callNotebook(
+          {
+            action: 'write',
+            name: '票价核对.md',
+            markdown: '# 票价核对\n\n持续研究完成后保存的旅行资料。',
+            revision: null,
+          },
+          finish,
+        );
+      else if (text.includes('讨论机场交通'))
         callNotebook(
           {
             action: 'write',
@@ -159,6 +195,16 @@ for await (const line of readline.createInterface({ input: process.stdin })) {
           finish,
         ),
       );
+    } else if (text.startsWith('验证持续研究超时')) {
+      notify('item/agentMessage/delta', { itemId: 'research-progress', delta: '开始查票。' });
+      for (const ms of [60_000, 120_000])
+        setTimeout(() => {
+          notify('item/agentMessage/delta', {
+            itemId: 'research-progress',
+            delta: '正在核对新的票价。',
+          });
+        }, ms);
+      setTimeout(finish, 185_000);
     } else if (text.startsWith('讨论机场交通')) finish();
     else if (text.includes('crash')) process.exit(2);
     else if (text.includes('wait')) {
@@ -252,6 +298,30 @@ for await (const line of readline.createInterface({ input: process.stdin })) {
         },
       });
     }
+  } else if (method === 'turn/steer') {
+    writeFileSync('steer-input.json', JSON.stringify(params));
+    if (params.expectedTurnId !== `turn-${turn}` || params.input[0].text.includes('拒绝这条引导')) {
+      send({ id, error: { code: -1, message: '引导被拒绝' } });
+      continue;
+    }
+    reply({ turnId: `turn-${turn}` });
+    setTimeout(() => {
+      send({
+        method: 'item/completed',
+        params: {
+          threadId,
+          item: {
+            id: 'steered-answer',
+            type: 'agentMessage',
+            text: '已按引导调整：' + params.input[0].text,
+          },
+        },
+      });
+      send({
+        method: 'turn/completed',
+        params: { threadId, turn: { id: `turn-${turn}`, status: 'completed', error: null } },
+      });
+    }, 50);
   } else if (method === 'turn/interrupt') {
     writeFileSync('interrupt-received.txt', 'yes');
     reply({});

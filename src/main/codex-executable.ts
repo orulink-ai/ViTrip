@@ -10,7 +10,10 @@ export async function resolveCodexExecutable(commandPath: string): Promise<strin
   if (process.platform === 'darwin') {
     for (const root of ['/Applications', path.join(os.homedir(), 'Applications')])
       for (const app of ['Codex.app', 'ChatGPT.app'])
-        candidates.push(path.join(root, app, 'Contents/Resources/codex'));
+        candidates.push(
+          path.join(root, app, 'Contents/Resources/codex'),
+          path.join(root, app, 'Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex'),
+        );
   }
   const available = await Promise.all(
     [...new Set(candidates.filter((candidate): candidate is string => !!candidate))].map(

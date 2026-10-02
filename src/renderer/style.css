@@ -429,20 +429,6 @@
 .home-map-preview[data-ready='true'] {
   opacity: 0.6;
 }
-.home-map-action {
-  position: absolute;
-  right: 16px;
-  bottom: 12px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 6px;
-  pointer-events: auto;
-}
-.home-map-action > span {
-  max-width: 330px;
-  text-align: right;
-}
 .home-map-interactive {
   width: 100%;
   height: min(65vh, 640px);
@@ -473,4 +459,18 @@
   text-underline-offset: 4px;
   cursor: pointer;
 }
-.notebook-bookmark-link:focus-visible { outline: 2px solid #2563eb; outline-offset: 3px; }
+.notebook-bookmark-link:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 3px;
+}
+
+/* Keep navigation together and let content, rather than chrome, fill the panel. */
+.right-heading {
+  justify-content: flex-start;
+  gap: 8px;
+  min-height: 52px;
+  padding: 8px 12px;
+}
+.journal-toolbar {
+  padding: 8px 12px;
+}

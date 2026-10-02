@@ -1,4 +1,7 @@
-import type { Settings } from '../shared/types';
+import { navigateGoogle } from './google-navigation';
+import { googleSearchURL, googleMapsURL } from '../shared/google-travel';
+import type { AgentSteer } from './agent-runtime';
+import type { Settings, Message } from '../shared/types';
 import { conversationSettingsSchema } from '../shared/schemas';
 import { enqueueMessage, cancelQueuedMessage, nextQueuedMessage } from '../shared/message-queue';
 import { NotebookMedia } from './notebook-media';
@@ -17,6 +20,7 @@ import type { ToolResult } from '../shared/photos';
 import { itineraryEditSchema } from '../shared/journey-editing';
 import { createDeepLink, resolveDeepLink, type LinkTarget } from '../shared/deep-link';
 import { RequestOutcome } from './request-outcome';
+import { RequestDeadline } from './request-deadline';
 import { messagePrompt, quoteSchema, type Quote } from '../shared/notebook';
 import {
   app,
@@ -27,6 +31,7 @@ import {
   dialog,
   Menu,
   nativeImage,
+  shell,
 } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs/promises';
@@ -150,6 +155,12 @@ app
     let current = store.trips[0] || store.create();
     let controller: AbortController | null = null;
     let task: Promise<void> | null = null;
+    let voiceTripId: string | undefined;
+    let activeSteer:
+      { tripId: string; send: AgentSteer; accept: (message: Message) => void } | undefined;
+    let steeringTask: Promise<void> | undefined;
+    let steeringMessageId: string | undefined;
+    let editingQueuedMessageId: string | undefined;
     let sending = false;
     let paused = false;
     let pending: { id: string; resolve: (allow: boolean) => void } | null = null;
@@ -177,6 +188,30 @@ app
       },
     });
     const win = window;
+    win.webContents.session.setPermissionRequestHandler(
+      (contents, permission, callback, details) => {
+        callback(
+          !win.isDestroyed() &&
+            contents === win.webContents &&
+            permission === 'media' &&
+            details.isMainFrame === true &&
+            details.requestingUrl === pathToFileURL(entry).href &&
+            'mediaTypes' in details &&
+            !!details.mediaTypes?.length &&
+            details.mediaTypes.every((type) => type === 'audio'),
+        );
+      },
+    );
+    win.webContents.session.setPermissionCheckHandler(
+      (contents, permission, _origin, details) =>
+        !win.isDestroyed() &&
+        contents === win.webContents &&
+        permission === 'media' &&
+        details.isMainFrame === true &&
+        details.mediaType === 'audio' &&
+        win.webContents.getURL() === pathToFileURL(entry).href,
+    );
+
     // Native tile requests identify ViTrip; Chromium retains normal HTTP caching.
     win.webContents.session.webRequest.onBeforeSendHeaders(
       { urls: ['https://tile.openstreetmap.org/*'] },
@@ -196,6 +231,14 @@ app
     const browser = new Browser(
       (state) => emit({ type: 'browser', browser: state }),
       (text) => emit({ type: 'status', text }),
+      {
+        journey: () => current.journeyId,
+        record: (journeyId, visit) => {
+          if (!store.journeys.some((journey) => journey.id === journeyId)) return;
+          const visits = store.recordBrowserVisit(journeyId, visit);
+          emit({ type: 'browser-history', journeyId, visits });
+        },
+      },
     );
     win.contentView.addChildView(browser.view);
     browser.view.setVisible(false);
@@ -271,11 +314,9 @@ app
       runSettings: Settings,
     ): Promise<ToolResult> {
       signal.throwIfAborted();
-      if (name !== 'notebook' && name !== 'prepare')
-        emit({
-          type: 'workspace',
-          workspace: name === 'plan' || name === 'journal' ? 'plan' : 'browser',
-        });
+      // Browser tools update the shared page in the background. Only explicit user
+      // navigation should reveal it, so reading or editing a notebook is uninterrupted.
+      if (name === 'plan' || name === 'journal') emit({ type: 'workspace', workspace: 'plan' });
       switch (name) {
         case 'photo_candidates': {
           const input = toolsSchema.photo_candidates.parse(args);
@@ -433,7 +474,7 @@ app
         case 'computer_use':
           if (!browser.state().url)
             throw new Error('请先打开网页（navigate），再执行 computer_use。');
-          return (store.settings.jevExperiments?.browser ? piComputerUse : computerUse)({
+          return (runSettings.jevExperiments?.browser ? piComputerUse : computerUse)({
             goal: toolsSchema.computer_use.parse(args).goal,
             settings: { ...runSettings },
             signal,
@@ -445,6 +486,10 @@ app
             },
             onStatus: (text) => emit({ type: 'status', text }),
           });
+        case 'google_search':
+          return navigateGoogle(browser, googleSearchURL(toolsSchema.google_search.parse(args)));
+        case 'google_maps':
+          return navigateGoogle(browser, googleMapsURL(toolsSchema.google_maps.parse(args)));
         case 'navigate':
           return browser.navigate(toolsSchema.navigate.parse(args).url);
         case 'observe':
@@ -471,11 +516,15 @@ app
         }
       }
     }
-    function dispatchQueuedMessage() {
+    function dispatchQueuedMessage(id?: string) {
       if (task || !current.queuedMessages?.length) return;
+      if ((id ?? current.queuedMessages[0].id) === editingQueuedMessageId) return;
       if (store.settingsFor(current).runtime !== 'codex' && !store.settingsFor(current).model)
         throw new Error('请先配置模型');
-      const message = nextQueuedMessage(current);
+      const message = id
+        ? current.queuedMessages?.find((message) => message.id === id)
+        : nextQueuedMessage(current);
+      if (id && message) cancelQueuedMessage(current, id);
       if (!message) return;
       current.messages.push(message);
       if (current.messages.length === 1 && !current.customTitle)
@@ -488,7 +537,7 @@ app
       save(current);
       begin();
     }
-    function begin(resuming = false) {
+    function begin(resuming = false, voiceSdp?: string) {
       if (task) throw new Error('请等待当前任务结束');
       const runSettings = {
         ...store.settingsFor(current),
@@ -500,7 +549,8 @@ app
       control.resume();
       controller = new AbortController();
       const userSignal = controller.signal;
-      const timeoutSignal = AbortSignal.timeout(180000);
+      const deadline = new RequestDeadline(Boolean(voiceSdp));
+      const timeoutSignal = deadline.signal;
       const signal = AbortSignal.any([userSignal, timeoutSignal]);
       const outcome = new RequestOutcome();
       const approveForRequest = async (label: string) => {
@@ -528,13 +578,28 @@ app
           outcome.saved('journal');
         }
         if (name === 'save_photo' || name === 'photo_candidates') outcome.saved('journal');
+        deadline.progress();
         return result;
       };
+      const callStartedAt = voiceSdp ? Date.now() : undefined;
       const response = createTurnResponse(trip.messages, (persist) => {
         if (persist) save(trip);
         else emit({ type: 'trip', trip });
       });
-      const onActivity = response.activity;
+      const onActivity: NonNullable<Parameters<typeof runTravelAgent>[0]['onActivity']> = (
+        step,
+      ) => {
+        deadline.progress();
+        response.activity(step);
+      };
+      const onDelta = (text: string) => {
+        if (text) deadline.progress();
+        response.delta(text);
+      };
+      const onText = (text: string) => {
+        if (text) deadline.progress();
+        response.text(text);
+      };
       emit({
         type: 'status',
         text: resuming ? '正在重新观察页面…' : '正在思考旅行安排…',
@@ -545,11 +610,13 @@ app
         const latest = trip.messages.filter((m) => m.role === 'user').at(-1);
         const uploaded = await attachments.prepare(
           trip.id,
-          latest?.attachments?.map((file) => file.id) ?? [],
+          voiceSdp ? [] : (latest?.attachments?.map((file) => file.id) ?? []),
           supportsImages(runSettings),
         );
         signal.throwIfAborted();
-        let prompt = messagePrompt(latest ?? { content: '继续当前旅行规划' });
+        let prompt = voiceSdp
+          ? '根据当前旅行资料响应用户的语音请求。仅在工具返回成功和页面证据充分时声称网页已打开或查询成功；失败时说明实际错误，不说已打开。'
+          : messagePrompt(latest ?? { content: '继续当前旅行规划' });
         if (resuming)
           prompt =
             '用户已交还浏览器控制权。之前的元素引用全部作废。先依据当前页面重新规划，不要重复已经完成的操作。当前页面：' +
@@ -565,7 +632,24 @@ app
           '\n本旅行笔记本文档目录（用 notebook read 查阅正文）：' +
           JSON.stringify(documents.list(documentJourney(trip.journeyId)));
         await runTravelAgent({
+          voice: voiceSdp
+            ? {
+                sdp: voiceSdp,
+                onEvent: (event) => {
+                  emit({ type: 'voice', voice: event });
+                  if (event.kind === 'transcript' && event.text.trim()) {
+                    if (event.role === 'user')
+                      response.voiceUser({ id: randomUUID(), role: 'user', content: event.text });
+                    else response.text(event.text);
+                  }
+                },
+              }
+            : undefined,
           approve: approveForRequest,
+          onSteerReady: (send) => {
+            activeSteer = send ? { tripId: trip.id, send, accept: response.addUser } : undefined;
+            emit({ type: 'status', canSteer: Boolean(send) });
+          },
           onActivity,
           prompt: prompt + uploaded.prompt + sharedContext(),
           images: uploaded.images,
@@ -574,7 +658,7 @@ app
             JSON.stringify(
               trip.messages
                 .filter((m) => m.content || m.quote || m.attachments?.length)
-                .slice(0, -1)
+                .slice(0, voiceSdp ? undefined : -1)
                 .map((message) => ({ role: message.role, content: messagePrompt(message) })),
             ) +
             '\n当前行程：' +
@@ -589,17 +673,19 @@ app
           settings: { ...runSettings },
           contextKey: trip.contextKey,
           control,
-          onDelta: response.delta,
+          onDelta,
           execute: executeForRequest,
-          onText: response.text,
+          onText,
           onStatus: (text) => emit({ type: 'status', text }),
           signal,
         });
         if (
+          !voiceSdp &&
           !signal.aborted &&
           (store.journeyFor(trip).revision === revisionBefore || !documentsSaved)
         ) {
           syncing = true;
+          deadline.startSync();
           emit({ type: 'status', text: '正在整理笔记与旅行资料…' });
           await runTravelAgent({
             approve: approveForRequest,
@@ -640,8 +726,23 @@ app
             secrets: [runSettings.apiKey, runSettings.jevApiKey],
           });
           if (message) response.fail(message);
+          if (voiceSdp && !userSignal.aborted)
+            emit({ type: 'voice', voice: { kind: 'error', message: message || '语音连接失败' } });
         })
-        .finally(() => {
+        .finally(async () => {
+          deadline.dispose();
+          await steeringTask?.catch(() => {});
+          activeSteer = undefined;
+          if (voiceSdp) {
+            voiceTripId = undefined;
+            if (callStartedAt)
+              trip.messages.push({
+                id: randomUUID(),
+                role: 'assistant',
+                content: `语音通话已结束 · ${Math.floor((Date.now() - callStartedAt) / 1000)} 秒`,
+              });
+            emit({ type: 'voice', voice: { kind: 'closed' } });
+          }
           save(trip);
           task = null;
           controller = null;
@@ -650,6 +751,7 @@ app
             type: 'status',
             text: paused ? '你已接管浏览器' : '准备好下一段旅程',
             running: false,
+            canSteer: false,
             paused,
           });
           if (!failed && !signal.aborted && current.id === trip.id) dispatchQueuedMessage();
@@ -689,6 +791,32 @@ app
       emit({ type: 'link', link: url });
     };
     if (app.isPackaged && !process.env.VITRIP_TEST_DATA) app.setAsDefaultProtocolClient('vitrip');
+    handle('startVoice', (rawId, rawSdp) => {
+      const id = z.string().parse(rawId);
+      if (id !== current.id) throw new Error('当前旅行已变化，请重新开启语音');
+      if (task) throw new Error('请先结束当前任务，再开启语音');
+      if (store.settingsFor(current).runtime !== 'codex')
+        throw new Error('语音聊天目前需要选择 Codex');
+      const sdp = z
+        .string()
+        .min(20)
+        .max(100000)
+        .refine((value) => value.startsWith('v=0'))
+        .parse(rawSdp);
+      voiceTripId = id;
+      try {
+        begin(false, sdp);
+      } catch (error) {
+        voiceTripId = undefined;
+        throw error;
+      }
+    });
+    handle('stopVoice', async (rawId) => {
+      if (voiceTripId === z.string().parse(rawId)) {
+        await stop(false);
+        dispatchQueuedMessage();
+      }
+    });
     handle('copyLink', (raw) => {
       const target = z
         .discriminatedUnion('kind', [
@@ -717,6 +845,7 @@ app
       })(),
       activeTripId: current.id,
       running: !!task,
+      canSteer: Boolean(activeSteer),
       paused,
       status: statusText,
       approval: latestApproval,
@@ -946,10 +1075,92 @@ app
       }
     });
     handle('cancelQueuedMessage', (id) => {
+      if (id === steeringMessageId) throw new Error('这条消息正在发送引导，请稍候');
       cancelQueuedMessage(current, z.string().parse(id));
       save(current);
     });
+    handle('beginQueuedMessageEdit', (rawId) => {
+      const id = z.string().parse(rawId);
+      if (id === steeringMessageId) throw new Error('这条消息正在发送引导，请稍候');
+      if (!current.queuedMessages?.some((message) => message.id === id))
+        throw new Error('这条消息已发送');
+      if (editingQueuedMessageId && editingQueuedMessageId !== id)
+        throw new Error('请先完成当前消息的编辑');
+      editingQueuedMessageId = id;
+    });
+    handle('endQueuedMessageEdit', (rawId) => {
+      if (editingQueuedMessageId === z.string().parse(rawId)) editingQueuedMessageId = undefined;
+    });
+    window.webContents.on('render-process-gone', () => {
+      editingQueuedMessageId = undefined;
+    });
+    window.webContents.on('did-start-loading', () => {
+      if (voiceTripId) void stop(false);
+      editingQueuedMessageId = undefined;
+    });
+    handle('editQueuedMessage', async (rawId, rawContent, rawQuote, rawIds) => {
+      const id = z.string().parse(rawId);
+      if (id === steeringMessageId) throw new Error('这条消息正在发送引导，请稍候');
+      const message = current.queuedMessages?.find((entry) => entry.id === id);
+      if (!message) throw new Error('这条消息已发送，无法编辑排队内容');
+      const content = z.string().trim().max(12000).parse(rawContent);
+      const quote =
+        rawQuote === undefined
+          ? message.quote
+          : rawQuote === null
+            ? undefined
+            : quoteSchema.parse(rawQuote);
+      const trip = current;
+      const files =
+        rawIds === undefined
+          ? message.attachments
+          : await Promise.all(
+              attachmentIdsSchema.parse(rawIds).map((fileId) => attachments.get(trip.id, fileId)),
+            );
+      if (current !== trip || !trip.queuedMessages?.includes(message))
+        throw new Error('这条消息已发送或会话已切换');
+      if (!content && !quote && !files?.length) throw new Error('消息不能为空');
+      message.content = content;
+      message.quote = quote;
+      message.attachments = files;
+      save(current);
+    });
     handle('resumeQueue', () => dispatchQueuedMessage());
+    handle('sendQueuedMessage', async (rawId) => {
+      const id = z.string().parse(rawId);
+      if (steeringTask) throw new Error('正在发送引导，请稍候');
+      if (id === editingQueuedMessageId) throw new Error('请先保存或取消消息编辑');
+      const trip = current;
+      const message = trip.queuedMessages?.find((entry) => entry.id === id);
+      if (!message) throw new Error('排队消息不存在或已发送');
+      if (!task) return dispatchQueuedMessage(id);
+      const target = activeSteer;
+      if (!target || target.tripId !== trip.id)
+        throw new Error('当前阶段不支持引导，消息会在任务结束后发送');
+      steeringMessageId = id;
+      steeringTask = (async () => {
+        const uploaded = await attachments.prepare(
+          trip.id,
+          message.attachments?.map((file) => file.id) ?? [],
+          true,
+        );
+        if (activeSteer !== target || current.id !== trip.id)
+          throw new Error('当前任务已变化，消息仍保留在队列中');
+        await target.send({
+          prompt: messagePrompt(message) + uploaded.prompt,
+          images: uploaded.images,
+        });
+        cancelQueuedMessage(trip, id);
+        target.accept(message);
+        save(trip);
+      })();
+      try {
+        await steeringTask;
+      } finally {
+        steeringTask = undefined;
+        steeringMessageId = undefined;
+      }
+    });
     handle('codexModels', () => listCodexModels(app.getPath('userData')));
     handle('conversationSettings', (tripId, patch) => {
       const trip = store.trips.find((item) => item.id === z.string().parse(tripId));
@@ -990,9 +1201,20 @@ app
       await stop(paused);
       await browser.navigate(z.string().max(4000).parse(url));
     });
+    handle('openBrowserExternal', async () => {
+      const url = browser.state().url;
+      if (!url) throw new Error('没有可打开的网页');
+      await shell.openExternal(allowedURL(url));
+    });
+    handle('browserHistory', (journeyId) => store.browserHistory(z.string().parse(journeyId)));
+    handle('clearBrowserHistory', (raw) => {
+      const journeyId = z.string().parse(raw);
+      store.clearBrowserHistory(journeyId);
+      emit({ type: 'browser-history', journeyId, visits: [] });
+    });
     handle('history', async (action) => {
       await stop(paused);
-      browser.history(z.enum(['back', 'forward', 'reload']).parse(action));
+      return browser.history(z.enum(['back', 'forward', 'reload']).parse(action));
     });
     handle('bounds', (value) => browser.bounds(boundsSchema.parse(value)));
     handle('pause', () => stop(true));

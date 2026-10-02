@@ -45,7 +45,7 @@ test('多段笔记批注可单独发送，保留评论与来源，并在重启�
       .getByLabel('模型接口地址', { exact: true })
       .fill(`http://127.0.0.1:${address.port}/v1`);
     await page.getByLabel('模型名称', { exact: true }).fill('test-model');
-    await page.getByRole('button', { name: '保存设置', exact: true }).click();
+    await page.getByRole('button', { name: '保存连接设置', exact: true }).click();
     await page.evaluate(async () => {
       const state = await window.vitrip.init();
       await window.vitrip.writeDocument(state.trips[0].journeyId, {

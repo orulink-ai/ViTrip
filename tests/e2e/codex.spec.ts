@@ -44,7 +44,7 @@ test('选择 Codex 后操作真实浏览器、更新行程、停止并在重启�
     await page.getByRole('combobox', { name: 'Codex 思考强度' }).click();
     await page.getByRole('option', { name: 'high', exact: true }).click();
     await page.screenshot({ path: 'artifacts/codex-model-settings.png', animations: 'disabled' });
-    await page.getByRole('button', { name: '保存设置', exact: true }).click();
+    await page.getByRole('button', { name: '保存连接设置', exact: true }).click();
     await page.evaluate(async () => {
       await window.vitrip.send('请继续回复这条消息');
       await window.vitrip.stop();
@@ -99,6 +99,13 @@ test('选择 Codex 后操作真实浏览器、更新行程、停止并在重启�
       page.getByTestId('agent-activity').last().getByText('进行中', { exact: true }).first(),
     ).toBeVisible();
     await expect(page.getByRole('combobox', { name: '切换 Agent' })).toBeEnabled();
+    await page.getByRole('button', { name: '浮动聊天', exact: true }).click();
+    await page.getByRole('button', { name: '收起聊天', exact: true }).click();
+    await expect(page.locator('.aui-modal-content')).not.toBeVisible();
+    expect((await page.evaluate(() => window.vitrip.init())).running).toBe(true);
+    await page.getByRole('button', { name: '展开聊天', exact: true }).click();
+    await expect(page.getByRole('button', { name: '停止生成', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: '停靠聊天', exact: true }).click();
     await page
       .locator('[data-sidebar="menu-button"]')
       .filter({ hasText: state.trips[0].title })

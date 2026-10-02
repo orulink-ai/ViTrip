@@ -4,6 +4,7 @@ import type { PhotoCandidate } from '../shared/photos';
 import { z } from 'zod';
 import { allowedURL, needsApproval } from '../shared/policy';
 import type { Bounds, BrowserState } from '../shared/types';
+import { browserVisitSchema, type BrowserVisit } from '../shared/browser-history';
 const targetSchema = z.object({
   x: z.number(),
   y: z.number(),
@@ -21,12 +22,22 @@ export class Browser {
       nodeIntegration: false,
     },
   });
+  private readonly contents = this.view.webContents;
   private sequence = 0;
   private revision = 0;
+  private requestedURL = '';
+  private loadError: BrowserState['error'];
+  private visitVersion = 0;
+  private navigationJourney?: string;
+  private visitReady = false;
   private photoRefs = new Map<number, { revision: number; candidate: PhotoCandidate }>();
   constructor(
     private changed: (state: BrowserState) => void,
     private error: (text: string) => void,
+    private visits?: {
+      journey: () => string;
+      record: (journeyId: string, visit: BrowserVisit) => void;
+    },
   ) {
     const page = this.view.webContents;
     this.view.setBounds({ x: 700, y: 124, width: 700, height: 740 });
@@ -54,28 +65,87 @@ export class Browser {
         event.preventDefault();
       }
     });
-    page.on('did-start-navigation', () => {
+    page.on('did-start-navigation', (_event, url, isInPlace, isMainFrame) => {
       this.revision++;
       this.photoRefs.clear();
+      if (isMainFrame) {
+        this.visitVersion++;
+        this.navigationJourney = this.visits?.journey();
+      }
+      if (isMainFrame && !isInPlace) {
+        this.visitReady = false;
+        this.requestedURL = url;
+        this.loadError = undefined;
+        this.changed(this.state());
+      }
     });
     const broadcast = () => this.changed(this.state());
-    page.on('did-navigate', broadcast);
-    page.on('did-navigate-in-page', broadcast);
+    page.on('did-navigate', (_event, url) => {
+      this.requestedURL = url;
+      this.visitReady = true;
+      broadcast();
+    });
+    page.on('did-navigate-in-page', (_event, url, isMainFrame) => {
+      if (isMainFrame) {
+        this.requestedURL = url;
+        this.visitReady = true;
+      }
+      broadcast();
+      if (isMainFrame) void this.recordVisit();
+    });
     page.on('page-title-updated', broadcast);
+    page.on('page-title-updated', () => void this.recordVisit());
     page.on('did-start-loading', broadcast);
     page.on('did-stop-loading', broadcast);
-    page.on('did-fail-load', (_event, code, description, _url, isMainFrame) => {
-      if (isMainFrame && code !== -3) this.error('网页加载失败：' + description);
+    page.on('did-stop-loading', () => void this.recordVisit());
+    page.on('did-fail-load', (_event, code, description, url, isMainFrame) => {
+      if (isMainFrame && code !== -3) {
+        this.loadError = { url, code, description };
+        this.changed(this.state());
+        this.error('网页加载失败：' + description);
+      }
     });
+  }
+  private async recordVisit() {
+    const page = this.view.webContents;
+    const journeyId = this.navigationJourney;
+    if (
+      !this.visits ||
+      !journeyId ||
+      !this.visitReady ||
+      this.loadError ||
+      page.isLoadingMainFrame() ||
+      !/^https?:/.test(page.getURL())
+    )
+      return;
+    const version = ++this.visitVersion;
+    try {
+      // Store public page metadata only, never form contents or a full page transcript.
+      const metadata = await this.evaluate(`(() => ({
+        url: location.href,
+        title: document.title.slice(0, 500),
+        description: (document.querySelector('meta[name="description"]')?.content || document.querySelector('meta[property="og:description"]')?.content || '').replace(/\\s+/g, ' ').trim().slice(0, 300)
+      }))()`);
+      if (version !== this.visitVersion || this.loadError || page.isDestroyed()) return;
+      const visit = browserVisitSchema.parse({
+        ...z.record(z.string(), z.unknown()).parse(metadata),
+        visitedAt: Date.now(),
+      });
+      this.visits.record(journeyId, visit);
+    } catch (error) {
+      if (version === this.visitVersion && !page.isDestroyed())
+        this.error('浏览记录保存失败：' + String(error));
+    }
   }
   state(): BrowserState {
     const page = this.view.webContents;
     return {
-      url: page.getURL(),
+      url: this.loadError?.url || this.requestedURL || page.getURL(),
       title: page.getTitle(),
       loading: page.isLoading(),
       canBack: page.navigationHistory.canGoBack(),
       canForward: page.navigationHistory.canGoForward(),
+      ...(this.loadError ? { error: this.loadError } : {}),
     };
   }
   bounds(value: Bounds) {
@@ -91,26 +161,29 @@ export class Browser {
   async navigate(url: string) {
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      await Promise.race([
+      const result = await Promise.race([
         this.view.webContents.loadURL(allowedURL(url)),
-        new Promise<never>((_, reject) => {
+        new Promise<string>((resolve) => {
           timer = setTimeout(() => {
-            this.view.webContents.stop();
-            reject(new Error('网页访问超过 15 秒，请换来源或保存待采集事项'));
+            // Bound the agent's wait, not the lifetime of the user's navigation.
+            resolve('网页仍在加载，尚未确认打开成功。请稍后 observe 读取页面。');
           }, 15000);
         }),
       ]);
+      return result ?? '网页已打开。请 observe 读取页面。';
     } finally {
       if (timer) clearTimeout(timer);
     }
-    return '网页已打开。请 observe 读取页面。';
   }
   history(action: 'back' | 'forward' | 'reload') {
     const page = this.view.webContents;
     if (action === 'back' && page.navigationHistory.canGoBack()) page.navigationHistory.goBack();
     if (action === 'forward' && page.navigationHistory.canGoForward())
       page.navigationHistory.goForward();
-    if (action === 'reload') page.reload();
+    if (action === 'reload') {
+      if (this.loadError) return this.navigate(this.loadError.url);
+      page.reload();
+    }
   }
   private async evaluate(code: string): Promise<unknown> {
     return this.view.webContents.executeJavaScriptInIsolatedWorld(1004, [{ code }], true);
@@ -318,6 +391,6 @@ export class Browser {
     if (this.view.webContents.isLoading()) this.view.webContents.stop();
   }
   destroy() {
-    this.view.webContents.close();
+    if (!this.contents.isDestroyed()) this.contents.close();
   }
 }

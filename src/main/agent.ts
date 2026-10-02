@@ -73,7 +73,7 @@ export async function runTravelAgent(
     onText: (text: string) => void;
   },
 ) {
-  const signal = AbortSignal.any([options.signal, AbortSignal.timeout(180000)]);
+  const signal = options.signal;
   fs.mkdirSync(options.sessionDir, { recursive: true, mode: 0o700 });
   const runtime = await ModelRuntime.create({
     authPath: path.join(options.sessionDir, 'auth.json'),

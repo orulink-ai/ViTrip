@@ -1,3 +1,4 @@
+import { selectMapDay } from './map-date';
 import { test, expect, _electron as electron } from '@playwright/test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -10,6 +11,14 @@ test('地图悬浮引用可进入、点击固定、确认变绿并在重载后�
   const store = new Storage(dir, { encrypt: (s) => Buffer.from(s), decrypt: (b) => b.toString() });
   const trip = store.create();
   const plan = structuredClone(demoPlan);
+  plan.days[0].title = '9月28日 · 抵达后游览';
+  Object.assign(plan.days[0].activities[0], {
+    time: '09:00',
+    timeLabel: '到访',
+    timeZone: '日本当地时间 · UTC+9',
+    notes: ['已确认从酒店乘公交前往'],
+    warnings: ['开放时间仍需核实'],
+  });
   plan.days[0].activities[0].sources = [
     {
       title: '清水寺 · 官方介绍',
@@ -35,12 +44,20 @@ test('地图悬浮引用可进入、点击固定、确认变绿并在重载后�
       await page.route('https://tile.openstreetmap.org/**', (route) => route.abort());
     await page.getByRole('tab', { name: '行程', exact: true }).click();
     await page.getByRole('tab', { name: '行程地图', exact: true }).click();
-    await page.getByRole('button', { name: '地图第 1 天', exact: true }).click();
+    await selectMapDay(page, 1);
     const marker = page.getByRole('button', { name: '地图地点 1 清水寺', exact: true });
     await expect(marker).toHaveAttribute('data-decision', 'pending');
     await marker.hover();
     const popup = page.getByRole('dialog', { name: '清水寺的引用' });
     await expect(popup).toBeVisible();
+    await expect(popup.getByLabel('活动时间')).toContainText('09:00');
+    await expect(popup.getByLabel('活动时间')).toContainText('到访');
+    await expect(popup).toContainText('9月28日');
+    await expect(popup).toContainText('日本当地时间 · UTC+9');
+    await expect(popup.getByLabel('行程备注')).toContainText('已确认从酒店乘公交前往');
+    await expect(popup.getByRole('note')).toContainText('开放时间仍需核实');
+    await popup.screenshot({ path: 'artifacts/map-ux/stop-details.png' });
+    await popup.getByRole('button', { name: /^来源/ }).click();
     await expect(popup.locator('[data-slot=source-card]')).toHaveCount(2);
     await expect(popup.getByRole('link').first()).toHaveAttribute(
       'href',
@@ -75,10 +92,12 @@ test('地图悬浮引用可进入、点击固定、确认变绿并在重载后�
     await page.reload();
     await page.getByRole('tab', { name: '行程', exact: true }).click();
     await page.getByRole('tab', { name: '行程地图', exact: true }).click();
-    await page.getByRole('button', { name: '地图第 1 天', exact: true }).click();
+    await selectMapDay(page, 1);
     await expect(marker).toHaveAttribute('data-decision', 'confirmed');
     await marker.click();
     await popup.getByRole('button', { name: '已确认安排', exact: true }).click();
+    await expect(popup.getByLabel('行程备注')).toContainText('已确认从酒店乘公交前往');
+    await popup.getByRole('button', { name: /^来源/ }).click();
     await popup.getByRole('link').first().click();
     await expect(page.getByRole('tab', { name: '浏览器', exact: true })).toHaveAttribute(
       'aria-selected',

@@ -86,11 +86,11 @@ it('requires explicit completion evidence and deduplicates repeated preparation'
   store.close();
 });
 
-it('can still save preparation after the research window closes', async () => {
+it('can still save preparation after repeated site failures', async () => {
   const { ResearchBudget } = await import('../src/main/research-budget');
-  let now = 0;
-  const budget = new ResearchBudget(() => now);
-  now = 145000;
-  expect(() => budget.check('navigate')).toThrow();
+  const budget = new ResearchBudget();
+  budget.failed('https://a.example/');
+  budget.failed('https://a.example/');
+  expect(() => budget.check('navigate', 'https://a.example/')).toThrow();
   expect(() => budget.check('prepare')).not.toThrow();
 });

@@ -18,7 +18,15 @@ it.skipIf(!process.env.VITRIP_LIVE_CODEX)(
         sessionDir,
         control,
         signal: AbortSignal.timeout(120000),
-        settings: { runtime: 'codex', baseURL: 'https://example.com', model: 'unused', apiKey: '' },
+        settings: {
+          runtime: 'codex',
+          baseURL: 'https://example.com',
+          model: 'unused',
+          apiKey: '',
+          ...(process.env.VITRIP_LIVE_CODEX_MODEL
+            ? { codexModel: process.env.VITRIP_LIVE_CODEX_MODEL }
+            : {}),
+        },
         prompt:
           '这是 ViTrip 接入验证，只调用一次 journal，参数 entries 为 []。不要调用其他工具，不读取文件，不查询网络，然后回复“接入成功”。',
         execute: async (name) => {

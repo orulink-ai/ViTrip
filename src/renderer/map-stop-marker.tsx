@@ -1,10 +1,12 @@
-import { Check } from 'lucide-react';
+import { Check, Clock, NotebookPen, TriangleAlert } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { ItineraryStop } from '../shared/itinerary-map';
 import { decisionKey, referenceCards } from '../shared/map-references';
 import { Sources } from './components/assistant-ui/elements/sources';
 import { Button } from './components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from './components/ui/popover';
+import { Alert, AlertTitle, AlertDescription } from './components/ui/alert';
+import { Badge } from './components/ui/badge';
 import { StopIcon } from './stop-icon';
 
 export function MapStopMarker({
@@ -32,7 +34,7 @@ export function MapStopMarker({
   });
   const [open, setOpen] = useState(selected);
   const [pinned, setPinned] = useState(selected);
-  const [sourcesOpen, setSourcesOpen] = useState(true);
+  const [sourcesOpen, setSourcesOpen] = useState(false);
   const [saveError, setSaveError] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const clear = () => {
@@ -121,7 +123,7 @@ export function MapStopMarker({
         }}
         aria-label={`${stop.location!.name}的引用`}
         side="top"
-        className="w-96 max-w-[calc(100vw-2rem)] max-h-96 overflow-y-auto"
+        className="w-96 max-w-[calc(100vw-2rem)] max-h-[min(36rem,70vh)] overflow-y-auto"
         onOpenAutoFocus={(event) => event.preventDefault()}
         onCloseAutoFocus={(event) => event.preventDefault()}
         onPointerEnter={clear}
@@ -136,13 +138,53 @@ export function MapStopMarker({
         }}
       >
         <div className="space-y-3">
-          <div>
-            <p className="text-sm font-medium">{stop.location!.name}</p>
-            <p className="text-xs text-muted-foreground">
-              {confirmed ? '已确定' : '待确定'} · 第 {stop.dayIndex + 1} 天 ·{' '}
-              {stop.time || '时间待定'}
+          <div className="space-y-2">
+            <div className="flex items-start justify-between gap-3">
+              <p className="text-base font-semibold">{stop.location!.name}</p>
+              <Badge variant="outline">{confirmed ? '已确定' : '待确定'}</Badge>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {stop.dayTitle || `第 ${stop.dayIndex + 1} 天`}
             </p>
+            <div className="flex flex-wrap items-center gap-2" aria-label="活动时间">
+              <Clock className="size-4" aria-hidden="true" />
+              <span className="text-xl font-semibold tabular-nums">{stop.time || '时间待定'}</span>
+              {stop.timeLabel && <span className="text-sm">{stop.timeLabel}</span>}
+            </div>
+            {stop.timeZone && <p className="text-sm text-muted-foreground">{stop.timeZone}</p>}
+            {stop.title !== stop.location!.name && (
+              <p className="text-sm font-medium">{stop.title}</p>
+            )}
+            {stop.detail && (
+              <p className="whitespace-pre-wrap text-sm leading-relaxed">{stop.detail}</p>
+            )}
           </div>
+          {!!stop.notes?.length && (
+            <section aria-label="行程备注" className="space-y-2 border-t pt-3">
+              <h3 className="flex items-center gap-2 text-sm font-medium">
+                <NotebookPen className="size-4" />
+                备注
+              </h3>
+              <ul className="list-disc space-y-1 pl-5 text-sm leading-relaxed">
+                {stop.notes.map((note, i) => (
+                  <li key={i}>{note}</li>
+                ))}
+              </ul>
+            </section>
+          )}
+          {!!stop.warnings?.length && (
+            <Alert role="note">
+              <TriangleAlert />
+              <AlertTitle>注意事项</AlertTitle>
+              <AlertDescription>
+                <ul className="list-disc space-y-1 pl-4">
+                  {stop.warnings.map((warning, i) => (
+                    <li key={i}>{warning}</li>
+                  ))}
+                </ul>
+              </AlertDescription>
+            </Alert>
+          )}
           {sources.length ? (
             <Sources
               sources={sources}

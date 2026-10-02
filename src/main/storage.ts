@@ -1,4 +1,9 @@
 import { conversationSettingsSchema, jevExperimentsSchema } from '../shared/schemas';
+import {
+  browserHistorySchema,
+  browserVisitSchema,
+  type BrowserVisit,
+} from '../shared/browser-history';
 import { attachmentSchema } from '../shared/attachments';
 import { photoSchema } from '../shared/photos';
 import { editItinerary, type ItineraryEdit } from '../shared/journey-editing';
@@ -74,6 +79,7 @@ export class Storage {
   };
   private db: DatabaseSync;
   private notebooks: Record<string, Notebook> = {};
+  private visits: Record<string, BrowserVisit[]> = {};
   constructor(
     dir: string,
     private cipher: Cipher,
@@ -84,6 +90,8 @@ export class Storage {
       'PRAGMA journal_mode=WAL; CREATE TABLE IF NOT EXISTS state (name TEXT PRIMARY KEY, value TEXT NOT NULL)',
     );
     const notebooks = this.read('notebooks-v1');
+    const visits = this.read('browser-history-v1');
+    if (visits) this.visits = browserHistorySchema.parse(JSON.parse(visits));
     if (notebooks)
       this.notebooks = z.record(z.string(), notebookSchema).parse(JSON.parse(notebooks));
     const workspace = this.read('workspace-v2');
@@ -153,6 +161,9 @@ export class Storage {
       runtime: this.settings.runtime ?? ('pi' as const),
       codexModel: this.settings.codexModel ?? '',
       codexEffort: this.settings.codexEffort ?? '',
+      jevExperiments: structuredClone(
+        this.settings.jevExperiments ?? { browser: false, webSearch: false, localSearch: false },
+      ),
     };
   }
   settingsFor(trip: Trip): Settings {
@@ -194,6 +205,26 @@ export class Storage {
   notebook(journeyId: string): Notebook {
     if (!this.journeys.some((j) => j.id === journeyId)) throw new Error('旅行文件夹不存在');
     return this.notebooks[journeyId] ?? notebookSchema.parse({});
+  }
+  browserHistory(journeyId: string): BrowserVisit[] {
+    if (!this.journeys.some((j) => j.id === journeyId)) throw new Error('旅行文件夹不存在');
+    return this.visits[journeyId] ?? [];
+  }
+  recordBrowserVisit(journeyId: string, raw: BrowserVisit): BrowserVisit[] {
+    const previous = this.browserHistory(journeyId);
+    const visit = browserVisitSchema.parse(raw);
+    const entries = [visit, ...previous.filter((item) => item.url !== visit.url)].slice(0, 100);
+    const visits = { ...this.visits, [journeyId]: entries };
+    this.write('browser-history-v1', visits);
+    this.visits = visits;
+    return entries;
+  }
+  clearBrowserHistory(journeyId: string): void {
+    this.browserHistory(journeyId);
+    const visits = { ...this.visits };
+    delete visits[journeyId];
+    this.write('browser-history-v1', visits);
+    this.visits = visits;
   }
   private saveNotebook(journeyId: string, notebook: Notebook) {
     this.notebooks[journeyId] = notebook;
@@ -292,10 +323,13 @@ export class Storage {
     const trips = this.trips.filter((trip) => trip.journeyId !== id);
     const notebooks = { ...this.notebooks };
     delete notebooks[id];
+    const visits = { ...this.visits };
+    delete visits[id];
     this.db.exec('BEGIN IMMEDIATE');
     try {
       this.write('workspace-v2', { trips, journeys });
       this.write('notebooks-v1', notebooks);
+      this.write('browser-history-v1', visits);
       this.db.prepare('DELETE FROM state WHERE name=?').run('trips');
       this.db.exec('COMMIT');
     } catch (error) {
@@ -305,6 +339,7 @@ export class Storage {
     this.trips = trips;
     this.journeys = journeys;
     this.notebooks = notebooks;
+    this.visits = visits;
     return removed;
   }
   createJourney(title: string) {

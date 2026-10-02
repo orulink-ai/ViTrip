@@ -68,7 +68,11 @@ export function JourneyMap({
   const preferences = [
     ...new Set(allStops.flatMap((stop) => stop.recommendation?.preferences ?? [])),
   ];
-  const stops = useMemo(() => filterCandidates(allStops, preference), [allStops, preference]);
+  const activePreference = preferences.includes(preference) ? preference : '';
+  const stops = useMemo(
+    () => filterCandidates(allStops, activePreference),
+    [allStops, activePreference],
+  );
   const located = stops.filter((stop) => stop.location);
   const selected = stops.find((stop) => stop.id === selection.stopId);
   const listRef = useRef<HTMLDivElement>(null);
@@ -88,7 +92,7 @@ export function JourneyMap({
     >
       <div
         className={
-          'relative z-10 flex shrink-0 flex-wrap items-center gap-2 border-b bg-background p-3'
+          'relative z-10 grid shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 border-b bg-background px-3 py-2'
         }
       >
         <Button
@@ -104,7 +108,7 @@ export function JourneyMap({
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
           {!!preferences.length && (
             <Select
-              value={preference || 'all'}
+              value={activePreference || 'all'}
               onValueChange={(value) => {
                 setPreference(value === 'all' ? '' : value);
                 onSelection({ day: selection.day });
@@ -129,31 +133,49 @@ export function JourneyMap({
               {t(expanded ? '返回行程' : '展开地图')}
             </Button>
           )}
-          <nav
-            aria-label={t('地图日期快捷切换')}
-            className="flex max-w-full gap-1 overflow-x-auto rounded-lg border bg-background p-1 shadow-sm"
+          <Select
+            value={selection.day === undefined ? 'all' : String(selection.day)}
+            onValueChange={(value) => {
+              setPreference('');
+              onSelection(value === 'all' ? {} : { day: Number(value) });
+            }}
           >
-            <Button
+            <SelectTrigger
+              aria-label={t('地图日期')}
               size="sm"
-              variant={selection.day === undefined ? 'secondary' : 'ghost'}
-              aria-pressed={selection.day === undefined}
-              onClick={() => onSelection({})}
+              className="min-w-0 max-w-full flex-1"
             >
-              {t('全部日期')}
-            </Button>
-            {plan?.days.map((day, index) => (
-              <Button
-                key={index}
-                size="sm"
-                variant={selection.day === index ? 'secondary' : 'ghost'}
-                aria-label={t('地图第 {day} 天', { day: index + 1 })}
-                aria-pressed={selection.day === index}
-                onClick={() => onSelection({ day: index })}
-              >
-                {t('第 {day} 天', { day: index + 1 })}
-              </Button>
-            ))}
-          </nav>
+              <SelectValue>
+                {selection.day === undefined ? (
+                  t('全部日期')
+                ) : (
+                  <>
+                    {t('第 {day} 天', { day: selection.day + 1 })} ·{' '}
+                    {plan?.days[selection.day]?.date ||
+                      plan?.days[selection.day]?.title.match(
+                        /(?:\d{4}[-/年])?\d{1,2}[-/月]\d{1,2}日?/,
+                      )?.[0] ||
+                      t('日期待定')}
+                  </>
+                )}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t('全部日期')}</SelectItem>
+              {plan?.days.map((day, index) => (
+                <SelectItem key={index} value={String(index)}>
+                  {t('第 {day} 天', { day: index + 1 })} ·{' '}
+                  {day.title.replace(/^(?:DAY\s*0*\d+|第\s*\d+\s*天)\s*[·:：-]?\s*/i, '')}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <span aria-label={t('当前地图范围')} className="text-xs text-muted-foreground">
+            {t('{count} 个地点', { count: stops.length })}
+            {stops.length > located.length && (
+              <> · {t('{count} 个待定位', { count: stops.length - located.length })}</>
+            )}
+          </span>
         </div>
         <div
           ref={setMapTools}
@@ -177,6 +199,7 @@ export function JourneyMap({
                 contextStops={contextStops}
                 selectedId={selection.stopId}
                 controlsHost={mapTools}
+                listOpen={listOpen}
                 expanded={expanded}
                 onSelect={(stopId) => onSelection({ ...selection, stopId })}
                 onBrowse={onBrowse}
@@ -193,7 +216,7 @@ export function JourneyMap({
           hidden={!listOpen}
           className={
             expanded
-              ? 'absolute left-3 top-3 z-10 max-h-[calc(100%-10rem)] w-80 max-w-[calc(100%-4rem)] space-y-3 overflow-y-auto rounded-xl border bg-background p-4 shadow-sm'
+              ? 'absolute left-3 top-16 z-10 max-h-[calc(100%-10rem)] w-[min(20rem,45%)] max-w-[calc(100%-4rem)] space-y-3 overflow-y-auto rounded-xl border bg-background p-4 shadow-sm'
               : 'space-y-3 p-4'
           }
         >

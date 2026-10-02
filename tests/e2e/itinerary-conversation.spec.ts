@@ -1,3 +1,4 @@
+import { selectMapDay } from './map-date';
 import { test, expect, _electron as electron, type ElectronApplication } from '@playwright/test';
 import http from 'node:http';
 import fs from 'node:fs/promises';
@@ -124,7 +125,7 @@ test('source itinerary survives conversation follow-up, revision and restart', a
       .getByLabel('模型接口地址', { exact: true })
       .fill(`http://127.0.0.1:${address.port}/v1`);
     await page.getByLabel('模型名称', { exact: true }).fill('test-model');
-    await page.getByRole('button', { name: '保存设置', exact: true }).click();
+    await page.getByRole('button', { name: '保存连接设置', exact: true }).click();
     const send = async (text: string, answer: string) => {
       await page.getByLabel('旅行需求', { exact: true }).fill(text);
       await page.getByRole('button', { name: '发送', exact: true }).click();
@@ -135,7 +136,7 @@ test('source itinerary survives conversation follow-up, revision and restart', a
     await send('按原攻略整理', '已根据原攻略整理六天行程，住宿为计划，预订待确认。');
     await expect(page.getByRole('tab', { name: '行程地图', exact: true })).toBeVisible();
     await page.getByRole('button', { name: '展开地点列表', exact: true }).click();
-    await page.getByRole('button', { name: '地图第 5 天', exact: true }).click();
+    await selectMapDay(page, 5);
     await expect(page.getByRole('region', { name: '第 5 天', exact: true })).toContainText(
       'Hotel Clover Patong',
     );
@@ -154,13 +155,13 @@ test('source itinerary survives conversation follow-up, revision and restart', a
     page = await app.firstWindow();
     await page.getByRole('tab', { name: '行程', exact: true }).click();
     await page.getByRole('button', { name: '展开地点列表', exact: true }).click();
-    await page.getByRole('button', { name: '地图第 5 天', exact: true }).click();
+    await selectMapDay(page, 5);
     const day = page.getByRole('region', { name: '第 5 天', exact: true });
     await expect(day.getByRole('heading', { name: '10月2日 · 休息', exact: true })).toBeVisible();
     await expect(day).toContainText('Hotel Clover Patong');
     await day.getByRole('button', { name: /休息/ }).click();
     const detail = page.getByLabel('选中地点');
-    await detail.getByRole('button', { name: /Sources/ }).click();
+    await detail.getByRole('button', { name: /^来源/ }).click();
     await expect(detail).toContainText(source.excerpt);
     await expect(detail.locator('a').filter({ hasText: '行程原文' })).toHaveAttribute(
       'href',

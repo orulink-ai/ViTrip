@@ -1,5 +1,6 @@
 import { ItineraryQuotation } from './itinerary-quotation';
 import type { Quote } from '../shared/notebook';
+import { normalizeMapSelection } from '../shared/map-selection';
 import { itineraryStops } from '../shared/itinerary-map';
 import { t } from './i18n';
 import type { Todo } from '../shared/notebook';
@@ -65,11 +66,8 @@ export function JournalPanel({
     setMode('map');
   }, [journey.id]);
   useEffect(() => {
-    if (!selection.stopId) return;
-    const stop = itineraryStops(plan).find((stop) => stop.id === selection.stopId);
-    if (!stop) setSelection({ day: selection.day });
-    else if (selection.day !== undefined && selection.day !== stop.dayIndex)
-      setSelection({ ...selection, day: stop.dayIndex });
+    const next = normalizeMapSelection(plan, selection);
+    if (next.day !== selection.day || next.stopId !== selection.stopId) setSelection(next);
   }, [plan]);
 
   function quoteDay(index: number, newConversation: boolean) {
@@ -85,7 +83,15 @@ export function JournalPanel({
           day.stay ? `当晚住宿：${day.stay.name}` : '',
           ...(day.issues ?? []),
           ...day.activities.map((activity) =>
-            [activity.time, activity.title, activity.detail].filter(Boolean).join('\n'),
+            [
+              activity.time,
+              activity.title,
+              activity.detail,
+              ...(activity.notes ?? []),
+              ...(activity.warnings ?? []),
+            ]
+              .filter(Boolean)
+              .join('\n'),
           ),
         ]
           .filter(Boolean)

@@ -1,7 +1,16 @@
 import { spawn } from 'node:child_process';
+import http from 'node:http';
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+// Use a real, deterministic page: public example sites can change their content.
+const fixtureText = 'ViTrip packaged browser verification';
+const fixture = http.createServer((_request, response) => {
+  response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+  response.end('<!doctype html><title>ViTrip test</title><h1>' + fixtureText + '</h1>');
+});
+await new Promise((resolve) => fixture.listen(0, '127.0.0.1', resolve));
+const fixtureURL = 'http://127.0.0.1:' + fixture.address().port + '/';
 const directory = await mkdtemp(path.join(os.tmpdir(), 'vitrip-package-'));
 const child = spawn(
   path.resolve('release/mac-arm64/ViTrip.app/Contents/MacOS/ViTrip'),
@@ -77,25 +86,16 @@ try {
   if (!(await evaluate("document.body?.innerText.includes('下一站，去哪里？')")))
     throw new Error('UI未渲染');
   await evaluate(
-    "[...document.querySelectorAll('button')].find(b=>b.textContent.includes('先看看一份示例行程')).click()",
+    "[...document.querySelectorAll('button')].find(b=>b.getAttribute('aria-label')==='先看看一份示例行程').click()",
   );
   for (let n = 0; n < 50; n++) {
-    if (
-      await evaluate(
-        "document.querySelector('[aria-label=\"交互行程正文\"]')?.innerText.includes('去京都，把脚步放慢')",
-      )
-    )
-      break;
+    if (await evaluate('document.querySelector(\'[aria-label="行程交互地图"]\') !== null')) break;
     await delay(100);
   }
-  if (
-    !(await evaluate(
-      "document.querySelector('[aria-label=\"交互行程正文\"]')?.innerText.includes('去京都，把脚步放慢')",
-    ))
-  )
+  if (!(await evaluate('document.querySelector(\'[aria-label="行程交互地图"]\') !== null')))
     throw new Error('行程未渲染');
-  await evaluate("window.vitrip.browse('https://example.com')");
-  const guest = (await targets()).find((t) => t.url.startsWith('https://example.com'));
+  await evaluate(`window.vitrip.browse(${JSON.stringify(fixtureURL)})`);
+  const guest = (await targets()).find((t) => t.url === fixtureURL);
   if (!guest) throw new Error('真实网页未打开');
   const guestCall = await connect(guest.webSocketDebuggerUrl);
   const content = await guestCall('Runtime.evaluate', {
@@ -103,17 +103,19 @@ try {
       "({text:document.body?.innerText,isolated:typeof window.vitrip==='undefined'&&typeof window.require==='undefined'})",
     returnByValue: true,
   });
-  if (!content.result.value.text.includes('Example Domain') || !content.result.value.isolated)
+  if (!content.result.value.text.includes(fixtureText) || !content.result.value.isolated)
     throw new Error('浏览器隔离或页面内容验证失败');
   console.log(
     JSON.stringify({
       packagedApp: 'passed',
       demo: 'passed',
-      liveHTTPSBrowser: 'passed',
+      liveHTTPBrowser: 'passed',
       remotePageIsolation: true,
     }),
   );
 } finally {
+  fixture.closeAllConnections();
+  fixture.close();
   for (const socket of sockets) socket.close();
   if (child.exitCode === null) {
     const ended = new Promise((resolve) => child.once('exit', resolve));

@@ -1,3 +1,4 @@
+import { googleSearchSchema, googleMapsSchema } from './google-travel';
 import { prepareToolSchema } from './prepare';
 import { notebookToolSchema } from './notebook-documents';
 import { photoSchema } from './photos';
@@ -24,6 +25,7 @@ export const planSchema = z.object({
   days: z
     .array(
       z.object({
+        date: z.iso.date().optional(),
         title: z.string().max(160),
         subtitle: z.string().max(500),
         stay: z
@@ -49,6 +51,10 @@ export const planSchema = z.object({
                 })
                 .optional(),
               time: z.string().max(60),
+              timeLabel: z.string().trim().min(1).max(40).optional(),
+              timeZone: z.string().trim().min(1).max(100).optional(),
+              notes: z.array(z.string().trim().min(1).max(500)).max(12).optional(),
+              warnings: z.array(z.string().trim().min(1).max(500)).max(12).optional(),
               title: z.string().max(200),
               detail: z.string().max(2000),
               url: z.string().url().optional(),
@@ -119,6 +125,7 @@ export const conversationSettingsSchema = settingsSchema
     codexEffort: true,
     model: true,
     imageInput: true,
+    jevExperiments: true,
   })
   .partial();
 export const boundsSchema = z.object({
@@ -143,6 +150,8 @@ export const toolsSchema = {
   inspect_photo: z.object({ id: z.string().regex(/^[a-f0-9]{64}$/) }),
   journal: journalSchema,
   computer_use: z.object({ goal: z.string().min(1).max(4000) }),
+  google_search: googleSearchSchema,
+  google_maps: googleMapsSchema,
   navigate: z.object({ url: z.string().max(4000) }),
   observe: z.object({}),
   click: z.object({ ref: z.number().int().positive() }),

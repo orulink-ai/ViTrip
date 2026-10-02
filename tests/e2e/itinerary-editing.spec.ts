@@ -1,3 +1,4 @@
+import { selectMapDay } from './map-date';
 import { test, expect, _electron as electron } from '@playwright/test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -18,7 +19,7 @@ test('行程变更新增和跨日移动会同步地图，重启后保留活动�
     let page = await app.firstWindow();
     await page.getByRole('tab', { name: '行程', exact: true }).click();
     await page.getByRole('button', { name: '展开地点列表', exact: true }).click();
-    await page.getByRole('button', { name: '地图第 1 天', exact: true }).click();
+    await selectMapDay(page, 1);
     await expect(page.getByLabel('地图地点列表')).toContainText('清水寺');
     // Direct editing controls were retired. Exercise the persisted editing command
     // and verify the same journey event used by agent changes updates the live map.
@@ -38,7 +39,7 @@ test('行程变更新增和跨日移动会同步地图，重启后保留活动�
     }, trip.journeyId);
     await expect(page.getByLabel('地图地点列表')).not.toContainText('清水寺');
     await expect(page.getByLabel('地图地点列表')).toContainText('自由散步 · 待定位');
-    await page.getByRole('button', { name: '地图第 2 天', exact: true }).click();
+    await selectMapDay(page, 2);
     const day = page.getByRole('region', { name: '第 2 天', exact: true });
     await day.getByRole('button', { name: /清水寺/ }).click();
     await expect(page.locator('#temple')).toContainText('从清水寺走进东山');
@@ -52,7 +53,7 @@ test('行程变更新增和跨日移动会同步地图，重启后保留活动�
     await expect(page.getByRole('region', { name: '第 2 天', exact: true })).toContainText(
       '清水寺',
     );
-    await page.getByRole('button', { name: '地图第 1 天', exact: true }).click();
+    await selectMapDay(page, 1);
     await expect(page.getByLabel('地图地点列表')).toContainText('自由散步 · 待定位');
     await expect(page.getByLabel('地图地点列表')).not.toContainText('清水寺');
   } finally {

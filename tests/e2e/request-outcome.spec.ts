@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { createPhuketPlan } from '../fixtures/phuket-source';
 
 test('保存后真实请求期限耗尽仍显示成功；下一轮失败不沿用保存状态', async () => {
-  // Exercise the production 180-second deadline, including real IPC, agent tool
+  // Exercise the production 180-second idle deadline, including real IPC, agent tool
   // execution, SQLite, renderer feedback and restart. Only the model is replaced.
   test.setTimeout(250_000);
   let savedToolReturned = false;
@@ -72,7 +72,7 @@ test('保存后真实请求期限耗尽仍显示成功；下一轮失败不沿�
       .getByLabel('模型接口地址', { exact: true })
       .fill(`http://127.0.0.1:${address.port}/v1`);
     await page.getByLabel('模型名称', { exact: true }).fill('test-model');
-    await page.getByRole('button', { name: '保存设置', exact: true }).click();
+    await page.getByRole('button', { name: '保存连接设置', exact: true }).click();
     await page.getByLabel('旅行需求', { exact: true }).fill('保存普吉岛行程后等待回复');
     await page.getByRole('button', { name: '发送', exact: true }).click();
     await page.getByRole('tab', { name: '行程', exact: true }).click();

@@ -5,7 +5,7 @@
 
 import { t } from '~/i18n';
 import type { ComponentProps } from 'react';
-import { ArrowUpIcon, XIcon } from 'lucide-react';
+import { ArrowUpIcon, XIcon, PencilIcon } from 'lucide-react';
 import { cn } from '~/utils';
 import { field, ghostButton, mono, paper } from './surfaces';
 
@@ -19,13 +19,24 @@ export function MessageQueue({
   showRunning = true,
   queued,
   onCancel,
+  onSend,
+  onEdit,
+  sending = false,
+  editingId,
   className,
   ...props
-}: Omit<ComponentProps<'div'>, 'children' | 'running' | 'queued' | 'onCancel'> & {
+}: Omit<
+  ComponentProps<'div'>,
+  'children' | 'running' | 'queued' | 'onCancel' | 'onSend' | 'onEdit'
+> & {
   running: string;
   showRunning?: boolean;
   queued: readonly QueuedMessage[];
   onCancel?: (id: string) => void;
+  onSend?: (id: string) => void;
+  onEdit?: (id: string) => void;
+  sending?: boolean;
+  editingId?: string;
 }) {
   return (
     <div
@@ -70,13 +81,47 @@ export function MessageQueue({
             <span className={cn(mono, 'text-foreground/30 w-3 shrink-0 tabular-nums')}>
               {index + 1}
             </span>
-            <span className="text-foreground/60 min-w-0 flex-1 truncate text-[13.5px]">
+            <button
+              type="button"
+              disabled={sending || !onEdit}
+              onClick={() => onEdit?.(message.id)}
+              className="text-foreground/60 min-w-0 flex-1 truncate text-left text-[13.5px]"
+            >
               {message.text}
-            </span>
-            <ArrowUpIcon className="text-foreground/25 size-3 shrink-0" />
+            </button>
+            {editingId === message.id && (
+              <span className="shrink-0 text-xs text-muted-foreground">{t('编辑中')}</span>
+            )}
+            {onEdit && (
+              <button
+                type="button"
+                disabled={sending}
+                aria-label={t('编辑消息：{text}', { text: message.text })}
+                title={t('编辑消息')}
+                onClick={() => onEdit(message.id)}
+                className={cn(ghostButton, 'size-6 shrink-0')}
+              >
+                <PencilIcon className="size-3.5" />
+              </button>
+            )}
+            {onSend && (
+              <button
+                type="button"
+                disabled={sending}
+                aria-label={t(running ? '发送引导：{text}' : '立即发送：{text}', {
+                  text: message.text,
+                })}
+                title={t(running ? '发送引导' : '立即发送')}
+                onClick={() => onSend(message.id)}
+                className={cn(ghostButton, 'size-6 shrink-0')}
+              >
+                <ArrowUpIcon className="size-3.5" />
+              </button>
+            )}
             {onCancel && (
               <button
                 type="button"
+                disabled={sending}
                 aria-label={t('取消排队：{text}', { text: message.text })}
                 onClick={() => onCancel(message.id)}
                 className={cn(ghostButton, 'size-6 shrink-0')}

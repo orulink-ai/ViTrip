@@ -1,3 +1,4 @@
+import { selectMapDay } from './map-date';
 import { test, expect, _electron as electron } from '@playwright/test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -23,7 +24,7 @@ test('地图引用浮层选中文字可加入对话且不修改行程', async ()
       await page.route('https://tile.openstreetmap.org/**', (route) => route.abort());
     await page.getByRole('tab', { name: '行程', exact: true }).click();
     await page.getByRole('tab', { name: '行程地图', exact: true }).click();
-    await page.getByRole('button', { name: '地图第 1 天', exact: true }).click();
+    await selectMapDay(page, 1);
     await page.getByRole('button', { name: '地图地点 1 清水寺', exact: true }).click();
     const popup = page.getByLabel('清水寺的引用', { exact: true });
     await expect(popup).toBeVisible();

@@ -24,6 +24,10 @@ export interface ItineraryStop {
   activityIndex: number;
   title: string;
   time: string;
+  timeLabel?: string;
+  timeZone?: string;
+  notes?: string[];
+  warnings?: string[];
   detail: string;
   location?: ItineraryLocation;
   optional?: boolean;
@@ -56,21 +60,18 @@ export function coordinate(location: ItineraryLocation): Coordinate {
   return [location.longitude, Math.max(-85.051129, Math.min(85.051129, location.latitude))];
 }
 
-/** Consecutive located activities only; gaps and day boundaries never imply travel. */
+/** Connect ordered located stops within a day; unlocated tasks do not break the sequence. */
 export function routeSegments(stops: ItineraryStop[]): Coordinate[][] {
   const segments: Coordinate[][] = [];
   let previous: ItineraryStop | undefined;
   for (const stop of stops) {
+    if (previous && previous.dayIndex !== stop.dayIndex) previous = undefined;
     if (stop.optional || stop.optionGroup || stop.recommendation) {
       previous = undefined;
       continue;
     }
-    if (
-      previous?.location &&
-      stop.location &&
-      previous.dayIndex === stop.dayIndex &&
-      stop.activityIndex === previous.activityIndex + 1
-    ) {
+    if (!stop.location) continue;
+    if (previous?.location && stop.location && previous.dayIndex === stop.dayIndex) {
       const start = coordinate(previous.location);
       const end = coordinate(stop.location);
       while (end[0] - start[0] > 180) end[0] -= 360;

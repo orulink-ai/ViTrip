@@ -42,6 +42,9 @@ const config = {
   files: ['dist/**/*', 'skills/**/*', '!dist/*-check.mjs', '!dist/main.cjs', 'package.json'],
   mac: {
     category: 'public.app-category.travel',
+    entitlements: path.join(root, 'build/entitlements.mac.plist'),
+    entitlementsInherit: path.join(root, 'build/entitlements.mac.plist'),
+    extendInfo: { NSMicrophoneUsageDescription: 'ViTrip 使用麦克风进行你主动开启的语音聊天。' },
     icon: path.join(root, 'build/icon.icns'),
     target: 'dir',
     identity: '-',

@@ -1,3 +1,4 @@
+import { selectMapDay, expectMapDay } from './map-date';
 import { test, expect, _electron as electron } from '@playwright/test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -37,7 +38,7 @@ test('地图与地点列表双向定位、筛选日期、切换准备待办与�
       page.getByText('0 个地点 · 5 个区域参考 · 1 个待定位', { exact: true }),
     ).toBeVisible();
     // Focus the day before selecting its marker; the overview may legitimately cluster it.
-    await page.getByRole('button', { name: '地图第 1 天', exact: true }).click();
+    await selectMapDay(page, 1);
     await page.getByRole('button', { name: '收起地点列表', exact: true }).click();
     await page.getByRole('button', { name: '地图地点 1 清水寺', exact: true }).click();
     await page.getByRole('button', { name: '展开地点列表', exact: true }).click();
@@ -46,7 +47,7 @@ test('地图与地点列表双向定位、筛选日期、切换准备待办与�
     await expect(
       page.getByRole('button', { name: '地图地点 1 清水寺', exact: true }),
     ).toHaveAttribute('aria-pressed', 'true');
-    await page.getByRole('button', { name: '地图第 2 天', exact: true }).click();
+    await selectMapDay(page, 2);
     await expect(map.locator('.maplibregl-marker')).toHaveCount(2);
     await expect(page.getByLabel('选中地点')).toHaveCount(0);
     await page
@@ -60,10 +61,12 @@ test('地图与地点列表双向定位、筛选日期、切换准备待办与�
     await page.getByRole('tab', { name: '准备待办', exact: true }).click();
     await expect(page.getByRole('region', { name: '准备待办', exact: true })).toBeVisible();
     await page.getByRole('tab', { name: '行程地图', exact: true }).click();
-    await expect(page.getByRole('button', { name: '地图第 2 天', exact: true })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
+    await expectMapDay(page, 2);
+    // Restoring a selected marker also restores its pinned source popover.
+    // Dismiss it as a user would before opening the list underneath it.
+    await expect(page.getByRole('dialog', { name: '岚山竹林的引用', exact: true })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog', { name: '岚山竹林的引用', exact: true })).toBeHidden();
     await page.getByRole('button', { name: '展开地点列表', exact: true }).click();
     await expect(page.getByLabel('选中地点')).toContainText('早一点抵达岚山');
     const canvasBox = await map.locator('canvas').boundingBox();
@@ -93,13 +96,16 @@ test('地图与地点列表双向定位、筛选日期、切换准备待办与�
     await page.route('https://tile.openstreetmap.org/**', (route) =>
       route.fulfill({ contentType: 'image/png', body: tile }),
     );
-    await expect(page.getByRole('button', { name: '地图第 2 天', exact: true })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
+    await expectMapDay(page, 2);
+    // Restoring a selected marker also restores its pinned source popover.
+    // Dismiss it as a user would before opening the list underneath it.
+    await expect(page.getByRole('dialog', { name: '岚山竹林的引用', exact: true })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog', { name: '岚山竹林的引用', exact: true })).toBeHidden();
     await page.getByRole('button', { name: '展开地点列表', exact: true }).click();
     await expect(page.getByLabel('选中地点')).toContainText('早一点抵达岚山');
-    await page.getByRole('button', { name: '全部日期', exact: true }).click();
+    await page.getByRole('combobox', { name: '地图日期', exact: true }).click();
+    await page.getByRole('option', { name: '全部日期', exact: true }).click();
     await expect(
       page.getByText('0 个地点 · 5 个区域参考 · 1 个待定位', { exact: true }),
     ).toBeVisible();

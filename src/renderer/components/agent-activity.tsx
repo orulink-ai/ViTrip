@@ -1,4 +1,6 @@
-import { t } from '../i18n';
+import { searchPresentation } from '../../shared/search-presentation';
+import { Sources } from './assistant-ui/elements/sources';
+import { t, useLocale } from '../i18n';
 import type { ToolActivity } from '../../shared/types';
 import { useState, type PropsWithChildren } from 'react';
 import type { ThreadGroupPart } from './assistant-ui/elements/thread.aui';
@@ -27,6 +29,8 @@ const labels: Record<string, string> = {
   grep: '搜索文件内容',
   find: '查找文件',
   ls: '查看目录',
+  google_search: 'Google 搜索',
+  google_maps: 'Google Maps 查询',
   navigate: '打开网页',
   observe: '阅读网页',
   computer_use: '操作浏览器',
@@ -47,11 +51,27 @@ export const ActivityPart: ToolCallMessagePartComponent = ({ toolCallId }) => {
     ToolActivity[] | undefined;
   const step = steps?.find((item) => item.id === toolCallId);
   const [open, setOpen] = useState(false);
+  const [sourcesOpen, setSourcesOpen] = useState(true);
+  const locale = useLocale();
   if (!step) return null;
+  const search = searchPresentation(step);
   const document = ['notebook', 'journal'].includes(step.name)
     ? documentOperation(step)
     : undefined;
   const label = t(document?.label ?? labels[step.name] ?? step.name);
+  const summary = search
+    ? t(
+        {
+          searching: '正在检索来源…',
+          results: '已获取 {count} 个来源',
+          empty: '未找到相关结果',
+          unavailable: '搜索已结束，当前引擎未提供来源明细',
+          error: '搜索失败，可展开查看原因',
+          interrupted: '搜索已停止，结果可能不完整',
+        }[search.state],
+        { count: search.sources.length },
+      )
+    : '';
   const failed = step.status === 'error' || step.status === 'interrupted';
   return (
     <div data-testid="agent-activity" data-tool-id={step.id} className="my-2">
@@ -74,15 +94,68 @@ export const ActivityPart: ToolCallMessagePartComponent = ({ toolCallId }) => {
         <ToolCall
           label={label}
           activeLabel={label}
-          query={document?.target ?? step.name}
-          request={step.input}
-          result={step.output || t('等待工具返回…')}
+          query={search ? search.queries[0] || t('查询词未提供') : (document?.target ?? step.name)}
+          requestLabel={search ? t('检索内容') : undefined}
+          resultLabel={search ? t('检索结果') : undefined}
+          request={
+            search ? (
+              search.queries.length ? (
+                <ul className="space-y-1">
+                  {search.queries.map((query) => (
+                    <li key={query}>{query}</li>
+                  ))}
+                </ul>
+              ) : (
+                t('当前引擎未提供查询词')
+              )
+            ) : (
+              step.input
+            )
+          }
+          result={
+            search ? (
+              <div className="space-y-3">
+                <>{search.sources.length === 0 && <p>{summary}</p>}</>
+                {search.sources.length > 0 && (
+                  <Sources
+                    sources={search.sources}
+                    open={sourcesOpen}
+                    onOpenChange={setSourcesOpen}
+                    locale={locale}
+                  />
+                )}
+                <details>
+                  <summary className="cursor-pointer text-muted-foreground">
+                    {t('技术详情')}
+                  </summary>
+                  <pre className="max-h-60 overflow-auto whitespace-pre-wrap break-all pt-2">
+                    {step.input || t('未提供参数')}
+                    {'\n\n'}
+                    {step.output || t('未返回结果')}
+                  </pre>
+                </details>
+              </div>
+            ) : (
+              step.output ||
+              t(step.status === 'active' ? '等待工具返回…' : '工具已完成，未返回文本结果')
+            )
+          }
+
           running={step.status === 'active'}
           open={open}
           onOpenChange={setOpen}
         />
       )}
-      {(open || step.status !== 'complete') && (
+      {search && !open && (
+        <p className="text-xs text-muted-foreground">
+          {summary}
+          {search.provider ? ` · ${search.provider}` : ''}
+          {search.sources.length
+            ? ` · ${[...new Set(search.sources.map((source) => source.domain))].slice(0, 3).join(' · ')}`
+            : ''}
+        </p>
+      )}
+      {(search || open || step.status !== 'complete') && (
         <p className="text-xs text-muted-foreground">
           {t(statuses[step.status])}
           {step.finishedAt

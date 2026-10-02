@@ -74,12 +74,16 @@ describe('行程地图的数据边界', () => {
       expect(planSchema.safeParse(value).success).toBe(false);
     }
   });
-  it('筛选日期时保留原编号和未定位活动，不跨天或跨缺失地点连线', () => {
+  it('保留未定位事项并连接同日已定位地点，不跨天连线', () => {
     const stops = itineraryStops(plan());
     expect(stops).toHaveLength(5);
     expect(stops[1].location).toBeUndefined();
     expect(itineraryStops(plan(), 1).map((stop) => stop.number)).toEqual([5]);
     expect(routeSegments(stops)).toEqual([
+      [
+        [135.785, 34.9949],
+        [135.77, 34.9949],
+      ],
       [
         [135.77, 34.9949],
         [135.76, 34.9949],
@@ -180,4 +184,41 @@ it('备选和可选活动不会串成路线，也不跨过备选空隙连线', (
       [136, 34.9949],
     ],
   ]);
+});
+
+it('机场间夹着转机和托运仍连线，相同坐标不重复且近距离点不合并', () => {
+  const value = plan();
+  const item = (title: string, longitude?: number) => ({
+    time: '',
+    title,
+    detail: '',
+    ...(longitude === undefined
+      ? {}
+      : { location: { ...location, precision: 'place' as const, longitude } }),
+  });
+  value.days[0].activities = [
+    item('深圳', 114),
+    item('廊曼', 100.6),
+    item('转机'),
+    item('托运行李'),
+    item('普吉', 98.3),
+    item('同机场', 98.3),
+    item('上车点', 98.30001),
+  ];
+  expect(routeSegments(itineraryStops(value, 0))).toEqual([
+    [
+      [114, 34.9949],
+      [100.6, 34.9949],
+    ],
+    [
+      [100.6, 34.9949],
+      [98.3, 34.9949],
+    ],
+    [
+      [98.3, 34.9949],
+      [98.30001, 34.9949],
+    ],
+  ]);
+  value.days[1].activities.unshift(item('取行李'));
+  expect(routeSegments(itineraryStops(value))).toHaveLength(3);
 });

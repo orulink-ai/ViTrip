@@ -91,3 +91,47 @@ it('persists failure separately while retaining partial output and ending active
   expect(messages[0].activities?.[0].status).toBe('interrupted');
   expect(persisted).toBe(true);
 });
+it('语音转写按轮次追加，工具迟到的结果仍归属于原轮次', () => {
+  const messages: Message[] = [];
+  const response = createTurnResponse(messages, () => {});
+  response.voiceUser({ id: 'u1', role: 'user', content: '找餐厅' });
+  response.text('我来查');
+  const first = messages[1].id;
+  const step = {
+    id: 'search',
+    name: 'google_maps',
+    input: '{}',
+    output: '',
+    status: 'active' as const,
+    startedAt: 1,
+  };
+  response.activity(step);
+  response.voiceUser({ id: 'u2', role: 'user', content: '改为海鲜' });
+  response.text('按海鲜查');
+  response.activity({ ...step, status: 'complete', output: '已获取结果' });
+  expect(messages.map((m) => [m.role, m.content])).toEqual([
+    ['user', '找餐厅'],
+    ['assistant', '我来查'],
+    ['user', '改为海鲜'],
+    ['assistant', '按海鲜查'],
+  ]);
+  expect(messages[1].id).toBe(first);
+  expect(messages[1].activities?.[0].output).toBe('已获取结果');
+  expect(messages[3].activities).toBeUndefined();
+});
+it('新请求复用工具编号时不会修改上一条回复', () => {
+  const messages: Message[] = [];
+  const step = {
+    id: 'same-id',
+    name: 'observe',
+    input: '{}',
+    output: '第一轮',
+    status: 'complete' as const,
+    startedAt: 1,
+  };
+  createTurnResponse(messages, () => {}).activity(step);
+  createTurnResponse(messages, () => {}).activity({ ...step, output: '第二轮' });
+  expect(messages).toHaveLength(2);
+  expect(messages[0].activities?.[0].output).toBe('第一轮');
+  expect(messages[1].activities?.[0].output).toBe('第二轮');
+});

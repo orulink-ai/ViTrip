@@ -5,6 +5,7 @@ import type { Message, ToolActivity } from '../shared/types';
 export function createTurnResponse(messages: Message[], publish: (persist: boolean) => void) {
   let message: Message | undefined;
   let currentText: { type: 'text'; text: string } | undefined;
+  const activityOwners = new Map<string, Message>();
   const ensure = () => {
     if (!message) {
       message = { id: randomUUID(), role: 'assistant', content: '', parts: [] };
@@ -23,6 +24,18 @@ export function createTurnResponse(messages: Message[], publish: (persist: boole
       .join('\n\n');
   };
   return {
+    voiceUser(input: Message) {
+      message = undefined;
+      currentText = undefined;
+      messages.push(input);
+      publish(true);
+    },
+    addUser(input: Message) {
+      // Steering belongs to the same turn; keep the ongoing assistant response after its inputs.
+      const index = message ? messages.indexOf(message) : -1;
+      messages.splice(index < 0 ? messages.length : index, 0, input);
+      publish(true);
+    },
     fail(error: string) {
       const row = ensure();
       row.error = error;
@@ -47,7 +60,8 @@ export function createTurnResponse(messages: Message[], publish: (persist: boole
       publish(true);
     },
     activity(step: ToolActivity) {
-      const row = ensure();
+      const row = activityOwners.get(step.id) ?? ensure();
+      activityOwners.set(step.id, row);
       const steps = (row.activities ??= []);
       const index = steps.findIndex((item) => item.id === step.id);
       if (index < 0) {

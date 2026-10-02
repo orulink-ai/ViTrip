@@ -233,7 +233,7 @@ test('local desktop: real browser tools, itinerary, approval and takeover', asyn
   await page.getByRole('button', { name: '模型设置', exact: true }).click();
   await page.getByLabel('模型接口地址', { exact: true }).fill(origin + '/v1');
   await page.getByLabel('模型名称', { exact: true }).fill('test-model');
-  await page.getByRole('button', { name: '保存设置', exact: true }).click();
+  await page.getByRole('button', { name: '保存连接设置', exact: true }).click();
   await page.getByLabel('旅行需求', { exact: true }).fill('测试规划');
   await page.getByRole('button', { name: '发送', exact: true }).click();
   await expect(page.getByText('已在真实浏览器中搜索京都，并生成测试行程。')).toBeVisible();

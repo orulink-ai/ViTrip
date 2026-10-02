@@ -11,15 +11,22 @@ export function documentOperation(step: ToolActivity) {
     const action = args?.action;
     return {
       label:
-        action === 'write'
-          ? '保存笔记'
-          : action === 'read'
-            ? '读取笔记'
-            : action === 'list'
-              ? '查看笔记目录'
-              : '整理笔记',
+        action === 'upsert_map'
+          ? '更新笔记地图'
+          : action === 'remove_map'
+            ? '删除笔记地图'
+            : action === 'write'
+              ? '保存笔记'
+              : action === 'read'
+                ? '读取笔记'
+                : action === 'list'
+                  ? '查看笔记目录'
+                  : '整理笔记',
       target: name || '笔记本',
-      saved: step.status === 'complete' && action === 'write' ? name : '',
+      saved:
+        step.status === 'complete' && ['write', 'upsert_map', 'remove_map'].includes(String(action))
+          ? name
+          : '',
     };
   }
   return { label: '整理旅行手册', target: '旅行手册', saved: '' };

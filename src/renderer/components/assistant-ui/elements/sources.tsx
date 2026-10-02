@@ -1,5 +1,6 @@
 'use client';
 
+import { t } from '~/i18n';
 import { ChevronDownIcon } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../ui/collapsible';
 import { cn } from '~/utils';
@@ -78,7 +79,7 @@ export function Sources({
             ))}
           </span>
         ) : null}
-        <span>Sources</span>
+        <span>{t('来源')}</span>
         <span className={cn(mono, 'text-foreground/35 tabular-nums')}>{sources.length}</span>
         <ChevronDownIcon className="size-3 opacity-60 transition-transform duration-200 ease-[cubic-bezier(0.32,0.72,0,1)] group-data-open/trigger:rotate-180 group-data-panel-open/trigger:rotate-180 motion-reduce:transition-none" />
       </CollapsibleTrigger>
@@ -131,7 +132,7 @@ export function Sources({
                   className={cardClassName}
                 >
                   {content}
-                  <span className="sr-only">(opens in a new tab)</span>
+                  <span className="sr-only">{t('打开来源网页')}</span>
                 </a>
               );
             }

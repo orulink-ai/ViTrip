@@ -1,3 +1,4 @@
+import { selectMapDay, expectMapDay } from './map-date';
 import { test, expect, _electron as electron } from '@playwright/test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -19,16 +20,13 @@ test('行程仅有地图和准备待办，待办完成状态持久化且地图�
     await expect(page.getByRole('tab', { name: '总览', exact: true })).toHaveCount(0);
     await expect(page.getByRole('tab', { name: '参考资料', exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: '返回行程', exact: true })).toHaveCount(0);
-    await page.getByRole('button', { name: '地图第 2 天', exact: true }).click();
+    await selectMapDay(page, 2);
     await page.getByRole('tab', { name: '准备待办', exact: true }).click();
     await page.getByLabel('新的待办事项', { exact: true }).fill('带护照');
     await page.getByLabel('新的待办事项', { exact: true }).press('Enter');
     await page.getByRole('checkbox', { name: '带护照', exact: true }).check();
     await page.getByRole('tab', { name: '行程地图', exact: true }).click();
-    await expect(page.getByRole('button', { name: '地图第 2 天', exact: true })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
+    await expectMapDay(page, 2);
     await page.reload();
     await page.getByRole('tab', { name: '行程', exact: true }).click();
     await page.getByRole('tab', { name: '准备待办', exact: true }).click();

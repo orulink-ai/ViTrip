@@ -1,6 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { API, Event } from '../shared/types';
 const api: API = {
+  startVoice: (tripId, sdp) => ipcRenderer.invoke('vitrip:startVoice', tripId, sdp),
+  stopVoice: (tripId) => ipcRenderer.invoke('vitrip:stopVoice', tripId),
   codexModels: () => ipcRenderer.invoke('vitrip:codexModels'),
   listDocumentFolders: (id) => ipcRenderer.invoke('vitrip:listDocumentFolders', id),
   createDocumentFolder: (id, name) => ipcRenderer.invoke('vitrip:createDocumentFolder', id, name),
@@ -30,7 +32,12 @@ const api: API = {
   conversationSettings: (tripId, patch) =>
     ipcRenderer.invoke('vitrip:conversationSettings', tripId, patch),
   cancelQueuedMessage: (id) => ipcRenderer.invoke('vitrip:cancelQueuedMessage', id),
+  beginQueuedMessageEdit: (id) => ipcRenderer.invoke('vitrip:beginQueuedMessageEdit', id),
+  endQueuedMessageEdit: (id) => ipcRenderer.invoke('vitrip:endQueuedMessageEdit', id),
+  editQueuedMessage: (id, content, quote, attachmentIds) =>
+    ipcRenderer.invoke('vitrip:editQueuedMessage', id, content, quote, attachmentIds),
   resumeQueue: () => ipcRenderer.invoke('vitrip:resumeQueue'),
+  sendQueuedMessage: (id) => ipcRenderer.invoke('vitrip:sendQueuedMessage', id),
   regenerate: (parentId) => ipcRenderer.invoke('vitrip:regenerate', parentId),
   selectBranch: (headId) => ipcRenderer.invoke('vitrip:selectBranch', headId),
   feedback: (id, value) => ipcRenderer.invoke('vitrip:feedback', id, value),
@@ -45,6 +52,9 @@ const api: API = {
   removeBookmark: (id, mark) => ipcRenderer.invoke('vitrip:removeBookmark', id, mark),
   settings: (value) => ipcRenderer.invoke('vitrip:settings', value),
   browse: (url) => ipcRenderer.invoke('vitrip:browse', url),
+  openBrowserExternal: () => ipcRenderer.invoke('vitrip:openBrowserExternal'),
+  browserHistory: (journeyId) => ipcRenderer.invoke('vitrip:browserHistory', journeyId),
+  clearBrowserHistory: (journeyId) => ipcRenderer.invoke('vitrip:clearBrowserHistory', journeyId),
   history: (action) => ipcRenderer.invoke('vitrip:history', action),
   bounds: (value) => ipcRenderer.invoke('vitrip:bounds', value),
   pause: () => ipcRenderer.invoke('vitrip:pause'),

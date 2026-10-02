@@ -37,13 +37,7 @@ test('工具随回复按顺序出现、原位完成，重启仍保留交错顺�
     const checkOrder = async () => {
       const row = page.locator('[data-slot="aui_assistant-message-root"]').last();
       const text = await row.innerText();
-      const ordered = [
-        '我先核对汇率',
-        'webSearch',
-        '已经核对汇率',
-        '人民币价格.md',
-        'Codex 已完成',
-      ];
+      const ordered = ['我先核对汇率', 'THB CNY', '已经核对汇率', '人民币价格.md', 'Codex 已完成'];
       for (let i = 1; i < ordered.length; i++)
         expect(text.indexOf(ordered[i])).toBeGreaterThan(text.indexOf(ordered[i - 1]));
       await expect(row.getByTestId('agent-activity')).toHaveCount(2);

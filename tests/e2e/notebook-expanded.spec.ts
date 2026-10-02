@@ -20,6 +20,10 @@ test('笔记展开后聊天浮动，保留草稿和编辑，恢复布局并可�
     await page.getByRole('button', { name: '展开笔记工作区', exact: true }).click();
     const popup = page.locator('.aui-modal-content');
     await expect(popup).toBeVisible();
+    await expect(popup.getByRole('heading', { name: '下一站，去哪里？', exact: true })).toHaveCount(
+      0,
+    );
+    await expect(popup.getByRole('region', { name: '我的旅行', exact: true })).toHaveCount(0);
     await expect(popup.getByLabel('旅行需求', { exact: true })).toHaveValue('请继续整理这篇笔记');
     await expect
       .poll(async () => (await region.boundingBox())!.width)

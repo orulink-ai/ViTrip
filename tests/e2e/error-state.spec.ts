@@ -57,7 +57,7 @@ test('额度错误显示官方提示，重启保留状态，重试恢复回复',
       .getByLabel('模型接口地址', { exact: true })
       .fill(`http://127.0.0.1:${address.port}/v1`);
     await page.getByLabel('模型名称', { exact: true }).fill('test-model');
-    await page.getByRole('button', { name: '保存设置', exact: true }).click();
+    await page.getByRole('button', { name: '保存连接设置', exact: true }).click();
     await page.getByLabel('旅行需求', { exact: true }).fill('安排一次旅行');
     await page.getByRole('button', { name: '发送', exact: true }).click();
     const banner = page.locator('[data-slot="error-state"]');

@@ -8,7 +8,11 @@ import type { RunControl } from './control';
 import { runTravelAgent as runPiAgent, supportsImages as piSupportsImages } from './agent';
 import { runCodexAgent } from './codex-agent';
 
+export type AgentSteer = (input: { prompt: string; images?: AgentImage[] }) => Promise<void>;
+
 export interface AgentRunOptions {
+  voice?: { sdp: string; onEvent: (event: import('../shared/voice').VoiceEvent) => void };
+  onSteerReady?: (steer: AgentSteer | undefined) => void;
   settings: Settings;
   sessionDir: string;
   searchDirectory?: string;

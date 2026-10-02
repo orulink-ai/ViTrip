@@ -1,4 +1,7 @@
 import { createPortal } from 'react-dom';
+import { LocateFixed, Check, Clock, CircleHelp } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from './components/ui/popover';
+import { TooltipIconButton } from './components/assistant-ui/elements/tooltip-icon-button';
 import { MapStopMarker } from './map-stop-marker';
 import { clusterStops } from '../shared/map-clusters';
 import { mapFocusCamera } from '../shared/map-focus';
@@ -34,6 +37,7 @@ export default function MapCanvas({
   onBrowse,
   expanded,
   controlsHost,
+  listOpen = false,
 }: {
   stops: ItineraryStop[];
   journeyId?: string;
@@ -45,6 +49,7 @@ export default function MapCanvas({
   onBrowse: (url: string) => void;
   expanded: boolean;
   controlsHost?: HTMLDivElement | null;
+  listOpen?: boolean;
 }) {
   const locale = useLocale();
   const [appearance, setAppearance] = useState(() => readMapAppearance(localStorage, journeyId));
@@ -363,23 +368,33 @@ export default function MapCanvas({
   }, [stops, contextStops, selectedId, readyMap, styleRevision, showConnections]);
 
   const previousSelection = useRef(selectedId);
+  const previousListOpen = useRef(listOpen);
   const focusStop = (id: string | undefined) => {
     const instance = map.current;
     const location = latest.current.stops.find((stop) => stop.id === id)?.location;
     if (!instance || !location) return;
-    instance.easeTo(
-      mapFocusCamera(
+    instance.easeTo({
+      ...mapFocusCamera(
         location,
         instance.getZoom(),
         window.matchMedia('(prefers-reduced-motion: reduce)').matches,
       ),
-    );
+      offset: [
+        listOpen ? (Math.min(320, instance.getContainer().clientWidth * 0.45) + 24) / 2 : 0,
+        0,
+      ],
+    });
   };
   useEffect(() => {
-    if (!ready || previousSelection.current === selectedId) return;
+    if (
+      !ready ||
+      (previousSelection.current === selectedId && previousListOpen.current === listOpen)
+    )
+      return;
     previousSelection.current = selectedId;
+    previousListOpen.current = listOpen;
     focusStop(selectedId);
-  }, [selectedId, stops, ready]);
+  }, [selectedId, stops, ready, listOpen]);
 
   return (
     <div className={expanded ? 'relative flex min-h-0 flex-1 flex-col' : 'relative'}>
@@ -404,72 +419,88 @@ export default function MapCanvas({
         className="absolute bottom-10 left-3 z-10 flex max-w-[calc(100%-5rem)] flex-wrap gap-3 rounded-md border bg-background px-3 py-2 text-xs shadow-sm"
         aria-label="地图安排状态"
       >
-        <span style={{ color: '#15803d' }}>● 已确定</span>
-        <span style={{ color: '#a16207' }}>● 待确定</span>
-        <span className="text-muted-foreground">悬浮查看引用 · 点击固定</span>
+        <span className="inline-flex items-center gap-1">
+          <Check size={12} />
+          {t('已确定')}
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <Clock size={12} />
+          {t('待确定')}
+        </span>
       </p>
+      <div className="absolute right-14 top-3 z-10">
+        <MapAppearancePicker
+          compact
+          value={appearance}
+          onChange={changeAppearance}
+          onDefault={() => saveDefaultMapAppearance(localStorage, appearance)}
+        />
+      </div>
       {controlsHost &&
         createPortal(
           <>
             <div className="flex flex-wrap items-center gap-2">
-              <Button
-                size="sm"
-                variant="outline"
+              <TooltipIconButton
+                tooltip={t('显示当前范围内的所有地点')}
+                aria-label={t('适应视野')}
                 disabled={!ready}
                 onClick={() => {
-                  changeAppearance({ style: 'liberty', view: 'flat' });
                   const bounds = mapBounds(stops);
                   if (bounds)
                     map.current?.fitBounds(bounds, {
                       padding: 90,
                       maxZoom: 14,
-                      pitch: 0,
-                      bearing: 0,
+                      pitch: map.current?.getPitch(),
+                      bearing: map.current?.getBearing(),
                       duration: 0,
                     });
                 }}
               >
-                {t('查看全部地点')}
-              </Button>
-              <MapAppearancePicker
-                value={appearance}
-                onChange={changeAppearance}
-                onDefault={() => saveDefaultMapAppearance(localStorage, appearance)}
-              />
-              {saveProblem && (
-                <span role="status" className="text-xs text-muted-foreground">
-                  {t('外观暂时无法保存')}
-                </span>
-              )}
-              {tilted && (
-                <Badge variant="secondary">
-                  {t(
-                    appliedStyle === 'liberty'
-                      ? '支持立体建筑，放大至街区查看'
-                      : '倾斜预览 · 不含建筑高度',
+                <LocateFixed />
+              </TooltipIconButton>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <TooltipIconButton tooltip={t('地图说明')} aria-label={t('地图说明')}>
+                    <CircleHelp />
+                  </TooltipIconButton>
+                </PopoverTrigger>
+                <PopoverContent align="end" className="space-y-2 text-sm">
+                  <p>{t('悬浮查看引用 · 点击固定')}</p>
+                  <p>{t('虚线仅示意行程顺序，不代表导航路线')}</p>
+                  {tilted && (
+                    <Badge variant="secondary">
+                      {t(
+                        appliedStyle === 'liberty'
+                          ? '支持立体建筑，放大至街区查看'
+                          : '倾斜预览 · 不含建筑高度',
+                      )}
+                    </Badge>
                   )}
-                </Badge>
-              )}
+                </PopoverContent>
+              </Popover>
             </div>
-            {loadingTiles && !problem && (
-              <p role="status" className="text-xs text-muted-foreground">
-                {t('正在加载地图底图…')}
-              </p>
-            )}
-            {problem && (
-              <div
-                role="status"
-                className="flex max-w-[calc(100%-1.5rem)] items-center justify-between gap-2 text-xs text-muted-foreground"
-              >
-                <span>{t(problem)}</span>
-                <Button size="xs" variant="outline" onClick={() => setRetry((n) => n + 1)}>
-                  {t('重试底图')}
-                </Button>
-              </div>
-            )}
           </>,
           controlsHost,
         )}
+      <div className="absolute left-3 top-3 z-10 max-w-[calc(100%-8rem)] space-y-2 rounded-md bg-background/95 text-xs text-muted-foreground">
+        {loadingTiles && !problem && (
+          <p role="status" className="text-xs text-muted-foreground">
+            {t('正在加载地图底图…')}
+          </p>
+        )}
+        {problem && (
+          <div
+            role="status"
+            className="flex max-w-[calc(100%-1.5rem)] items-center justify-between gap-2 text-xs text-muted-foreground"
+          >
+            <span>{t(problem)}</span>
+            <Button size="xs" variant="outline" onClick={() => setRetry((n) => n + 1)}>
+              {t('重试底图')}
+            </Button>
+          </div>
+        )}
+        {saveProblem && <p role="status">{t('外观暂时无法保存')}</p>}
+      </div>
       <div
         ref={container}
         aria-label="行程交互地图"
@@ -481,7 +512,6 @@ export default function MapCanvas({
         className={`maplibregl-map ${expanded ? 'min-h-56 flex-1' : 'h-72'}`}
       />
       <div className="absolute inset-x-0 bottom-0 z-10 flex flex-wrap items-center justify-between gap-2 bg-background/90 px-3 py-1 text-xs text-muted-foreground">
-        <span>{t('虚线仅示意行程顺序，不代表导航路线')}</span>
         {appliedStyle !== 'street' && (
           <a
             href="https://www.openmaptiles.org/"

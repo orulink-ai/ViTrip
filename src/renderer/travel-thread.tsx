@@ -1,6 +1,8 @@
+import { VoiceControls } from './voice-controls';
 import { SelectionQuotation } from './selection-quotation';
 import type { QuoteHandler } from './quote-actions';
 import { AnnotationList } from './annotation-list';
+import { QueuedMessageEditor, useQueuedMessageEdit } from './queued-message-editor';
 import { bookmarkMarkdown } from './bookmark-markdown';
 import { compactQuote } from '../shared/bookmark-ranges';
 import { MarkdownText } from './components/assistant-ui/elements/markdown-text';
@@ -16,6 +18,8 @@ import { savedNotebookArtifacts } from '../shared/notebook-artifacts';
 import { File } from './components/assistant-ui/elements/file';
 import { CopyLink } from './copy-link';
 import {
+  lazy,
+  Suspense,
   createContext,
   useContext,
   useEffect,
@@ -34,6 +38,7 @@ import {
 } from '@assistant-ui/react';
 import {
   Thread,
+  Composer,
   type ThreadComponents,
 } from './components/assistant-ui/elements/thread.aui';
 import { QuoteBlock } from './components/assistant-ui/elements/quote.aui';
@@ -46,6 +51,8 @@ import { TravelOverview } from './travel-overview';
 import type { Journey, Trip, PublicSettings, ToolActivity } from '../shared/types';
 import type { Quote } from '../shared/notebook';
 
+const HomeMap = lazy(() => import('./home-globe'));
+
 type Props = {
   floating?: boolean;
   onFloatingOpenChange?: (open: boolean) => void;
@@ -57,6 +64,9 @@ type Props = {
   onOverlay: (open: boolean) => void;
   draft: string;
   running: boolean;
+  voiceActive?: boolean;
+  onVoiceActiveChange?: (active: boolean) => void;
+  canSteer?: boolean;
   quoteRequest?: Quote;
   onQuote: QuoteHandler;
   onQuoteChange: (quote: Quote | undefined) => void;
@@ -75,12 +85,15 @@ type Props = {
   onBrowse: (url: string) => void;
   onOpenDocument: (name: string) => void;
 };
-const Context = createContext<Props | null>(null);
+const Context = createContext<(Props & { editor: ReturnType<typeof useQueuedMessageEdit> }) | null>(
+  null,
+);
 function useTravel() {
   return useContext(Context)!;
 }
 
 export function TravelThread(props: Props) {
+  const editor = useQueuedMessageEdit(props.trip?.id, props.onError);
   const threadHost = useMemo(() => {
     const host = document.createElement('div');
     host.className = 'h-full min-h-0';
@@ -90,8 +103,13 @@ export function TravelThread(props: Props) {
     if (node && threadHost.parentElement !== node) node.append(threadHost);
   };
   const messages = useMemo(
-    () => toThreadMessages(props.trip?.messages ?? [], props.draft, props.running),
-    [props.trip?.messages, props.draft, props.running],
+    () =>
+      toThreadMessages(
+        props.trip?.messages ?? [],
+        props.draft,
+        props.running && !props.voiceActive,
+      ),
+    [props.trip?.messages, props.draft, props.running, props.voiceActive],
   );
   const attachmentAdapter = useMemo(
     () =>
@@ -99,8 +117,9 @@ export function TravelThread(props: Props) {
     [props.trip?.id, props.onError],
   );
   const repository = useMemo(
-    () => (props.trip ? toBranchRepository(props.trip, props.running) : undefined),
-    [props.trip, props.running],
+    () =>
+      props.trip ? toBranchRepository(props.trip, props.running && !props.voiceActive) : undefined,
+    [props.trip, props.running, props.voiceActive],
   );
   const runtime = useExternalStoreRuntime({
     messageRepository: repository,
@@ -132,7 +151,7 @@ export function TravelThread(props: Props) {
     isDisabled: props.disabled,
     messages,
     convertMessage: (message) => message,
-    isRunning: props.running,
+    isRunning: props.running && !props.voiceActive,
     onNew: async (message) => {
       const text = message.content
         .filter((part) => part.type === 'text')
@@ -171,7 +190,7 @@ export function TravelThread(props: Props) {
     });
   }, [runtime, props.trip?.id]);
   return (
-    <Context.Provider value={props}>
+    <Context.Provider value={{ ...props, editor }}>
       <AssistantRuntimeProvider runtime={runtime}>
         <QuoteRequest />
         <div
@@ -185,6 +204,7 @@ export function TravelThread(props: Props) {
               return;
             }
             if (
+              !editor.message &&
               props.running &&
               event.key === 'Enter' &&
               !event.shiftKey &&
@@ -213,7 +233,12 @@ export function TravelThread(props: Props) {
             }
           }}
         >
-          {createPortal(<Thread components={components} />, threadHost)}
+          {createPortal(
+            <Thread
+              components={props.floating ? { ...components, WelcomeFooter: undefined } : components}
+            />,
+            threadHost,
+          )}
           {props.floating ? (
             <AssistantModal
               title={props.trip?.title || '旅行助手'}
@@ -245,6 +270,13 @@ function QuoteRequest() {
   return null;
 }
 function Welcome() {
+  const { floating } = useTravel();
+  if (floating)
+    return (
+      <p className="px-4 py-3 text-sm text-muted-foreground">
+        {t('告诉我一个想法，一起把旅行安排好。')}
+      </p>
+    );
   return (
     <div className="welcome">
       <p className="text-sm">{t('你的旅行，从这里开始')}</p>
@@ -283,6 +315,9 @@ function WelcomeFooter() {
           <ArrowRight size={14} />
         </Button>
       </div>
+      <Suspense fallback={null}>
+        <HomeMap />
+      </Suspense>
       <TravelOverview
         journeys={journeys}
         trips={trips}
@@ -294,32 +329,52 @@ function WelcomeFooter() {
   );
 }
 function Tools() {
-  const { config, running, disabled, onRuntimeChange, onSettings } = useTravel();
+  const {
+    config,
+    running,
+    disabled,
+    onRuntimeChange,
+    onSettings,
+    trip,
+    onError,
+    onVoiceActiveChange,
+  } = useTravel();
   return (
-    <AgentSelector
-      config={config}
-      running={running}
-      disabled={!!disabled}
-      onChange={onRuntimeChange}
-      onSettings={onSettings}
-    />
+    <>
+      <AgentSelector
+        config={config}
+        running={running}
+        disabled={!!disabled}
+        onChange={onRuntimeChange}
+        onSettings={onSettings}
+      />
+      {config.runtime === 'codex' && trip && (
+        <VoiceControls
+          key={trip.id}
+          tripId={trip.id}
+          disabled={running || !!disabled}
+          onError={onError}
+          onActiveChange={onVoiceActiveChange}
+        />
+      )}
+    </>
   );
 }
 function SendAction({ queue = false }: { queue?: boolean }) {
-  const { running, quoteRequest, onSend, onError } = useTravel();
+  const { running, voiceActive, quoteRequest, onSend, onError } = useTravel();
   const aui = useAui();
   const canSend = useAuiState((s) => s.composer.canSend);
   const hasAttachments = useAuiState((s) => s.composer.attachments.length > 0);
   const disabled = useAuiState((s) => s.thread.isDisabled || s.composer.submission !== undefined);
   const [sending, setSending] = useState(false);
-  if (queue !== running) return null;
+  if (queue !== (running && !voiceActive)) return null;
   return (
     <Button
       type="button"
       variant={queue ? 'outline' : 'default'}
       size={queue ? 'sm' : 'icon'}
       className={queue ? undefined : 'aui-composer-send size-7 rounded-full'}
-      aria-label={t(queue ? '加入队列' : '发送')}
+      aria-label={t(voiceActive ? '通话后发送' : queue ? '加入队列' : '发送')}
       disabled={disabled || sending || (!canSend && (!quoteRequest || hasAttachments))}
       onClick={() => {
         if (canSend) {
@@ -486,7 +541,9 @@ function MessageError() {
   return <TravelMessageError onSettings={useTravel().onSettings} />;
 }
 function Footer() {
-  const { footer, trip, running, onError } = useTravel();
+  const { footer, trip, running, canSteer, onError, editor } = useTravel();
+  const [sending, setSending] = useState(false);
+
   const queued = trip?.queuedMessages ?? [];
   return (
     <>
@@ -509,12 +566,30 @@ function Footer() {
                 m.attachments?.map((f) => f.name).join('、') ||
                 t('附件'),
             }))}
+            sending={sending || editor.busy || Boolean(editor.message)}
+            editingId={editor.message?.id}
+            onEdit={(id) => {
+              const message = queued.find((message) => message.id === id);
+              if (message) void editor.begin(message);
+            }}
+            onSend={
+              !running || canSteer
+                ? (id) => {
+                    setSending(true);
+                    void window.vitrip
+                      .sendQueuedMessage(id)
+                      .catch((error: Error) => onError(error.message))
+                      .finally(() => setSending(false));
+                  }
+                : undefined
+            }
             onCancel={(id) => {
               void window.vitrip.cancelQueuedMessage(id).catch((e: Error) => onError(e.message));
             }}
           />
           {!running && (
             <Button
+              disabled={Boolean(editor.message) || editor.busy}
               variant="ghost"
               size="sm"
               onClick={() => {
@@ -557,7 +632,25 @@ function BookmarkedText() {
   );
   return <MarkdownText rehypePlugins={plugins} />;
 }
+function TravelComposer() {
+  const { editor, trip, onError } = useTravel();
+  return editor.message && trip ? (
+    <QueuedMessageEditor
+      key={editor.message.id}
+      message={editor.message}
+      tripId={trip.id}
+      position={
+        (trip.queuedMessages?.findIndex((message) => message.id === editor.message?.id) ?? 0) + 1
+      }
+      onClose={editor.end}
+      onError={onError}
+    />
+  ) : (
+    <Composer />
+  );
+}
 const components: ThreadComponents = {
+  Composer: TravelComposer,
   MessageText: BookmarkedText,
   MessageError,
   ToolFallback: ActivityPart,

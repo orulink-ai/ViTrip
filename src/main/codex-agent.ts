@@ -1,3 +1,4 @@
+import { startCodexVoice } from './codex-voice-start';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
@@ -19,14 +20,19 @@ const sessionSchema = z.object({ threadId: z.string().min(1) });
 
 /** Each ViTrip conversation owns a Codex thread; Pi session files remain independent. */
 export async function runCodexAgent(options: AgentRunOptions, commandOverride?: CodexCommand) {
-  const signal = AbortSignal.any([options.signal, AbortSignal.timeout(180000)]);
+  const signal = options.signal;
   signal.throwIfAborted();
   await fs.mkdir(options.sessionDir, { recursive: true, mode: 0o700 });
   const host = await resolveHostEnvironment();
   signal.throwIfAborted();
   const command = commandOverride ?? {
     command: await resolveCodexExecutable(host.commandPath),
-    args: ['app-server', '--listen', 'stdio://'],
+    args: [
+      'app-server',
+      ...(options.voice ? ['--enable', 'realtime_conversation'] : []),
+      '--listen',
+      'stdio://',
+    ],
   };
   if (!command.command)
     throw new Error('未找到 Codex CLI。请安装后在终端运行 codex login，再重试。');
@@ -49,6 +55,11 @@ export async function runCodexAgent(options: AgentRunOptions, commandOverride?: 
   let threadId = '';
   let turnId = '';
   let accepting = true;
+  let turnFinished = false;
+  const clearSteer = () => {
+    turnFinished = true;
+    options.onSteerReady?.(undefined);
+  };
   let shutdown: Promise<void> | undefined;
   let acknowledgeInterruption!: () => void;
   const interrupted = new Promise<void>((resolve) => {
@@ -64,6 +75,7 @@ export async function runCodexAgent(options: AgentRunOptions, commandOverride?: 
   // Completion can arrive before turn/start's response, including startup failures.
   void done.catch(() => {});
   const fail = (error: Error) => {
+    clearSteer();
     failure = error;
     rejectDone(error);
   };
@@ -74,7 +86,11 @@ export async function runCodexAgent(options: AgentRunOptions, commandOverride?: 
   const budget = new ResearchBudget();
   const safe = (value: unknown) => {
     let text = typeof value === 'string' ? value : (JSON.stringify(value) ?? '');
-    for (const key of [options.settings.apiKey, options.settings.jevApiKey])
+    for (const key of [
+      options.settings.apiKey,
+      options.settings.jevApiKey,
+      options.settings.tavilyApiKey,
+    ])
       if (key) text = text.replaceAll(key, '[密钥已隐藏]');
     return text.slice(0, 12000);
   };
@@ -169,6 +185,22 @@ export async function runCodexAgent(options: AgentRunOptions, commandOverride?: 
     }
     const params = parsed.data;
     if (params.threadId && params.threadId !== threadId) return;
+    if (options.voice && message.method.startsWith('thread/realtime/')) {
+      if (message.method === 'thread/realtime/sdp' && typeof params.sdp === 'string')
+        options.voice.onEvent({ kind: 'sdp', sdp: params.sdp });
+      if (
+        message.method === 'thread/realtime/transcript/done' &&
+        typeof params.text === 'string' &&
+        (params.role === 'user' || params.role === 'assistant')
+      ) {
+        if (params.role === 'user' && params.text.trim()) budget.startTurn();
+        options.voice.onEvent({ kind: 'transcript', role: params.role, text: params.text });
+      }
+      if (message.method === 'thread/realtime/error')
+        fail(new Error(typeof params.message === 'string' ? safe(params.message) : '语音连接失败'));
+      if (message.method === 'thread/realtime/closed') resolveDone();
+      return;
+    }
     if (message.id !== undefined) {
       requestQueue = requestQueue
         .then(async () => {
@@ -231,7 +263,6 @@ export async function runCodexAgent(options: AgentRunOptions, commandOverride?: 
           id: value.id,
           name: String(value.tool ?? value.type),
           input:
-            previous?.input ??
             safe(
               value.command ??
                 value.changes ??
@@ -239,8 +270,17 @@ export async function runCodexAgent(options: AgentRunOptions, commandOverride?: 
                 value.action ??
                 value.query ??
                 '',
-            ),
-          output: safe(value.aggregatedOutput ?? value.result ?? value.error ?? ''),
+            ) ||
+            previous?.input ||
+            '',
+          output: safe(
+            value.aggregatedOutput ??
+              value.result ??
+              value.error ??
+              value.sources ??
+              previous?.output ??
+              '',
+          ),
           status: completed
             ? value.status === 'failed' ||
               value.status === 'declined' ||
@@ -273,18 +313,22 @@ export async function runCodexAgent(options: AgentRunOptions, commandOverride?: 
         })
         .safeParse(params.turn);
       if (!turn.success || (turnId && turn.data.id !== turnId)) return;
-      if (turn.data.status === 'completed') resolveDone();
-      else fail(new Error(turn.data.error?.message ?? 'Codex 本轮已中断'));
+      clearSteer();
+      if (turn.data.status === 'completed') {
+        if (!options.voice) resolveDone();
+      } else fail(new Error(turn.data.error?.message ?? 'Codex 本轮已中断'));
     }
   });
   const cancel = () => {
     accepting = false;
     shutdown = (async () => {
-      if (threadId && turnId) {
+      if (threadId && (turnId || options.voice)) {
         let timer: ReturnType<typeof setTimeout> | undefined;
         try {
           await Promise.race([
-            rpc.request('turn/interrupt', { threadId, turnId }).then(() => interrupted),
+            options.voice
+              ? rpc.request('thread/realtime/stop', { threadId })
+              : rpc.request('turn/interrupt', { threadId, turnId }).then(() => interrupted),
             new Promise<void>((resolve) => {
               timer = setTimeout(resolve, 750);
             }),
@@ -332,7 +376,14 @@ export async function runCodexAgent(options: AgentRunOptions, commandOverride?: 
       approvalPolicy: 'on-request',
       approvalsReviewer: 'user',
       sandbox: 'workspace-write',
-      developerInstructions: instructions,
+      developerInstructions:
+        instructions +
+        (options.voice
+          ? '\n语音会话的当前旅行上下文：\n' +
+            (options.initialContext ?? '') +
+            '\n' +
+            options.prompt
+          : ''),
       ...(options.settings.codexModel ? { model: options.settings.codexModel } : {}),
     };
     const started = threadResult.parse(
@@ -360,6 +411,19 @@ export async function runCodexAgent(options: AgentRunOptions, commandOverride?: 
     threadId = started.thread.id;
     if (failure) throw failure;
     signal.throwIfAborted();
+    if (options.voice) {
+      if (!ephemeral) {
+        await fs.writeFile(file + '.tmp', JSON.stringify({ threadId }), { mode: 0o600 });
+        await fs.rename(file + '.tmp', file);
+      }
+      await startCodexVoice(rpc, threadId, signal, 30000, {
+        type: 'webrtc',
+        sdp: options.voice.sdp,
+      });
+      await done;
+      signal.throwIfAborted();
+      return;
+    }
     const startedTurn = z.object({ turn: z.object({ id: z.string() }) }).parse(
       await rpc.request('turn/start', {
         threadId,
@@ -379,6 +443,25 @@ export async function runCodexAgent(options: AgentRunOptions, commandOverride?: 
       }),
     );
     turnId = startedTurn.turn.id;
+    if (!turnFinished && !signal.aborted)
+      options.onSteerReady?.(async ({ prompt, images }) => {
+        signal.throwIfAborted();
+        if (!accepting || turnFinished) throw new Error('当前任务已结束，消息仍保留在队列中');
+        const result = z.object({ turnId: z.string() }).parse(
+          await rpc.request('turn/steer', {
+            threadId,
+            expectedTurnId: turnId,
+            input: [
+              { type: 'text', text: prompt, text_elements: [] },
+              ...(images ?? []).map((image) => ({
+                type: 'image',
+                url: `data:${image.mimeType};base64,${image.data}`,
+              })),
+            ],
+          }),
+        );
+        if (result.turnId !== turnId) throw new Error('引导目标已变化，请重试');
+      });
     if (!ephemeral) {
       await fs.writeFile(file + '.tmp', JSON.stringify({ threadId }), { mode: 0o600 });
       await fs.rename(file + '.tmp', file);
@@ -386,6 +469,7 @@ export async function runCodexAgent(options: AgentRunOptions, commandOverride?: 
     await done;
     signal.throwIfAborted();
   } finally {
+    clearSteer();
     accepting = false;
     signal.removeEventListener('abort', cancel);
     await (shutdown ?? rpc.close());

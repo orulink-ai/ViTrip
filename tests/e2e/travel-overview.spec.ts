@@ -73,6 +73,25 @@ test('首页仅展示两趟最近旅行，完整旅行记录按需查看', async
     await page.keyboard.press('Escape');
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1040, 720));
     await expect(page.getByLabel('旅行需求', { exact: true })).toBeInViewport({ ratio: 1 });
+    const exploreBox = (await page
+      .getByRole('button', { name: '展开探索地图', exact: true })
+      .locator('..')
+      .boundingBox())!;
+    const reviewBox = (await overview
+      .getByRole('button', { name: '继续旅行：京都', exact: true })
+      .boundingBox())!;
+    const overlap =
+      Math.max(
+        0,
+        Math.min(exploreBox.x + exploreBox.width, reviewBox.x + reviewBox.width) -
+          Math.max(exploreBox.x, reviewBox.x),
+      ) *
+      Math.max(
+        0,
+        Math.min(exploreBox.y + exploreBox.height, reviewBox.y + reviewBox.height) -
+          Math.max(exploreBox.y, reviewBox.y),
+      );
+    expect(overlap).toBe(0);
     await page.screenshot({ path: 'artifacts/home-design-compact.png' });
   } finally {
     await app.close();

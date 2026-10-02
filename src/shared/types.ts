@@ -26,7 +26,7 @@ export interface Settings {
 export type ConversationSettings = Partial<
   Pick<
     Settings,
-    'runtime' | 'codexModel' | 'codexEffort' | 'model' | 'imageInput'
+    'runtime' | 'codexModel' | 'codexEffort' | 'model' | 'imageInput' | 'jevExperiments'
   >
 >;
 export interface PublicSettings {
@@ -68,6 +68,7 @@ export interface ItinerarySource {
   excerpt: string;
 }
 export interface Day {
+  date?: string;
   title: string;
   subtitle: string;
   stay?: {
@@ -81,6 +82,10 @@ export interface Day {
     photoIds?: string[];
     recommendation?: { reason: string; preferences: string[] };
     time: string;
+    timeLabel?: string;
+    timeZone?: string;
+    notes?: string[];
+    warnings?: string[];
     title: string;
     detail: string;
     url?: string;
@@ -139,11 +144,14 @@ export interface BrowserState {
   loading: boolean;
   canBack: boolean;
   canForward: boolean;
+  error?: { url: string; code: number; description: string };
 }
 export interface Event {
   type:
+    | 'voice'
     | 'link'
     | 'browser'
+    | 'browser-history'
     | 'trip'
     | 'status'
     | 'approval'
@@ -153,14 +161,17 @@ export interface Event {
     | 'journey'
     | 'documents'
     | 'prepare';
+  voice?: import('./voice').VoiceEvent;
   link?: string;
   workspace?: 'browser' | 'plan' | 'notebook';
   journeyId?: string;
   browser?: BrowserState;
+  visits?: import('./browser-history').BrowserVisit[];
   trip?: Trip;
   journey?: Journey;
   text?: string;
   running?: boolean;
+  canSteer?: boolean;
   paused?: boolean;
   approval?: { id: string; label: string } | null;
 }
@@ -172,6 +183,8 @@ export interface Bounds {
   visible: boolean;
 }
 export interface API {
+  startVoice(tripId: string, sdp: string): Promise<void>;
+  stopVoice(tripId: string): Promise<void>;
   codexModels(): Promise<CodexModel[]>;
   listDocumentFolders(journeyId: string): Promise<string[]>;
   createDocumentFolder(
@@ -194,6 +207,7 @@ export interface API {
     link?: string;
     activeTripId: string;
     running: boolean;
+    canSteer: boolean;
     paused: boolean;
     status: string;
     approval: { id: string; label: string } | null;
@@ -219,6 +233,15 @@ export interface API {
   ): Promise<PublicSettings>;
   cancelQueuedMessage(id: string): Promise<void>;
   resumeQueue(): Promise<void>;
+  sendQueuedMessage(id: string): Promise<void>;
+  beginQueuedMessageEdit(id: string): Promise<void>;
+  endQueuedMessageEdit(id: string): Promise<void>;
+  editQueuedMessage(
+    id: string,
+    content: string,
+    quote?: Quote | null,
+    attachmentIds?: string[],
+  ): Promise<void>;
   regenerate(parentId: string): Promise<void>;
   selectBranch(headId: string): Promise<void>;
   feedback(messageId: string, value: 'positive' | 'negative'): Promise<void>;
@@ -250,6 +273,9 @@ export interface API {
     tavilyApiKey?: string;
   }): Promise<PublicSettings>;
   browse(url: string): Promise<void>;
+  openBrowserExternal(): Promise<void>;
+  browserHistory(journeyId: string): Promise<import('./browser-history').BrowserVisit[]>;
+  clearBrowserHistory(journeyId: string): Promise<void>;
   history(action: 'back' | 'forward' | 'reload'): Promise<void>;
   bounds(bounds: Bounds): Promise<void>;
   pause(): Promise<void>;

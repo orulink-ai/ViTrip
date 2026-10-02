@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { Layers } from 'lucide-react';
+import { TooltipIconButton } from './components/assistant-ui/elements/tooltip-icon-button';
 import { MAP_MODES, type MapAppearance } from '../shared/map-appearance';
 import { Button } from './components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from './components/ui/popover';
@@ -8,18 +10,26 @@ export function MapAppearancePicker({
   value,
   onChange,
   onDefault,
+  compact = false,
 }: {
   value: MapAppearance;
   onChange: (value: MapAppearance) => void;
   onDefault: () => boolean;
+  compact?: boolean;
 }) {
   const [notice, setNotice] = useState('');
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button size="sm" variant="outline">
-          {t('地图外观')}
-        </Button>
+        {compact ? (
+          <TooltipIconButton tooltip={t('地图外观')} aria-label={t('地图外观')} variant="outline">
+            <Layers />
+          </TooltipIconButton>
+        ) : (
+          <Button size="sm" variant="outline">
+            {t('地图外观')}
+          </Button>
+        )}
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80 space-y-4">
         <fieldset className="space-y-2">

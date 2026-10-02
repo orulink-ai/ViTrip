@@ -1,3 +1,4 @@
+import { selectMapDay, expectMapDay } from './map-date';
 import { test, expect, _electron as electron } from '@playwright/test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -15,7 +16,7 @@ test('日期栏不遮挡地图缩放按钮，点击后视野实际变化', async
     await page.getByRole('button', { name: '先看看一份示例行程' }).click();
     const map = page.getByLabel('行程交互地图', { exact: true });
     await expect(map).toHaveAttribute('data-map-ready', 'true');
-    await page.getByRole('button', { name: '查看全部地点', exact: true }).click();
+    await page.getByRole('button', { name: '适应视野', exact: true }).click();
     const snapshot = await page.evaluate(() => window.vitrip.init());
     const key = `vitrip-map:${snapshot.trips[0].journeyId}:all`;
     const zoom = () =>
@@ -26,11 +27,8 @@ test('日期栏不遮挡地图缩放按钮，点击后视野实际变化', async
     await expect.poll(zoom).toBeGreaterThan(before);
     await page.getByRole('button', { name: '缩小地图', exact: true }).click();
     await expect.poll(zoom).toBeCloseTo(before, 1);
-    await page.getByRole('button', { name: '地图第 1 天', exact: true }).click();
-    await expect(page.getByRole('button', { name: '地图第 1 天', exact: true })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
+    await selectMapDay(page, 1);
+    await expectMapDay(page, 1);
   } finally {
     await app.close();
     await rm(dir, { recursive: true, force: true });

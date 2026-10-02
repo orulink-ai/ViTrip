@@ -1,3 +1,4 @@
+import { selectMapDay } from './map-date';
 import { test, expect, _electron as electron } from '@playwright/test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -15,14 +16,17 @@ test('地图直接标注地点，可切日期、倾斜与回到全貌，列表�
   });
   try {
     const page = await app.firstWindow();
-    await page.route('https://tile.openstreetmap.org/**', async (route) => {
-      await tiles;
-      await route.abort();
-    });
+    await page.route(
+      (url) => ['tile.openstreetmap.org', 'tiles.openfreemap.org'].includes(url.hostname),
+      async (route) => {
+        await tiles;
+        await route.abort();
+      },
+    );
     await page.getByRole('button', { name: '先看看一份示例行程' }).click();
     await expect(page.getByText('正在加载地图底图…', { exact: true })).toBeVisible();
     releaseTiles();
-    await page.getByRole('button', { name: '地图第 1 天', exact: true }).click();
+    await selectMapDay(page, 1);
     await page.getByRole('button', { name: '展开地点列表', exact: true }).click();
     const list = page.getByLabel('地图地点列表');
     await expect(list.locator('[data-slot="timeline"]')).toHaveCount(1);
@@ -38,13 +42,13 @@ test('地图直接标注地点，可切日期、倾斜与回到全貌，列表�
       'data-perspective',
       'tilted',
     );
-    await page.getByRole('button', { name: '查看全部地点', exact: true }).click();
+    await page.getByRole('button', { name: '适应视野', exact: true }).click();
     await expect(page.getByLabel('行程交互地图', { exact: true })).toHaveAttribute(
       'data-perspective',
-      'flat',
+      'tilted',
     );
     await expect(marker).toHaveAttribute('aria-pressed', 'true');
-    await page.getByRole('button', { name: '地图第 2 天', exact: true }).click();
+    await selectMapDay(page, 2);
     await expect(list).toContainText('岚山竹林');
     await expect(list).not.toContainText('清水寺');
     await page.getByRole('button', { name: '展开行程工作区', exact: true }).click();

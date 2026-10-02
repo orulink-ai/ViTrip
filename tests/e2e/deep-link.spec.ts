@@ -26,7 +26,8 @@ test('复制链接可跨会话定位消息和旅行页面，支持系统唤起�
       `vitrip://trip/${trip.id}`,
     );
     await page.getByRole('tab', { name: '笔记本', exact: true }).click();
-    await page.locator('.right-heading').getByRole('button', { name: '复制本机链接' }).click();
+    await page.getByRole('button', { name: '更多工作区操作' }).click();
+    await page.getByRole('menuitem', { name: '复制本机链接' }).click();
     const notebook = await app.evaluate(({ clipboard }) => clipboard.readText());
     expect(notebook).toBe(`vitrip://notebook/${trip.journeyId}`);
     await page.evaluate(() => window.vitrip.createJourney('另一趟旅行'));

@@ -145,7 +145,7 @@ test('实验开关持久化，JEV 联网与本地检索、真实浏览器点击�
       await page.getByRole('combobox', { name, exact: true }).click();
       await page.getByRole('option', { name: '启用实验', exact: true }).click();
     }
-    await page.getByRole('button', { name: '保存设置', exact: true }).click();
+    await page.getByRole('button', { name: '保存连接设置', exact: true }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
     await app.close();
     app = await electron.launch({ args: ['.'], env });

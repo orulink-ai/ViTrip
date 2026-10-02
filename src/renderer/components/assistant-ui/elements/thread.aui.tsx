@@ -65,6 +65,7 @@ import {
   createContext,
   useContext,
   type ComponentType,
+  type ReactNode,
   type FC,
   type PropsWithChildren,
 } from 'react';
@@ -81,6 +82,7 @@ export type ThreadGroupPart = MessagePrimitive.GroupedParts.GroupPart;
  * tool group; without it they render like any other tool call.
  */
 export type ThreadComponents = {
+  Composer?: ComponentType;
   ComposerQuote?: ComponentType;
   ComposerSend?: ComponentType;
   ComposerTools?: ComponentType;
@@ -180,6 +182,7 @@ export const Thread: FC<ThreadProps> = ({ components = EMPTY_COMPONENTS, autoFoc
 
 const ThreadRoot: FC<{ isEmpty: boolean; autoFocus: boolean }> = ({ isEmpty, autoFocus }) => {
   const {
+    Composer: ComposerOverride,
     Welcome = ThreadWelcome,
     WelcomeFooter,
     Footer,
@@ -233,7 +236,7 @@ const ThreadRoot: FC<{ isEmpty: boolean; autoFocus: boolean }> = ({ isEmpty, aut
             {Footer && <Footer />}
             <ThreadScrollToBottom />
             <ThreadFollowupSuggestions />
-            <Composer autoFocus={autoFocus} />
+            {ComposerOverride ? <ComposerOverride /> : <Composer autoFocus={autoFocus} />}
             <AuiIf condition={(s) => isNewChatView(s) && s.composer.isEmpty}>
               <ThreadSuggestions />
             </AuiIf>
@@ -415,7 +418,12 @@ const ThreadSuggestionItem: FC = () => {
   );
 };
 
-const Composer: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
+export const Composer: FC<{
+  autoFocus?: boolean;
+  header?: ReactNode;
+  actions?: ReactNode;
+  quote?: ReactNode;
+}> = ({ autoFocus = true, header, actions, quote }) => {
   const isRunning = useAuiState((s) => s.thread.isRunning);
   const { ComposerQuote } = useContext(ThreadComponentsContext);
   return (
@@ -425,7 +433,8 @@ const Composer: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
           data-slot="aui_composer-shell"
           className="border-foreground/10 focus-within:border-foreground/25 data-[dragging=true]:border-ring flex w-full cursor-text flex-col gap-2 rounded-(--composer-radius) border bg-(--composer-bg) p-(--composer-padding) transition-[border-color] data-[dragging=true]:border-dashed data-[dragging=true]:bg-[color-mix(in_oklab,var(--color-accent)_50%,var(--color-background))]"
         >
-          {ComposerQuote && <ComposerQuote />}
+          {header}
+          {quote !== undefined ? quote : ComposerQuote && <ComposerQuote />}
           <ComposerAttachments />
           <ComposerPrimitive.Input
             placeholder={t(
@@ -439,7 +448,7 @@ const Composer: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
             enterKeyHint="send"
             aria-label={t('旅行需求')}
           />
-          <ComposerAction />
+          {actions ?? <ComposerAction />}
         </div>
       </ComposerPrimitive.AttachmentDropzone>
     </ComposerPrimitive.Root>
@@ -803,6 +812,7 @@ const EditComposer: FC = () => {
 };
 
 const BranchPicker: FC<BranchPickerPrimitive.Root.Props> = ({ className, ...rest }) => {
+  const running = useAuiState((s) => s.thread.isRunning);
   return (
     <BranchPickerPrimitive.Root
       hideWhenSingleBranch
@@ -825,6 +835,7 @@ const BranchPicker: FC<BranchPickerPrimitive.Root.Props> = ({ className, ...rest
           <ChevronRightIcon />
         </TooltipIconButton>
       </BranchPickerPrimitive.Next>
+      {running && <span role="status">{t('回答完成后可切换版本')}</span>}
     </BranchPickerPrimitive.Root>
   );
 };

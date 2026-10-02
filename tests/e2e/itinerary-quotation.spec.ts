@@ -1,3 +1,4 @@
+import { selectMapDay } from './map-date';
 import { test, expect, _electron as electron, type Page } from '@playwright/test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -10,7 +11,7 @@ async function quoteActivity(page: Page) {
   if (await closeChat.isVisible()) await closeChat.click();
   const openList = page.getByRole('button', { name: '展开地点列表', exact: true });
   if (await openList.isVisible()) await openList.click();
-  await page.getByRole('button', { name: '地图第 1 天', exact: true }).click();
+  await selectMapDay(page, 1);
   await page
     .getByLabel('地图地点列表')
     .getByRole('button', { name: /清水寺/ })
