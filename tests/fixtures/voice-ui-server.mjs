@@ -1,5 +1,5 @@
 import readline from 'node:readline';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 const send = (value) => process.stdout.write(JSON.stringify(value) + '\n');
 const notify = (suffix, params = {}) =>
   send({ method: `thread/realtime/${suffix}`, params: { threadId: 'call-thread', ...params } });
@@ -69,6 +69,26 @@ for await (const line of readline.createInterface({ input: process.stdin })) {
       role: 'assistant',
       text: '地图显示步行12分钟，来源是当前路线页面。',
     });
+    let previous;
+    timer = setInterval(() => {
+      const file = process.env.VITRIP_VOICE_SCROLL_GATE;
+      if (!file || !existsSync(file)) return;
+      const value = JSON.parse(readFileSync(file, 'utf8'));
+      if (value.id === previous) return;
+      previous = value.id;
+      if (value.voice) {
+        notify('transcript/done', { role: 'assistant', text: value.text });
+        return;
+      }
+      send({
+        method: 'item/agentMessage/delta',
+        params: {
+          threadId: 'call-thread',
+          itemId: 'route-result',
+          delta: value.text,
+        },
+      });
+    }, 50);
   } else if (message.method === 'thread/realtime/stop') {
     clearInterval(timer);
     reply({});

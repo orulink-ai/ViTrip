@@ -13,12 +13,14 @@ test('悬浮电话：状态、计时、静音、挂断、逐轮转写和长通�
     { mode: 0o755 },
   );
   const gate = path.join(dir, 'request');
+  const scrollGate = path.join(dir, 'scroll');
   const app = await electron.launch({
     args: ['.', '--use-fake-device-for-media-stream'],
     env: {
       ...process.env,
       VITRIP_TEST_DATA: path.join(dir, 'data'),
       VITRIP_VOICE_GATE: gate,
+      VITRIP_VOICE_SCROLL_GATE: scrollGate,
       PATH: path.join(dir, 'bin') + path.delimiter + process.env.PATH,
     },
   });
@@ -152,10 +154,25 @@ test('悬浮电话：状态、计时、静音、挂断、逐轮转写和长通�
         },
       });
     });
-    await page.getByRole('button', { name: '开启语音聊天', exact: true }).click();
+    const phone = page.getByRole('button', { name: '开启语音聊天', exact: true });
+    await expect(phone.locator('svg')).toHaveClass(/lucide-phone/);
+    await phone.click();
     const call = page.getByRole('region', { name: '语音通话', exact: true });
+    const waveformDrawn = () =>
+      call.locator('canvas').evaluate((canvas: HTMLCanvasElement) => {
+        const pixels = canvas
+          .getContext('2d')!
+          .getImageData(0, 0, canvas.width, canvas.height).data;
+        return pixels.some((value, index) => index % 4 === 3 && value > 0);
+      });
     await expect(call).toBeVisible();
     await expect(call.getByRole('status')).toHaveText('正在连接语音…');
+    await expect(call.locator('canvas')).toHaveCount(0);
+    expect((await call.boundingBox())!.height).toBeLessThanOrEqual(64);
+    await call.getByRole('button', { name: '展开语音面板', exact: true }).click();
+    await expect(call.locator('canvas')).toHaveCount(0);
+    await expect(call.getByText('通话仍在继续，可以继续说话。', { exact: true })).toHaveCount(0);
+    await call.getByRole('button', { name: '收起语音面板', exact: true }).click();
     await expect
       .poll(() =>
         page.evaluate(() =>
@@ -169,8 +186,13 @@ test('悬浮电话：状态、计时、静音、挂断、逐轮转写和长通�
       'false',
     );
     const panelBox = await call.boundingBox();
+    expect(panelBox!.height).toBeLessThanOrEqual(80);
     const composerBox = await page.locator('[data-slot="aui_composer-shell"]').boundingBox();
-    expect(panelBox!.y + panelBox!.height).toBeLessThanOrEqual(composerBox!.y);
+    expect(panelBox!.y + panelBox!.height - composerBox!.y).toBeGreaterThanOrEqual(12);
+    expect(panelBox!.y + panelBox!.height - composerBox!.y).toBeLessThanOrEqual(20);
+    expect(panelBox!.x).toBeGreaterThan(composerBox!.x);
+    expect(panelBox!.x + panelBox!.width).toBeLessThan(composerBox!.x + composerBox!.width);
+    await expect(call.locator('canvas')).toHaveCount(1);
     await call.getByRole('button', { name: '展开语音面板', exact: true }).click();
     await call.getByRole('button', { name: '收起语音面板', exact: true }).click();
     expect(
@@ -217,6 +239,7 @@ test('悬浮电话：状态、计时、静音、挂断、逐轮转写和长通�
       send({ type: 'turn.done', turn: { role: 'user' } });
     });
     await expect(call.getByLabel('实时语音转写')).toContainText('我来查海鲜餐厅');
+    expect((await call.boundingBox())!.height).toBeLessThanOrEqual(80);
     await expect(call.getByRole('status')).toHaveText('正在说话 · 通话中');
     const media = await page.evaluate(() => {
       const media = (
@@ -228,6 +251,7 @@ test('悬浮电话：状态、计时、静音、挂断、逐轮转写和长通�
       };
     });
     expect(media).toEqual({ calls: 1, alive: true });
+    await call.getByRole('button', { name: '展开语音面板', exact: true }).click();
     await expect
       .poll(() =>
         page.evaluate(() => {
@@ -238,6 +262,7 @@ test('悬浮电话：状态、计时、静音、挂断、逐轮转写和长通�
         }),
       )
       .toBe(true);
+    await call.getByRole('button', { name: '收起语音面板', exact: true }).click();
     await call.getByRole('button', { name: '静音麦克风', exact: true }).click();
     await expect(call.getByRole('status')).toHaveText('正在说话 · 麦克风已静音 · 通话中');
     expect(
@@ -287,17 +312,102 @@ test('悬浮电话：状态、计时、静音、挂断、逐轮转写和长通�
     await expect(call.getByLabel('本次语音记录')).toContainText(
       '地图显示步行12分钟，来源是当前路线页面。',
     );
+    // A live reply belongs after the finalized conversation, in the same viewport.
+    await page.evaluate(() => {
+      (
+        window as unknown as { __phoneChannels: { onmessage(e: { data: string }): void }[] }
+      ).__phoneChannels
+        .at(-1)!
+        .onmessage({
+          data: JSON.stringify({
+            type: 'output_transcript.added',
+            item: { id: 'latest-reply', text: '最新路线说明' },
+          }),
+        });
+    });
+    const record = call.getByLabel('本次语音记录');
+    await expect(record.getByLabel('实时语音转写')).toContainText('最新路线说明');
+    const order = await record.innerText();
+    expect(order.indexOf('找附近餐厅')).toBeLessThan(order.indexOf('地图显示步行12分钟'));
+    expect(order.indexOf('地图显示步行12分钟')).toBeLessThan(order.indexOf('最新路线说明'));
+    // Long streaming captions follow the bottom, until the reader scrolls up.
+    const sendCaption = (id: string, text: string) =>
+      page.evaluate(
+        ({ id, text }) => {
+          (
+            window as unknown as { __phoneChannels: { onmessage(e: { data: string }): void }[] }
+          ).__phoneChannels
+            .at(-1)!
+            .onmessage({
+              data: JSON.stringify({
+                type: 'output_transcript.added',
+                item: { id, text },
+              }),
+            });
+        },
+        { id, text },
+      );
+    const recordDistance = () =>
+      record.evaluate((el) => el.scrollHeight - el.clientHeight - el.scrollTop);
+    await sendCaption('long-caption', '路线说明。'.repeat(400));
+    await expect.poll(recordDistance).toBeLessThan(8);
+    await record.hover();
+    await page.mouse.wheel(0, -300);
+    await expect.poll(recordDistance).toBeGreaterThan(100);
+    const recordTop = await record.evaluate((el) => el.scrollTop);
+    await sendCaption('more-caption', '继续补充。'.repeat(100));
+    await expect(record).toContainText('继续补充。');
+    expect(Math.abs((await record.evaluate((el) => el.scrollTop)) - recordTop)).toBeLessThan(8);
+    await call.getByRole('button', { name: '回到最新', exact: true }).click();
+    await expect.poll(recordDistance).toBeLessThan(8);
+    await writeFile(
+      scrollGate,
+      JSON.stringify({ id: 'final-caption', voice: true, text: '正式路线说明。' }),
+    );
+    await expect(record).toContainText('正式路线说明。');
+    await expect(record.getByLabel('实时语音转写')).toHaveCount(0);
+    await expect(record.getByText('助手说：正式路线说明。', { exact: true })).toHaveCount(1);
+    // Resume the outer conversation after deliberately reading voice history;
+    // its follow/reading behavior is verified independently below.
+    const mainFollow = page.getByRole('button', { name: '滚动到底部', exact: true });
+    if (await mainFollow.isVisible()) await mainFollow.click();
+    // Follow streamed Agent results until the reader deliberately scrolls up.
+    const viewport = page.locator('[data-slot="aui_thread-viewport"]');
+    const distance = () =>
+      viewport.evaluate((el) => el.scrollHeight - el.clientHeight - el.scrollTop);
+    await writeFile(
+      scrollGate,
+      JSON.stringify({ id: 'long', text: '\n\n旅行安排细节。'.repeat(60) }),
+    );
+    await expect(mainTranscript).toContainText('旅行安排细节。');
+    await expect.poll(distance).toBeLessThan(8);
+    await viewport.hover();
+    await page.mouse.wheel(0, -600);
+    await expect.poll(distance).toBeGreaterThan(200);
+    const readingTop = await viewport.evaluate((el) => el.scrollTop);
+    await writeFile(scrollGate, JSON.stringify({ id: 'more', text: '\n\n新增安排。'.repeat(20) }));
+    await expect(mainTranscript).toContainText('新增安排。');
+    expect(Math.abs((await viewport.evaluate((el) => el.scrollTop)) - readingTop)).toBeLessThan(8);
+    await page.getByRole('button', { name: '滚动到底部', exact: true }).click();
+    await expect.poll(distance).toBeLessThan(8);
+    await writeFile(
+      scrollGate,
+      JSON.stringify({ id: 'resume', text: '\n\n继续跟随。'.repeat(10) }),
+    );
+    await expect(mainTranscript).toContainText('继续跟随。');
+    await expect.poll(distance).toBeLessThan(8);
     await call.getByRole('button', { name: '收起语音面板', exact: true }).click();
-    await expect
-      .poll(() =>
-        call.locator('canvas').evaluate((canvas: HTMLCanvasElement) => {
-          const pixels = canvas
-            .getContext('2d')!
-            .getImageData(0, 0, canvas.width, canvas.height).data;
-          return pixels.some((value, index) => index % 4 === 3 && value > 0);
-        }),
-      )
-      .toBe(true);
+    await expect(call.locator('canvas')).toHaveCount(1);
+    await expect.poll(waveformDrawn).toBe(true);
+    await page.screenshot({ path: test.info().outputPath('phone-call-compact.png') });
+    await page
+      .locator('[data-voice-dock]')
+      .locator('..')
+      .screenshot({
+        path: test.info().outputPath('call-composer.png'),
+      });
+    await call.getByRole('button', { name: '展开语音面板', exact: true }).click();
+    await expect.poll(waveformDrawn).toBe(true);
     await page.screenshot({ path: test.info().outputPath('phone-call.png') });
     await page.getByLabel('旅行需求', { exact: true }).fill('通话后整理路线');
     await page.getByRole('button', { name: '通话后发送', exact: true }).click();
@@ -338,6 +448,19 @@ test('悬浮电话：状态、计时、静音、挂断、逐轮转写和长通�
     });
     await expect(page.getByLabel('待发送消息')).toHaveCount(0);
     await expect(page.getByRole('button', { name: '开启语音聊天', exact: true })).toBeEnabled();
+    await expect(call).toHaveCount(0);
+    const review = page.getByRole('button', { name: '查看上次通话记录', exact: true });
+    await review.click();
+    await expect(call.getByLabel('本次语音记录')).toContainText('地图显示步行12分钟');
+    await expect(call.locator('canvas')).toHaveCount(0);
+    await expect(call.getByRole('button', { name: '结束语音聊天', exact: true })).toHaveCount(0);
+    await call.getByRole('button', { name: '关闭语音面板', exact: true }).click();
+    await expect(call).toHaveCount(0);
+    await review.click();
+    await expect(call).toBeVisible();
+    await page.waitForTimeout(3200);
+    await expect(call).toBeVisible();
+    await call.getByRole('button', { name: '关闭语音面板', exact: true }).click();
   } finally {
     await app.close();
     await rm(dir, { recursive: true, force: true });

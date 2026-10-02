@@ -221,7 +221,9 @@ export function ConversationMapAui({
           element.getBoundingClientRect().top -
           viewport.getBoundingClientRect().top +
           viewport.scrollTop;
-        viewport.scrollTo({ top, behavior: 'smooth' });
+        // Land in the reading position before content resize can resume bottom
+        // following; the viewport observes this upward scroll as reader intent.
+        viewport.scrollTo({ top, behavior: 'instant' });
         return;
       }
     },

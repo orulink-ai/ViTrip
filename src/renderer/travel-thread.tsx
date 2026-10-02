@@ -550,26 +550,13 @@ function MessageError() {
   return <TravelMessageError onSettings={useTravel().onSettings} />;
 }
 function Footer() {
-  const { footer, trip, running, voiceActive, canSteer, onError, editor } = useTravel();
+  const { footer, trip, running, canSteer, onError, editor } = useTravel();
   const [sending, setSending] = useState(false);
 
   const queued = trip?.queuedMessages ?? [];
   return (
     <>
       {footer}
-      {voiceActive && (
-        <p
-          role="status"
-          aria-label={t('通话持续状态')}
-          className="text-sm text-muted-foreground py-2"
-        >
-          {t(
-            trip?.messages.some((m) => m.activities?.some((step) => step.status === 'active'))
-              ? '通话中 · 正在查询资料，完成后继续与你说话。'
-              : '通话中 · 你可以继续说话，随时打断。',
-          )}
-        </p>
-      )}
       {queued.length > 0 && (
         <div className="max-h-44 overflow-y-auto py-2" aria-label={t('待发送消息')}>
           <MessageQueue
@@ -668,9 +655,11 @@ function TravelComposer() {
       onError={onError}
     />
   ) : (
-    <div className="flex flex-col gap-2">
-      <div data-voice-dock />
-      <Composer />
+    <div className="flex flex-col">
+      <div data-voice-dock className="relative mx-3 -mb-4 empty:mb-0" />
+      <div className="relative z-10 rounded-(--composer-radius) bg-background">
+        <Composer />
+      </div>
     </div>
   );
 }
