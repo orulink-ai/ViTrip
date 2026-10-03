@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { Journey } from './types';
+import { itineraryDate, itineraryTime } from './calendar-time';
 
 export function validTimeZone(value: string): boolean {
   try {
@@ -17,6 +18,18 @@ export const calendarOptionsSchema = z.object({
     .max(100)
     .refine(validTimeZone, '请输入有效的 IANA 时区，例如 Asia/Tokyo'),
   durationMinutes: z.number().int().min(1).max(1440),
+  activityOverrides: z
+    .record(
+      z.string().min(1).max(100),
+      z.object({
+        date: z.iso.date(),
+        time: z.string().min(1).max(100),
+        timeZone: z.string().min(1).max(100).refine(validTimeZone),
+        confirmed: z.literal(true),
+      }),
+    )
+    .refine((value) => Object.keys(value).length <= 600)
+    .optional(),
   reminderMinutes: z.union([
     z.literal(0),
     z.literal(15),
@@ -45,7 +58,14 @@ export interface CalendarPreview {
   journeyId: string;
   revision: number;
   events: CalendarEvent[];
-  skipped: { id: string; title: string; reason: string }[];
+  skipped: {
+    id: string;
+    title: string;
+    reason: string;
+    date?: string;
+    time: string;
+    timeZone: string;
+  }[];
 }
 export interface CalendarAccount {
   id: string;
@@ -116,29 +136,33 @@ export function buildCalendarPreview(
     skipped: [],
   };
   const seen = new Set<string>();
+  const anchor = options.startDate ?? journey.plan?.days.find((day) => day.date)?.date;
   journey.plan?.days.forEach((day, index) => {
     day.activities.forEach((activity) => {
       const id = activity.id ?? '';
+      const override = options.activityOverrides?.[id];
+      const parsed = itineraryTime(override?.time ?? activity.time, day.date ?? anchor);
+      const date =
+        override?.date ??
+        parsed.date ??
+        day.date ??
+        itineraryDate(day.title, anchor) ??
+        (options.startDate ? addDays(options.startDate, index) : undefined);
+      const zone = override?.timeZone ?? activity.timeZone ?? parsed.zone ?? options.timeZone;
       try {
         if (!id || seen.has(id)) throw new Error('活动标识缺失或重复，请重新打开同步预览');
         seen.add(id);
-        if (activity.optional || activity.optionGroup)
+        if ((activity.optional || activity.optionGroup) && !override?.confirmed)
           throw new Error('备选活动，请先在行程中确定安排');
-        const date =
-          day.date ?? (options.startDate ? addDays(options.startDate, index) : undefined);
         if (!date || !z.iso.date().safeParse(date).success)
           throw new Error('缺少明确日期，请填写出发日期');
-        const match = activity.time
-          .trim()
-          .match(/^([01]\d|2[0-3]):([0-5]\d)(?:\s*[-–—~至]\s*([01]\d|2[0-3]):([0-5]\d))?$/);
-        if (!match) throw new Error('时间尚未确定，请在行程中填写 HH:mm 或 HH:mm-HH:mm');
-        const zone = activity.timeZone ?? options.timeZone;
+        if (!parsed.start) throw new Error('时间尚未确定，请在行程中填写 HH:mm 或 HH:mm-HH:mm');
         if (!validTimeZone(zone)) throw new Error('活动时区无效，请先修正行程中的时区');
-        const startTime = `${match[1]}:${match[2]}`;
+        const startTime = parsed.start;
         const start = wallTime(date, startTime, zone);
         let end = start + options.durationMinutes * 60000;
-        if (match[3]) {
-          const endTime = `${match[3]}:${match[4]}`;
+        if (parsed.end) {
+          const endTime = parsed.end;
           if (endTime === startTime) throw new Error('开始和结束时间相同，请确认活动时长');
           end = wallTime(endTime < startTime ? addDays(date, 1) : date, endTime, zone);
         }
@@ -155,7 +179,7 @@ export function buildCalendarPreview(
             .filter(Boolean)
             .join('\n'),
           url: activity.url,
-          usesDefaultDuration: !match[3],
+          usesDefaultDuration: !parsed.end,
           reminderMinutes: options.reminderMinutes,
         });
       } catch (error) {
@@ -163,6 +187,9 @@ export function buildCalendarPreview(
           id,
           title: activity.title,
           reason: error instanceof Error ? error.message : String(error),
+          date,
+          time: override?.time ?? activity.time,
+          timeZone: zone,
         });
       }
     });

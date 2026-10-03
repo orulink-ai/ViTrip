@@ -54,6 +54,87 @@ function journey(): Journey {
   };
 }
 describe('旅行日历预览', () => {
+  it('用户确认日期与时间后可同步模糊和备选活动，保持原活动身份且不修改行程', () => {
+    const j = journey();
+    j.plan!.days[0].activities[0].time = '购物后';
+    j.plan!.days[0].activities[1].optional = true;
+    const before = JSON.stringify(j);
+    const overrides = {
+      temple: {
+        date: '2026-10-03',
+        time: '16:00',
+        timeZone: 'Asia/Bangkok',
+        confirmed: true as const,
+      },
+      dinner: {
+        date: '2026-10-03',
+        time: '方案A · 17:20→18:52（表定）',
+        timeZone: 'Asia/Bangkok',
+        confirmed: true as const,
+      },
+    };
+    const preview = buildCalendarPreview(j, { ...options, activityOverrides: overrides });
+    expect(preview.events.slice(0, 2).map((e) => [e.id, e.start])).toEqual([
+      ['temple', '2026-10-03T09:00:00.000Z'],
+      ['dinner', '2026-10-03T10:20:00.000Z'],
+    ]);
+    expect(JSON.stringify(j)).toBe(before);
+  });
+  it('识别真实行程的当地时间备注、次日抵达日期和标题日期', () => {
+    const j = journey();
+    j.plan!.days = [
+      {
+        title: '9月28日 · 抵达普吉岛',
+        subtitle: '',
+        activities: [{ id: 'departure', title: '深圳起飞', time: '03:30（中国当地）', detail: '' }],
+      },
+      {
+        date: '2026-10-03',
+        title: '返程',
+        subtitle: '',
+        activities: [
+          { id: 'flight', title: '普吉起飞', time: '22:40（泰国当地）', detail: '' },
+          { id: 'arrival', title: '深圳抵达', time: '10月4日 03:40（中国当地）', detail: '' },
+          {
+            id: 'bus',
+            title: '巴士',
+            time: '17:20→18:52（表定）',
+            detail: '',
+            timeZone: 'Asia/Bangkok',
+          },
+          { id: 'vague', title: '取行李', time: '购物后（随交通方案提前）', detail: '' },
+        ],
+      },
+    ];
+    const preview = buildCalendarPreview(j, {
+      ...options,
+      startDate: undefined,
+      timeZone: 'Asia/Bangkok',
+    });
+    expect(preview.events.map((e) => [e.id, e.start, e.timeZone])).toEqual([
+      ['departure', '2026-09-27T19:30:00.000Z', 'Asia/Shanghai'],
+      ['flight', '2026-10-03T15:40:00.000Z', 'Asia/Bangkok'],
+      ['arrival', '2026-10-03T19:40:00.000Z', 'Asia/Shanghai'],
+      ['bus', '2026-10-03T10:20:00.000Z', 'Asia/Bangkok'],
+    ]);
+    expect(preview.events[3].end).toBe('2026-10-03T11:52:00.000Z');
+    expect(preview.skipped.map((e) => e.id)).toEqual(['vague']);
+  });
+  it('不从带有不确定修饰的文本中猜测具体时间，也不猜测日期年份', () => {
+    const j = journey();
+    j.plan!.days = [
+      {
+        title: '10月3日',
+        subtitle: '',
+        activities: [
+          { id: 'a', title: '活动', time: '预计22:40左右', detail: '' },
+          { id: 'b', title: '活动', time: '22:40', detail: '' },
+        ],
+      },
+    ];
+    expect(buildCalendarPreview(j, { ...options, startDate: undefined }).events).toHaveLength(0);
+    expect(buildCalendarPreview(j, options).events.map((e) => e.id)).toEqual(['b']);
+  });
   it('按所在地时区转换，填补相对日期，保留明确日期与跨午夜范围', () => {
     const preview = buildCalendarPreview(journey(), options);
     expect(preview.events.map((e) => [e.id, e.start, e.end])).toEqual([

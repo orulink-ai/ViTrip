@@ -1,4 +1,49 @@
 export const translations: Record<string, string> = {
+  '选择活动，写入独立的旅行日历。': 'Choose activities to save to a separate travel calendar.',
+  日历已连接: 'Calendar connected',
+  尚未连接苹果日历: 'Apple Calendar not connected',
+  日历同步步骤: 'Calendar sync steps',
+  '可同步 {count}': 'Ready {count}',
+  '待确认 {count}': 'Pending {count}',
+  同步设置: 'Sync settings',
+  检查同步设置: 'Check sync settings',
+  '连接苹果日历后，即可同步所选活动。': 'Connect Apple Calendar to sync selected activities.',
+  '正在更新活动预览…': 'Updating activity preview…',
+  '请至少选择一项可同步活动。': 'Select at least one activity to sync.',
+  '待确认项不会阻止同步已选择的活动。': 'Pending items do not block syncing your selection.',
+  '确认后加入同步列表，尚未写入苹果日历。':
+    'Confirm to add to the sync list. This does not save to Apple Calendar yet.',
+  '「{title}」已加入同步。': '“{title}” added to sync.',
+  查看可同步活动: 'View ready activities',
+  待选方案: 'Choose an alternative',
+  缺少日期: 'Date needed',
+  缺少具体时间: 'Time needed',
+  取消全选: 'Deselect all',
+  全选可同步活动: 'Select all ready activities',
+  '暂无可同步活动，请到待确认列表补齐安排。':
+    'No ready activities. Complete arrangements in the Pending list.',
+  返回待确认列表: 'Back to pending list',
+  返回列表: 'Back to list',
+  原安排: 'Original arrangement',
+  '仅调整日历安排，原行程保持不变。同组备选方案只确认一个。':
+    'Changes apply to Calendar sync only. Confirm one alternative per group.',
+  '补齐后可加入同步，也可以先同步已确定的活动。':
+    'Complete these arrangements or sync ready activities first.',
+  '所有活动已具备同步条件。': 'All activities are ready to sync.',
+  同步范围与手机查看: 'Sync behavior and iPhone access',
+  'Mac 和 iPhone 使用同一 Apple 账户，并开启 iCloud 日历。在手机日历列表勾选本旅行日历；必要时下拉刷新。':
+    'Use the same Apple Account with iCloud Calendar on Mac and iPhone. Select this calendar on your iPhone and pull down to refresh if needed.',
+  待确认行程: 'Itinerary awaiting confirmation',
+  确认安排: 'Confirm arrangement',
+  确认日期: 'Confirm date',
+  确认时间: 'Confirm time',
+  确认时区: 'Confirm time zone',
+  确认并加入同步: 'Confirm and add to sync',
+  '请确认有效日期、时间和时区。': 'Confirm a valid date, time and time zone.',
+  '以下安排尚未满足同步条件。请逐项确认日期、时间或备选方案，确认后会加入上方可选择的活动。':
+    'Confirm the date, time or alternative for each item below to add it to the selectable activities above.',
+  '确认结果保存在日历同步设置中，不改写原行程。同组交通方案只保留一个已确认方案。':
+    'Confirmed arrangements are saved in Calendar sync settings without changing the itinerary. Only one alternative per group is confirmed.',
   打开苹果日历: 'Open Apple Calendar',
   日历授权: 'Calendar permission',
   '需要允许日历完整访问，才能创建旅行日历并更新日程。':
