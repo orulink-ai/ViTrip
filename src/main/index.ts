@@ -1,3 +1,4 @@
+import { renderItineraryVideo } from './itinerary-video';
 import { navigateGoogle } from './google-navigation';
 import { googleSearchURL, googleMapsURL } from '../shared/google-travel';
 import type { AgentSteer } from './agent-runtime';
@@ -834,6 +835,42 @@ app
       emit({ type: 'link', link: url });
     };
     if (app.isPackaged && !process.env.VITRIP_TEST_DATA) app.setAsDefaultProtocolClient('vitrip');
+    let videoRendering = false;
+    handle('generateItineraryVideo', async (rawId, rawDay) => {
+      const id = z.string().uuid().parse(rawId);
+      const dayIndex = z.number().int().min(0).parse(rawDay);
+      const journey = store.journeys.find((j) => j.id === id);
+      if (!journey?.plan) throw Error('请先保存行程。');
+      if (videoRendering) throw Error('已有视频正在生成，请等待完成。');
+      videoRendering = true;
+      try {
+        const snapshot = structuredClone(journey.plan);
+        const result = await renderItineraryVideo(
+          snapshot,
+          dayIndex,
+          path.join(app.getPath('userData'), 'journeys', id, 'videos'),
+          (label) => emit({ type: 'itinerary-video', journeyId: id, text: label }),
+        );
+        const { filePath, ...video } = result;
+        return video;
+      } finally {
+        videoRendering = false;
+      }
+    });
+    handle('exportItineraryVideo', async (rawId, rawVideoId) => {
+      const id = z.string().uuid().parse(rawId);
+      const videoId = z.string().uuid().parse(rawVideoId);
+      if (!store.journeys.some((j) => j.id === id)) throw Error('旅行不存在。');
+      const source = path.join(app.getPath('userData'), 'journeys', id, 'videos', `${videoId}.mp4`);
+      await fs.access(source);
+      const target = await dialog.showSaveDialog(win, {
+        defaultPath: '行程动画讲解.mp4',
+        filters: [{ name: 'MP4 视频', extensions: ['mp4'] }],
+      });
+      if (target.canceled || !target.filePath) return false;
+      await fs.copyFile(source, target.filePath);
+      return true;
+    });
     handle('mapViewResult', (rawRequest, rawTrip, rawStatus) => {
       const requestId = z.string().uuid().parse(rawRequest);
       const tripId = z.string().parse(rawTrip);

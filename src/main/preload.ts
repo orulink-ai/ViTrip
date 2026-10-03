@@ -1,6 +1,9 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { API, Event } from '../shared/types';
 const api: API = {
+  generateItineraryVideo: (id, day) => ipcRenderer.invoke('vitrip:generateItineraryVideo', id, day),
+  exportItineraryVideo: (id, videoId) =>
+    ipcRenderer.invoke('vitrip:exportItineraryVideo', id, videoId),
   mapViewResult: (requestId, tripId, status) =>
     ipcRenderer.invoke('vitrip:mapViewResult', requestId, tripId, status),
   startVoice: (tripId, sdp) => ipcRenderer.invoke('vitrip:startVoice', tripId, sdp),

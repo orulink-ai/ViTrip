@@ -1,3 +1,4 @@
+import { ItineraryVideoDialog } from './itinerary-video-dialog';
 import { QuoteActions } from './quote-actions';
 import { Sources } from './components/assistant-ui/elements/sources';
 import { referenceCards } from '../shared/map-references';
@@ -157,6 +158,14 @@ export function JourneyMap({
                 </Button>
               )}
             </div>
+          )}
+          {journeyId && plan && (
+            <ItineraryVideoDialog
+              key={journeyId}
+              journeyId={journeyId}
+              plan={plan}
+              dayIndex={selection.day}
+            />
           )}
           {!!preferences.length && (
             <Select

@@ -151,6 +151,7 @@ export interface BrowserState {
 export interface Event {
   type:
     | 'map-view'
+    | 'itinerary-video'
     | 'voice'
     | 'link'
     | 'browser'
@@ -187,6 +188,11 @@ export interface Bounds {
   visible: boolean;
 }
 export interface API {
+  generateItineraryVideo(
+    journeyId: string,
+    dayIndex: number,
+  ): Promise<import('./itinerary-video').ItineraryVideo>;
+  exportItineraryVideo(journeyId: string, videoId: string): Promise<boolean>;
   mapViewResult(
     requestId: string,
     tripId: string,
