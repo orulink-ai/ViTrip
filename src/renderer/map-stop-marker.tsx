@@ -1,3 +1,4 @@
+import { photoCollectionKey } from '../shared/photo-collection';
 import { usePlaceDetails, linkedNotebookStops } from './place-details-context';
 import { photosForActivity } from '../shared/photos';
 import { PhotoGallery } from './photo-gallery';
@@ -37,12 +38,17 @@ export function MapStopMarker({
     error: linksError,
     onOpenDocument,
     onFindPhotos,
-    findingPhotos,
+    photoCollections,
+    assistantBusy,
   } = usePlaceDetails();
   const linkedDocuments = documents.filter(
     (doc) => linkedNotebookStops(doc.markdown, [stop]).length,
   );
   const photos = photosForActivity(stop, journey?.photos ?? []);
+  const photoTask = journey
+    ? photoCollections?.[photoCollectionKey(journey.id, stop.id)]
+    : undefined;
+  const findingPhotos = photoTask?.status === 'collecting';
   const key = decisionKey(journeyKey, stop);
   const journeyId = journeyKey.replace(/^vitrip-map:/, '');
   const popup = useRef<HTMLDivElement>(null);
@@ -144,6 +150,10 @@ export function MapStopMarker({
         data-map-journey={journeyId}
         data-activity-id={stop.id}
         data-message-id={`itinerary:${journeyId}`}
+        onFocusOutside={(event) => {
+          // Conversation updates may refocus its composer; keep active collection progress readable.
+          if (findingPhotos) event.preventDefault();
+        }}
         onInteractOutside={(event) => {
           const target = event.target;
           if (
@@ -202,18 +212,39 @@ export function MapStopMarker({
               ) : (
                 <p className="text-sm text-muted-foreground">暂无已保存的地点图片。</p>
               )}
+              {photoTask?.status === 'failed' && (
+                <p role="alert" className="text-sm text-muted-foreground">
+                  {photoTask.message}
+                </p>
+              )}
+              {photoTask?.status === 'saved' && (
+                <p role="status" className="text-sm text-muted-foreground">
+                  {photoTask.message}
+                </p>
+              )}
+              {assistantBusy && !findingPhotos && (
+                <p className="text-sm text-muted-foreground">
+                  助手正在处理其他任务，结束后可查找图片。
+                </p>
+              )}
               {onFindPhotos && (
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={findingPhotos}
-                  onClick={() => onFindPhotos(stop)}
+                  disabled={findingPhotos || assistantBusy}
+                  onClick={() => {
+                    // Keep focus in the popover when its trigger becomes disabled during collection.
+                    popup.current?.focus({ preventScroll: true });
+                    onFindPhotos(stop);
+                  }}
                 >
                   {findingPhotos
                     ? '正在查找图片…'
-                    : photos.length
-                      ? '补充地点图片'
-                      : '查找地点图片'}
+                    : photoTask?.status === 'failed'
+                      ? '重试查找图片'
+                      : photos.length
+                        ? '补充地点图片'
+                        : '查找地点图片'}
                 </Button>
               )}
             </section>

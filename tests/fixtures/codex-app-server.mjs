@@ -55,6 +55,10 @@ for await (const line of readline.createInterface({ input: process.stdin })) {
   else if (method === 'account/read')
     reply({ account: { type: 'chatgpt' }, requiresOpenaiAuth: true });
   else if (method === 'thread/start' || method === 'thread/resume') {
+    writeFileSync(
+      'thread-permissions.json',
+      JSON.stringify({ approvalPolicy: params.approvalPolicy, sandbox: params.sandbox }),
+    );
     if (method === 'thread/resume' && params.threadId !== threadId) {
       send({ id, error: { code: -1, message: 'thread missing' } });
     } else reply({ thread: { id: threadId } });
@@ -265,6 +269,7 @@ for await (const line of readline.createInterface({ input: process.stdin })) {
       next();
     } else if (text.includes('approval')) {
       pending.set('approval', (result) => {
+        writeFileSync('approval-decision.txt', result.decision);
         notify('item/agentMessage/delta', { itemId: 'approval-result', delta: result.decision });
         finish();
       });

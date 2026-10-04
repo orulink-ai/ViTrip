@@ -234,3 +234,19 @@ it('steers the active Codex turn with its id and images, then clears the capabil
   expect(steer).toBeUndefined();
   await expect(active({ prompt: '过期引导' })).rejects.toThrow();
 }, 20000);
+
+it('applies permission changes on resumed threads and auto-accepts native requests in full access', async () => {
+  const { options, command } = fixture();
+  options.prompt = 'approval';
+  options.approve = vi.fn(async () => true);
+  await runCodexAgent(options, command);
+  const config = () =>
+    JSON.parse(readFileSync(path.join(options.sessionDir, 'thread-permissions.json'), 'utf8'));
+  expect(config()).toEqual({ approvalPolicy: 'on-request', sandbox: 'workspace-write' });
+  expect(options.approve).toHaveBeenCalledTimes(1);
+  options.settings.permissionMode = 'full-access';
+  await runCodexAgent(options, command);
+  expect(config()).toEqual({ approvalPolicy: 'never', sandbox: 'danger-full-access' });
+  expect(options.approve).toHaveBeenCalledTimes(1);
+  expect(options.onDelta).toHaveBeenCalledWith('accept');
+});

@@ -1,3 +1,5 @@
+import type { DayNarrationControls } from './use-day-narration';
+import type { PhotoCollectionTask } from '../shared/photo-collection';
 import { PlaceDetailsProvider } from './place-details-context';
 import { ItineraryQuotation } from './itinerary-quotation';
 import type { Quote } from '../shared/notebook';
@@ -18,6 +20,7 @@ export function JournalPanel({
   scratchMarkdown,
   onOpenDocument,
   onFindPhotos,
+  photoCollections,
   tripId,
   onQuote,
   quoteTarget,
@@ -27,11 +30,13 @@ export function JournalPanel({
   todos,
   onTodos,
   discussion,
+  narration,
 }: {
   journey: Journey;
   scratchMarkdown?: string;
   onOpenDocument?: (name: string) => void;
   onFindPhotos?: (stop: ItineraryStop) => void;
+  photoCollections?: Record<string, PhotoCollectionTask>;
   tripId?: string;
   onQuote?: (quote: Quote, newConversation?: boolean) => void;
   quoteTarget?: Quote['source'];
@@ -41,6 +46,7 @@ export function JournalPanel({
   todos?: Todo[];
   onTodos?: (todos: Todo[]) => void;
   discussion?: DiscussionFollowControls;
+  narration?: DayNarrationControls;
 }) {
   // IPC clones Journey even when only knowledge or its title changes.
   const planKey = JSON.stringify(journey.plan);
@@ -153,7 +159,8 @@ export function JournalPanel({
       scratchMarkdown={scratchMarkdown}
       onOpenDocument={onOpenDocument}
       onFindPhotos={onFindPhotos}
-      findingPhotos={building}
+      photoCollections={photoCollections}
+      assistantBusy={building}
     >
       <div className="journal-panel">
         {tripId && onQuote && (
@@ -203,6 +210,8 @@ export function JournalPanel({
                 selection={selection}
                 onSelection={selectManually}
                 discussion={discussion}
+                narration={narration}
+                narrationBusy={building}
                 discussionFocus={presentedFocus}
                 automaticSelection={automaticSelection}
                 expanded={true}

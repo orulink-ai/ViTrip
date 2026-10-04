@@ -64,10 +64,15 @@ test('小窗在最小宽度、长模型名称和运行中保持所有输入栏�
     await assertFits();
     await popup.getByRole('button', { name: '选择 Codex 模型和思考强度' }).click();
     await expect(page.getByRole('dialog', { name: '连接你的旅行助手' })).toBeVisible();
+    await page.getByRole('combobox', { name: '权限模式', exact: true }).click();
+    await page.getByRole('option', { name: '完全访问权限', exact: true }).click();
+    await expect(page.getByText('当前会话设置已自动保存', { exact: true })).toBeVisible();
     await page
       .getByRole('dialog', { name: '连接你的旅行助手' })
       .getByRole('button', { name: 'Close', exact: true })
       .click();
+    await expect(popup.getByRole('button', { name: 'Agent 权限模式' })).toHaveText('完全访问权限');
+    await assertFits();
     await popup.getByLabel('旅行需求', { exact: true }).fill('wait');
     await popup.getByRole('button', { name: '发送', exact: true }).click();
     await expect(popup.getByRole('button', { name: '停止生成', exact: true })).toBeVisible();

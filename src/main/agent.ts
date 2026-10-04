@@ -1,3 +1,8 @@
+import {
+  requireAgentApproval,
+  localToolApprovalLabel,
+  permissionInstructions,
+} from './agent-permissions';
 import { jevSearchToolNames } from './jev-search-tools';
 import { loadWebSearch, webToolNames } from './web-search';
 import type { AgentImage } from '../shared/attachments';
@@ -31,6 +36,7 @@ import type { RunControl } from './control';
 import { travelPrompt, descriptions } from './travel-instructions';
 export { travelPrompt } from './travel-instructions';
 interface ToolOptions {
+  approve?: (label: string) => Promise<boolean>;
   control: RunControl;
   signal: AbortSignal;
   execute: (name: ToolName, args: Record<string, unknown>) => Promise<ToolResult>;
@@ -122,6 +128,7 @@ export async function runTravelAgent(
     cwd: options.sessionDir,
     prompt:
       travelPrompt +
+      permissionInstructions(options.settings.permissionMode) +
       (options.settings.jevExperiments?.webSearch
         ? '\nJEV 联网搜索实验已开启，优先用 jev_web_search 获取资料；web_search 保留作为原始搜索。'
         : '') +
@@ -167,8 +174,18 @@ export async function runTravelAgent(
       label: tool.label,
       description: tool.description,
       parameters: tool.parameters,
+      executionMode: 'sequential',
       execute: async (id, args, toolSignal, onUpdate, context) => {
         budget.check(tool.name);
+        const label = localToolApprovalLabel(tool.name, args);
+        if (label)
+          await requireAgentApproval(
+            options.settings.permissionMode,
+            label,
+            signal,
+            options.approve,
+          );
+        signal.throwIfAborted();
         return tool.execute(
           id,
           args as Static<T>,

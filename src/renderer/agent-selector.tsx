@@ -23,7 +23,7 @@ export function AgentSelector({
 }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="flex min-w-0 flex-1 items-center gap-1">
+    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
       <ModelSelectorRoot
         models={[
           { id: 'pi', name: 'Pi', description: config.model || '自定义模型接口', disabled },
@@ -68,6 +68,18 @@ export function AgentSelector({
           </span>
         </Button>
       )}
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        aria-label="Agent 权限模式"
+        onClick={onSettings}
+        disabled={disabled}
+        title={running ? '权限修改用于后续发送' : '修改当前会话权限'}
+      >
+        {running ? '下次：' : ''}
+        {config.permissionMode === 'full-access' ? '完全访问权限' : '请求批准'}
+      </Button>
       <Button
         type="button"
         variant="ghost"

@@ -1,3 +1,8 @@
+import {
+  codexPermissionConfig,
+  requireAgentApproval,
+  permissionInstructions,
+} from './agent-permissions';
 import { startCodexVoice } from './codex-voice-start';
 import fs from 'node:fs/promises';
 import { createHash } from 'node:crypto';
@@ -183,7 +188,13 @@ export async function runCodexAgent(options: AgentRunOptions, commandOverride?: 
       const activity =
         typeof params.itemId === 'string' ? activities.get(params.itemId) : undefined;
       const label = `Codex 请求执行：${safe(params.command ?? activity?.input ?? params.reason ?? '修改本地文件')}`;
-      const accepted = (await options.approve?.(label)) ?? false;
+      let accepted = false;
+      try {
+        await requireAgentApproval(options.settings.permissionMode, label, signal, options.approve);
+        accepted = true;
+      } catch (error) {
+        if (signal.aborted) throw error;
+      }
       signal.throwIfAborted();
       return { decision: accepted ? 'accept' : 'decline' };
     }
@@ -392,11 +403,11 @@ export async function runCodexAgent(options: AgentRunOptions, commandOverride?: 
     }
     const config = {
       cwd: options.sessionDir,
-      approvalPolicy: 'on-request',
+      ...codexPermissionConfig(options.settings.permissionMode),
       approvalsReviewer: 'user',
-      sandbox: 'workspace-write',
       developerInstructions:
         instructions +
+        permissionInstructions(options.settings.permissionMode) +
         (options.voice
           ? '\n语音会话的当前旅行上下文：\n' +
             (options.initialContext ?? '') +

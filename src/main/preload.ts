@@ -4,6 +4,9 @@ const api: API = {
   generateItineraryVideo: (id, day) => ipcRenderer.invoke('vitrip:generateItineraryVideo', id, day),
   exportItineraryVideo: (id, videoId) =>
     ipcRenderer.invoke('vitrip:exportItineraryVideo', id, videoId),
+  narrationSpeech: (tripId, text) => ipcRenderer.invoke('vitrip:narrationSpeech', tripId, text),
+  presentMap: (tripId, input) => ipcRenderer.invoke('vitrip:presentMap', tripId, input),
+  zoom: (action) => ipcRenderer.invoke('vitrip:zoom', action),
   mapViewResult: (requestId, tripId, status) =>
     ipcRenderer.invoke('vitrip:mapViewResult', requestId, tripId, status),
   startVoice: (tripId, sdp) => ipcRenderer.invoke('vitrip:startVoice', tripId, sdp),
@@ -18,6 +21,7 @@ const api: API = {
   editItinerary: (id, revision, edit) =>
     ipcRenderer.invoke('vitrip:editItinerary', id, revision, edit),
   notebookImage: (id, source) => ipcRenderer.invoke('vitrip:notebookImage', id, source),
+  findPlacePhotos: (id, activityId) => ipcRenderer.invoke('vitrip:findPlacePhotos', id, activityId),
   photo: (id, photoId) => ipcRenderer.invoke('vitrip:photo', id, photoId),
   copyLink: (target) => ipcRenderer.invoke('vitrip:copyLink', target),
   openLink: (url) => ipcRenderer.invoke('vitrip:openLink', url),

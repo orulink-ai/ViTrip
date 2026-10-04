@@ -285,6 +285,23 @@ test('local desktop: real browser tools, itinerary, approval and takeover', asyn
   await page.getByRole('button', { name: '允许这次操作', exact: true }).click();
   await expect(guest!.locator('#booking')).toHaveText('已预订');
   await expect(page.getByLabel('旅行需求', { exact: true })).toBeEnabled();
+  const activeTripId = (await page.evaluate(() => window.vitrip.init())).activeTripId;
+  await page.evaluate(
+    (id) => window.vitrip.conversationSettings(id, { permissionMode: 'full-access' }),
+    activeTripId,
+  );
+  await guest!.evaluate(() => {
+    document.querySelector('#booking')!.textContent = '尚未预订';
+  });
+  await page.getByLabel('旅行需求', { exact: true }).fill('完全权限预订测试');
+  await page.getByRole('button', { name: '发送', exact: true }).click();
+  await expect(guest!.locator('#booking')).toHaveText('已预订');
+  await expect(page.getByRole('button', { name: '允许这次操作', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '停止生成', exact: true })).toHaveCount(0);
+  await page.evaluate(
+    (id) => window.vitrip.conversationSettings(id, { permissionMode: 'ask' }),
+    activeTripId,
+  );
   await page.getByLabel('旅行需求', { exact: true }).fill('接管测试');
   await page.getByRole('button', { name: '发送', exact: true }).click();
   await expect(page.getByRole('button', { name: '允许这次操作', exact: true })).toBeVisible();
@@ -325,7 +342,7 @@ test('restores conversation and itinerary after restarting', async () => {
   await expect(page.getByText('我已重新观察当前页面，接管后的内容已保留。')).toBeVisible();
   const state = await page.evaluate(() => window.vitrip.init());
   expect(state.settings.model).toBe('test-model');
-  expect(state.trips[0].messages.filter((message) => message.role === 'user')).toHaveLength(4);
+  expect(state.trips[0].messages.filter((message) => message.role === 'user')).toHaveLength(5);
 });
 
 test('旅行文件夹重命名、跨会话共享资料与旧手册保留', async () => {

@@ -1,4 +1,19 @@
 import { renderItineraryVideo } from './itinerary-video';
+import { prepareNarration } from '../shared/day-narration';
+import { synthesizeNarration } from './narration-speech';
+import { InterfaceZoom, scaleZoomBounds } from './interface-zoom';
+import {
+  bindPhotoCollectionTool,
+  startPhotoCollection,
+  finishPhotoCollection,
+  photoCollectionKey,
+  photoCollectionPrompt,
+  type PhotoCollectionTask,
+} from '../shared/photo-collection';
+import {
+  itineraryStops as photoCollectionStops,
+  type ItineraryStop,
+} from '../shared/itinerary-map';
 import { navigateGoogle } from './google-navigation';
 import { googleSearchURL, googleMapsURL } from '../shared/google-travel';
 import type { AgentSteer } from './agent-runtime';
@@ -17,6 +32,7 @@ import { attachmentIdsSchema, type FileAttachment } from '../shared/attachments'
 import { backgroundTest } from './test-window-policy';
 import { createHash } from 'node:crypto';
 import { PhotoCache } from './photo-cache';
+import { executeCalendarTool } from './calendar-tool';
 import { CalendarSync, eventKitNative } from './calendar-sync';
 import { openCalendarPrivacySettings } from './calendar-permissions';
 import { openAppleCalendar } from './calendar-app';
@@ -25,7 +41,7 @@ import {
   calendarOptionsSchema,
   calendarSyncSchema,
 } from '../shared/calendar';
-import type { ToolResult } from '../shared/photos';
+import { photosForActivity, type ToolResult } from '../shared/photos';
 import { itineraryEditSchema } from '../shared/journey-editing';
 import { createDeepLink, resolveDeepLink, type LinkTarget } from '../shared/deep-link';
 import { RequestOutcome } from './request-outcome';
@@ -67,7 +83,7 @@ import {
 } from '../shared/schemas';
 import { allowedURL, redactSettings } from '../shared/policy';
 import { demoPlan } from '../shared/demo';
-import type { Event, Trip } from '../shared/types';
+import type { Event, Trip, Bounds } from '../shared/types';
 
 app.setName('ViTrip');
 const backgroundTesting = backgroundTest();
@@ -181,6 +197,12 @@ app
     let steeringTask: Promise<void> | undefined;
     let steeringMessageId: string | undefined;
     let editingQueuedMessageId: string | undefined;
+    const photoCollections = new Map<string, PhotoCollectionTask>();
+    const publishPhotoCollection = (value: PhotoCollectionTask) => {
+      photoCollections.set(photoCollectionKey(value.journeyId, value.activityId), value);
+      emit({ type: 'photo-collection', photoCollection: value });
+      return value;
+    };
     let sending = false;
     let paused = false;
     let pending: { id: string; resolve: (allow: boolean) => void } | null = null;
@@ -261,6 +283,15 @@ app
       },
     );
     win.contentView.addChildView(browser.view);
+    let browserBounds: Bounds | undefined;
+    const zoom = new InterfaceZoom(
+      path.join(app.getPath('userData'), 'interface-zoom.json'),
+      [win.webContents, browser.view.webContents],
+      () => {
+        if (browserBounds && !win.isDestroyed())
+          browser.bounds(scaleZoomBounds(browserBounds, win.webContents.getZoomFactor()));
+      },
+    );
     browser.view.setVisible(false);
     const save = (trip: Trip) => {
       trip.updatedAt = Date.now();
@@ -283,8 +314,9 @@ app
       });
       save(trip);
     };
-    async function approve(label: string, signal: AbortSignal) {
+    async function approve(label: string, signal: AbortSignal, mode?: Settings['permissionMode']) {
       signal.throwIfAborted();
+      if (mode === 'full-access') return;
       const id = randomUUID();
       const allowed = await new Promise<boolean>((resolve) => {
         pending = { id, resolve };
@@ -338,6 +370,40 @@ app
       // navigation should reveal it, so reading or editing a notebook is uninterrupted.
       if (name === 'plan' || name === 'journal') emit({ type: 'workspace', workspace: 'plan' });
       switch (name) {
+        case 'apple_calendar':
+          return JSON.stringify(
+            await executeCalendarTool(args, {
+              journey: () => ensureCalendarJourney(trip.journeyId),
+              calendar,
+              signal,
+              approve: (label) => approve(label, signal, runSettings.permissionMode),
+              openPrivacy: () => openCalendarPrivacySettings((url) => shell.openExternal(url)),
+              openCalendar: () => openAppleCalendar((file) => shell.openPath(file)),
+            }),
+          );
+        case 'day_narration': {
+          const input = toolsSchema.day_narration.parse(args);
+          const journey = store.journeyFor(trip);
+          if (trip.id !== current.id) return JSON.stringify({ status: 'unavailable' });
+          const segments = prepareNarration(journey.plan, input);
+          emit({
+            type: 'day-narration',
+            narration: {
+              id: randomUUID(),
+              tripId: trip.id,
+              journeyId: journey.id,
+              planKey: JSON.stringify(journey.plan),
+              dayIndex: input.dayIndex,
+              segments,
+            },
+          });
+          return JSON.stringify({
+            status: 'prepared',
+            segments: segments.length,
+            instruction:
+              '已交给分段播放器，播放器会尝试自动播放，实际播放状态以右侧控制条为准。不要再朗读完整讲解或调用map_view轮播；控制条支持暂停、继续本段、上一段、下一段和结束，没有单独的开始按钮。',
+          });
+        }
         case 'map_view': {
           const input = toolsSchema.map_view.parse(args);
           const journey = store.journeyFor(trip);
@@ -533,7 +599,7 @@ app
           return browser.observe();
         case 'click':
           return browser.click(toolsSchema.click.parse(args).ref, (label) =>
-            approve(label, signal),
+            approve(label, signal, runSettings.permissionMode),
           );
         case 'type': {
           const value = toolsSchema.type.parse(args);
@@ -541,7 +607,7 @@ app
         }
         case 'press':
           return browser.press(toolsSchema.press.parse(args).key, (label) =>
-            approve(label, signal),
+            approve(label, signal, runSettings.permissionMode),
           );
         case 'scroll':
           return browser.scroll(toolsSchema.scroll.parse(args).direction);
@@ -574,7 +640,7 @@ app
       save(current);
       begin();
     }
-    function begin(resuming = false, voiceSdp?: string) {
+    function begin(resuming = false, voiceSdp?: string, photoStop?: ItineraryStop) {
       if (task) throw new Error('请等待当前任务结束');
       const runSettings = {
         ...store.settingsFor(current),
@@ -592,7 +658,7 @@ app
       const outcome = new RequestOutcome();
       const approveForRequest = async (label: string) => {
         try {
-          await approve(label, signal);
+          await approve(label, signal, runSettings.permissionMode);
           return true;
         } catch (error) {
           if (signal.aborted) throw error;
@@ -604,7 +670,13 @@ app
       let documentsSaved = false;
       const trip = current;
       const executeForRequest = async (name: ToolName, args: Record<string, unknown>) => {
-        const result = await execute(name, args, trip, signal, runSettings);
+        if (
+          photoStop &&
+          ['plan', 'journal', 'notebook', 'prepare', 'apple_calendar'].includes(name)
+        )
+          throw Error('地点图片任务只采集照片，请勿修改行程或笔记。');
+        const scopedArgs = photoStop ? bindPhotoCollectionTool(photoStop, name, args) : args;
+        const result = await execute(name, scopedArgs, trip, signal, runSettings);
         // Record only successful durable writes; older journey revisions are irrelevant.
         if (name === 'plan' || name === 'journal') outcome.saved(name);
         if (
@@ -658,7 +730,9 @@ app
         signal.throwIfAborted();
         let prompt = voiceSdp
           ? '根据当前旅行资料响应用户的语音请求。仅在工具返回成功和页面证据充分时声称网页已打开或查询成功；失败时说明实际错误，不说已打开。'
-          : messagePrompt(latest ?? { content: '继续当前旅行规划' });
+          : photoStop
+            ? photoCollectionPrompt(photoStop)
+            : messagePrompt(latest ?? { content: '继续当前旅行规划' });
         if (resuming)
           prompt =
             '用户已交还浏览器控制权。之前的元素引用全部作废。先依据当前页面重新规划，不要重复已经完成的操作。当前页面：' +
@@ -723,6 +797,7 @@ app
         });
         if (
           !voiceSdp &&
+          !photoStop &&
           !signal.aborted &&
           (store.journeyFor(trip).revision === revisionBefore || !documentsSaved)
         ) {
@@ -871,6 +946,22 @@ app
       await fs.copyFile(source, target.filePath);
       return true;
     });
+    handle('narrationSpeech', async (rawTrip, rawText) => {
+      if (z.string().parse(rawTrip) !== current.id) throw Error('当前会话已变化');
+      return synthesizeNarration(z.string().trim().min(1).max(1200).parse(rawText));
+    });
+    handle('presentMap', async (rawTrip, rawInput) => {
+      if (z.string().parse(rawTrip) !== current.id) return { status: 'unavailable' };
+      const input = toolsSchema.map_view.parse(rawInput);
+      if (input.action === 'read') throw Error('展示需要指定当天或地点。');
+      const journey = store.journeyFor(current);
+      const target = resolveMapView(journey.plan, input);
+      return mapPresentation.present(
+        { tripId: current.id, journeyId: journey.id, planRevision: journey.revision, target },
+        new AbortController().signal,
+        (command) => emit({ type: 'map-view', mapView: command }),
+      );
+    });
     handle('mapViewResult', (rawRequest, rawTrip, rawStatus) => {
       const requestId = z.string().uuid().parse(rawRequest);
       const tripId = z.string().parse(rawTrip);
@@ -935,6 +1026,7 @@ app
         pendingLink = undefined;
         return url;
       })(),
+      photoCollections: [...photoCollections.values()],
       activeTripId: current.id,
       running: !!task,
       canSteer: Boolean(activeSteer),
@@ -1137,6 +1229,73 @@ app
       }
       save(current);
     });
+    handle('findPlacePhotos', async (rawJourneyId, rawActivityId) => {
+      const journeyId = z.string().parse(rawJourneyId);
+      const activityId = z.string().parse(rawActivityId);
+      if (current.journeyId !== journeyId) throw Error('当前旅行已变化，请重新查找图片');
+      if (task || sending) throw Error('助手正在处理其他任务，请结束后重试');
+      const trip = current;
+      const journey = store.journeyFor(trip);
+      const stop = photoCollectionStops(journey.plan).find((stop) => stop.id === activityId);
+      if (!stop?.location) throw Error('地点不存在或尚未定位');
+      const existingReadable = photosForActivity(stop, journey.photos ?? [])
+        .filter((photo) => photos.read(photo.id))
+        .map((photo) => photo.id);
+      const collection = startPhotoCollection(
+        journeyId,
+        stop,
+        journey.photos ?? [],
+        existingReadable,
+      );
+      const previousMessages = trip.messages.length;
+      try {
+        const settings = store.settingsFor(trip);
+        if (settings.runtime !== 'codex' && !settings.model) throw Error('请先配置模型');
+        trip.messages.push({
+          id: randomUUID(),
+          role: 'user',
+          content: `请查找并保存「${stop.location.name}」的真实地点图片。`,
+          settings: structuredClone(trip.settings),
+        });
+        save(trip);
+        publishPhotoCollection(collection);
+        begin(false, undefined, stop);
+        const run = task;
+        const runController = controller as AbortController | null;
+        await run;
+        const latest = store.journeyFor(trip);
+        const latestStop = photoCollectionStops(latest.plan).find((stop) => stop.id === activityId);
+        const readable = latestStop
+          ? photosForActivity(latestStop, latest.photos ?? [])
+              .filter(
+                (photo) => !collection.initialPhotoIds.includes(photo.id) && photos.read(photo.id),
+              )
+              .map((photo) => photo.id)
+          : [];
+        const messages = trip.messages.slice(previousMessages);
+        const steps = messages.flatMap((message) => message.activities ?? []);
+        const reason = runController?.signal.aborted
+          ? '已停止图片采集，尚未保存新图片。可以重试。'
+          : messages.some((message) => message.error)
+            ? '图片采集请求未完成，请检查对话中的错误后重试。'
+            : steps.some(
+                  (step) =>
+                    ['photo_candidates', 'save_photo'].includes(step.name) &&
+                    step.status === 'error',
+                )
+              ? '网页图片读取或保存失败，尚未保存新图片。请更换来源后重试。'
+              : undefined;
+        return publishPhotoCollection(
+          finishPhotoCollection(collection, latestStop, latest.photos ?? [], readable, reason),
+        );
+      } catch (error) {
+        return publishPhotoCollection({
+          ...collection,
+          status: 'failed',
+          message: error instanceof Error ? error.message : '图片采集失败，请重试。',
+        });
+      }
+    });
     handle('send', async (text, quotation, rawIds) => {
       if (sending) throw new Error('消息正在发送，请稍候');
       sending = true;
@@ -1268,6 +1427,7 @@ app
         throw new Error('远程模型接口必须使用 HTTPS');
       store.configure({
         jevExperiments: settings.jevExperiments ?? store.settings.jevExperiments,
+        permissionMode: settings.permissionMode ?? store.settings.permissionMode,
         runtime: settings.runtime ?? store.settings.runtime,
         codexModel: settings.codexModel ?? store.settings.codexModel,
         codexEffort: settings.codexEffort ?? store.settings.codexEffort,
@@ -1308,7 +1468,11 @@ app
       await stop(paused);
       return browser.history(z.enum(['back', 'forward', 'reload']).parse(action));
     });
-    handle('bounds', (value) => browser.bounds(boundsSchema.parse(value)));
+    handle('zoom', (action) => zoom.change(z.enum(['in', 'out', 'reset']).parse(action)));
+    handle('bounds', (value) => {
+      browserBounds = boundsSchema.parse(value);
+      browser.bounds(scaleZoomBounds(browserBounds, win.webContents.getZoomFactor()));
+    });
     handle('pause', () => stop(true));
     handle('stop', () => stop(false));
     handle('resume', () => {
@@ -1340,8 +1504,7 @@ app
       openCalendarPrivacySettings((url) => shell.openExternal(url)),
     );
     handle('openAppleCalendar', () => openAppleCalendar((path) => shell.openPath(path)));
-    handle('calendarPreview', (rawId, rawOptions) => {
-      const options = calendarOptionsSchema.parse(rawOptions);
+    function ensureCalendarJourney(rawId: unknown) {
       let journey = calendarJourney(rawId);
       if (journey.plan!.days.some((day) => day.activities.some((activity) => !activity.id))) {
         const plan = structuredClone(journey.plan!);
@@ -1350,8 +1513,11 @@ app
         journey = store.updatePlan(journey.id, plan);
         emit({ type: 'journey', journey });
       }
-      return buildCalendarPreview(journey, options);
-    });
+      return journey;
+    }
+    handle('calendarPreview', (rawId, rawOptions) =>
+      buildCalendarPreview(ensureCalendarJourney(rawId), calendarOptionsSchema.parse(rawOptions)),
+    );
     handle('calendarSync', (raw) => {
       const input = calendarSyncSchema.parse(raw);
       const journey = calendarJourney(input.journeyId);
@@ -1375,6 +1541,14 @@ app
             { role: 'copy' },
             { role: 'paste' },
             { role: 'selectAll' },
+          ],
+        },
+        {
+          label: '视图',
+          submenu: [
+            { label: '放大', accelerator: 'CmdOrCtrl+Plus', click: () => zoom.change('in') },
+            { label: '缩小', accelerator: 'CmdOrCtrl+-', click: () => zoom.change('out') },
+            { label: '恢复 100%', accelerator: 'CmdOrCtrl+0', click: () => zoom.change('reset') },
           ],
         },
         { label: '窗口', submenu: [{ role: 'minimize' }, { role: 'zoom' }] },

@@ -1,4 +1,5 @@
 export const translations: Record<string, string> = {
+  苹果日历: 'Apple Calendar',
   '选择活动，写入独立的旅行日历。': 'Choose activities to save to a separate travel calendar.',
   日历已连接: 'Calendar connected',
   尚未连接苹果日历: 'Apple Calendar not connected',
@@ -410,6 +411,7 @@ export const translations: Record<string, string> = {
   '网页加载中…': 'Loading page…',
   浏览器就绪: 'Browser ready',
   关闭提示: 'Dismiss notification',
+  '请检查操作内容，批准后才会执行。': 'Review the action before allowing it to run.',
   需要你确认: 'Your approval is needed',
   '请先检查右侧网页上的操作内容。': 'Review the action on the page before continuing.',
   拒绝: 'Reject',

@@ -108,6 +108,21 @@ test('Pi 内置工具实际读写文件、读取飞书技能并通过 bash 执�
     );
     await page.getByLabel('旅行需求', { exact: true }).fill('验证本机文件工具与飞书 CLI');
     await page.getByRole('button', { name: '发送', exact: true }).click();
+    await expect(page.getByText('写入本地文件：travel-note.txt', { exact: true })).toBeVisible();
+    const activeTrip = (await page.evaluate(() => window.vitrip.init())).activeTripId;
+    await expect(
+      access(path.join(dir, 'data/sessions', activeTrip, 'travel-note.txt')),
+    ).rejects.toThrow();
+    await page.getByRole('button', { name: '允许这次操作', exact: true }).click();
+    await expect(page.getByText('修改本地文件：travel-note.txt', { exact: true })).toBeVisible();
+    expect(
+      await readFile(path.join(dir, 'data/sessions', activeTrip, 'travel-note.txt'), 'utf8'),
+    ).toBe('first draft');
+    await page.getByRole('button', { name: '允许这次操作', exact: true }).click();
+    await expect(
+      page.getByText('执行本机命令：lark-cli --help && node --version', { exact: true }),
+    ).toBeVisible();
+    await page.getByRole('button', { name: '允许这次操作', exact: true }).click();
     await expect(page.getByText('内置工具与飞书 CLI 已执行完成。', { exact: true })).toBeVisible();
     expect(exposed).toEqual(
       expect.arrayContaining([
@@ -142,6 +157,10 @@ test('Pi 内置工具实际读写文件、读取飞书技能并通过 bash 执�
     await activity.getByRole('button', { name: /bash/ }).click();
     await expect(activity.getByText(/fixture-lark-ready/)).toBeVisible();
     await page.screenshot({ path: 'test-results/pi-tools-lark.png' });
+    await page.evaluate(
+      (id) => window.vitrip.conversationSettings(id, { permissionMode: 'full-access' }),
+      trip.id,
+    );
     await page.getByLabel('旅行需求', { exact: true }).fill('验证停止长命令');
     await page.getByRole('button', { name: '发送', exact: true }).click();
     await expect(

@@ -1,3 +1,4 @@
+import type { PhotoCollectionTask } from '../shared/photo-collection';
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { ItineraryStop } from '../shared/itinerary-map';
 import type { Journey } from '../shared/types';
@@ -10,7 +11,8 @@ const PlaceDetailsContext = createContext<{
   error: string;
   onOpenDocument?: (name: string) => void;
   onFindPhotos?: (stop: ItineraryStop) => void;
-  findingPhotos?: boolean;
+  photoCollections?: Record<string, PhotoCollectionTask>;
+  assistantBusy?: boolean;
 }>({ documents: [], error: '' });
 export const usePlaceDetails = () => useContext(PlaceDetailsContext);
 export { linkedNotebookStops };
@@ -20,14 +22,16 @@ export function PlaceDetailsProvider({
   scratchMarkdown = '',
   onOpenDocument,
   onFindPhotos,
-  findingPhotos,
+  photoCollections,
+  assistantBusy,
   children,
 }: {
   journey: Journey;
   scratchMarkdown?: string;
   onOpenDocument?: (name: string) => void;
   onFindPhotos?: (stop: ItineraryStop) => void;
-  findingPhotos?: boolean;
+  photoCollections?: Record<string, PhotoCollectionTask>;
+  assistantBusy?: boolean;
   children: ReactNode;
 }) {
   const [documents, setDocuments] = useState<NotebookDocument[]>([]);
@@ -73,7 +77,8 @@ export function PlaceDetailsProvider({
         error,
         onOpenDocument,
         onFindPhotos,
-        findingPhotos,
+        photoCollections,
+        assistantBusy,
       }}
     >
       {children}

@@ -24,7 +24,7 @@ import {
 } from './components/ui/dialog';
 import { Input } from './components/ui/input';
 import { Button } from './components/ui/button';
-import type { ConversationSettings, PublicSettings } from '../shared/types';
+import type { AgentPermissionMode, ConversationSettings, PublicSettings } from '../shared/types';
 export function SettingsDialog({
   open,
   tripId,
@@ -47,6 +47,9 @@ export function SettingsDialog({
   useEffect(() => {
     if (open) setTavilyKey('');
   }, [open]);
+  const [permissionMode, setPermissionMode] = useState<AgentPermissionMode>(
+    config.permissionMode ?? 'ask',
+  );
   const [runtime, setRuntime] = useState<'pi' | 'codex'>(config.runtime ?? 'pi');
   const [codexModel, setCodexModel] = useState(config.codexModel ?? '');
   const [codexEffort, setCodexEffort] = useState(config.codexEffort ?? '');
@@ -89,6 +92,7 @@ export function SettingsDialog({
       setExperiments(
         config.jevExperiments ?? { browser: false, webSearch: false, localSearch: false },
       );
+      setPermissionMode(config.permissionMode ?? 'ask');
       setRuntime(config.runtime ?? 'pi');
       setCodexModel(config.codexModel ?? '');
       setCodexEffort(config.codexEffort ?? '');
@@ -115,6 +119,7 @@ export function SettingsDialog({
         );
       }
       setAutoSaved(true);
+      return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : t('保存失败'));
     } finally {
@@ -144,6 +149,7 @@ export function SettingsDialog({
               onSave(
                 await window.vitrip.settings({
                   jevExperiments: experiments,
+                  permissionMode,
                   runtime,
                   codexModel,
                   codexEffort,
@@ -187,6 +193,31 @@ export function SettingsDialog({
                 </SelectContent>
               </Select>
             </label>
+            <label>
+              权限模式
+              <Select
+                value={permissionMode}
+                disabled={saving || selectionSaving}
+                onValueChange={async (value) => {
+                  if (value !== 'ask' && value !== 'full-access') return;
+                  if (await saveSelection({ permissionMode: value })) setPermissionMode(value);
+                }}
+              >
+                <SelectTrigger aria-label="权限模式">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ask">请求批准</SelectItem>
+                  <SelectItem value="full-access">完全访问权限</SelectItem>
+                </SelectContent>
+              </Select>
+            </label>
+            <p className="text-xs text-muted-foreground">
+              {permissionMode === 'full-access'
+                ? '允许 Agent 自动执行本机命令、修改文件和网页提交，无需逐次批准。系统授权仍由系统控制。'
+                : 'Pi 的本机命令和文件修改、网页提交需批准；Codex 按工作区沙箱策略请求批准。资料读取和旅行内容整理自动执行。'}{' '}
+              权限修改用于后续发送，当前任务使用发送时的设置。
+            </p>
             {runtime === 'codex' && (
               <>
                 <p className="settings-note">

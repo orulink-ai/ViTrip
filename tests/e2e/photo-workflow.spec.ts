@@ -52,7 +52,6 @@ test('真实浏览器照片经模型工具缓存，图像传入接口，地图�
         arguments: JSON.stringify({
           subject: '清水寺',
           ref: candidates[0].ref,
-          activityId: 'vitrip-stop-0-0',
         }),
       };
     }
@@ -102,8 +101,13 @@ test('真实浏览器照片经模型工具缓存，图像传入接口，地图�
         }),
       origin,
     );
-    await page.getByLabel('旅行需求', { exact: true }).fill('采集清水寺的照片并保存');
-    await page.getByRole('button', { name: '发送', exact: true }).click();
+    await page.getByRole('tab', { name: '行程', exact: true }).click();
+    await selectMapDay(page, 1);
+    await page.getByRole('button', { name: '地图地点 1 清水寺', exact: true }).click();
+    await page
+      .getByRole('dialog', { name: '清水寺的引用' })
+      .getByRole('button', { name: '查找地点图片', exact: true })
+      .click();
     await expect
       .poll(
         async () => (await page.evaluate(() => window.vitrip.init())).journeys[0].photos?.length,
@@ -114,6 +118,9 @@ test('真实浏览器照片经模型工具缓存，图像传入接口，地图�
     await selectMapDay(page, 1);
     await page.getByRole('button', { name: '地图地点 1 清水寺', exact: true }).click();
     const popup = page.getByRole('dialog', { name: '清水寺的引用' });
+    await expect(
+      popup.getByRole('status').filter({ hasText: '已保存 1 张地点图片' }),
+    ).toBeVisible();
     await popup.getByRole('button', { name: /^Open image: 清水寺/ }).click();
     await expect(
       page.getByRole('dialog', { name: 'Image 1 of 1', exact: true }).locator('img'),
@@ -141,6 +148,7 @@ test('真实浏览器照片经模型工具缓存，图像传入接口，地图�
     const state = await page.evaluate(() => window.vitrip.init());
     expect(JSON.stringify(state.trips)).not.toContain('data:image');
     const photo = state.journeys[0].photos![0];
+    expect(state.journeys[0].plan!.days[0].activities[0].photoIds).toContain(photo.id);
     expect(photo.pageUrl).toBe(origin + '/temple');
     expect(photo.imageUrl).toBe(origin + '/photo.png');
     await app.close();

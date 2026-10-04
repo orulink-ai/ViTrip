@@ -3,6 +3,7 @@ import { CalendarDays } from 'lucide-react';
 import type { Journey } from '../shared/types';
 import {
   calendarOptionsSchema,
+  defaultCalendarOptions,
   buildCalendarPreview,
   type CalendarConnection,
   type CalendarOptions,
@@ -39,14 +40,7 @@ export function CalendarSyncDialog({
   onClose: () => void;
   onSuccess: (message: string) => void;
 }) {
-  const [options, setOptions] = useState<CalendarOptions>({
-    startDate: journey.plan?.days[0]?.date,
-    timeZone:
-      journey.plan?.days.flatMap((day) => day.activities).find((activity) => activity.timeZone)
-        ?.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
-    durationMinutes: 60,
-    reminderMinutes: 30,
-  });
+  const [options, setOptions] = useState<CalendarOptions>(() => defaultCalendarOptions(journey));
   const [connection, setConnection] = useState<CalendarConnection>();
   const optionsEdited = useRef(false);
   const selectionEdited = useRef(false);

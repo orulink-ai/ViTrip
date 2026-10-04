@@ -1,3 +1,4 @@
+import type { PhotoCollectionTask } from './photo-collection';
 import type { CodexModel } from './codex-models';
 import type { DocumentWrite, NotebookDocument, NotebookDocumentInfo } from './notebook-documents';
 import type { FileAttachment } from './attachments';
@@ -11,7 +12,9 @@ export interface JevExperiments {
   webSearch: boolean;
   localSearch: boolean;
 }
+export type AgentPermissionMode = 'ask' | 'full-access';
 export interface Settings {
+  permissionMode?: AgentPermissionMode;
   jevExperiments?: JevExperiments;
   runtime?: 'pi' | 'codex';
   codexModel?: string;
@@ -26,10 +29,17 @@ export interface Settings {
 export type ConversationSettings = Partial<
   Pick<
     Settings,
-    'runtime' | 'codexModel' | 'codexEffort' | 'model' | 'imageInput' | 'jevExperiments'
+    | 'permissionMode'
+    | 'runtime'
+    | 'codexModel'
+    | 'codexEffort'
+    | 'model'
+    | 'imageInput'
+    | 'jevExperiments'
   >
 >;
 export interface PublicSettings {
+  permissionMode?: AgentPermissionMode;
   jevExperiments?: JevExperiments;
   runtime?: 'pi' | 'codex';
   codexModel?: string;
@@ -151,7 +161,9 @@ export interface BrowserState {
 export interface Event {
   type:
     | 'map-view'
+    | 'day-narration'
     | 'itinerary-video'
+    | 'photo-collection'
     | 'voice'
     | 'link'
     | 'browser'
@@ -165,7 +177,9 @@ export interface Event {
     | 'journey'
     | 'documents'
     | 'prepare';
+  narration?: import('./day-narration').NarrationCommand;
   mapView?: import('./map-view').MapViewCommand;
+  photoCollection?: PhotoCollectionTask;
   voice?: import('./voice').VoiceEvent;
   link?: string;
   workspace?: 'browser' | 'plan' | 'notebook';
@@ -193,6 +207,13 @@ export interface API {
     dayIndex: number,
   ): Promise<import('./itinerary-video').ItineraryVideo>;
   exportItineraryVideo(journeyId: string, videoId: string): Promise<boolean>;
+  narrationSpeech(tripId: string, text: string): Promise<string>;
+  presentMap(
+    tripId: string,
+    input: Exclude<import('./map-view').MapViewInput, { action: 'read' }>,
+  ): Promise<{ status: import('./map-view').MapViewStatus }>;
+
+  zoom(action: import('./interface-zoom').ZoomAction): Promise<void>;
   mapViewResult(
     requestId: string,
     tripId: string,
@@ -217,9 +238,11 @@ export interface API {
   openLink(url: string): Promise<{ target: LinkTarget; trip: Trip }>;
   editItinerary(journeyId: string, revision: number, edit: ItineraryEdit): Promise<Journey>;
   notebookImage(journeyId: string, source: string): Promise<string | null>;
+  findPlacePhotos(journeyId: string, activityId: string): Promise<PhotoCollectionTask>;
   photo(journeyId: string, photoId: string): Promise<string | null>;
   init(): Promise<{
     link?: string;
+    photoCollections?: PhotoCollectionTask[];
     activeTripId: string;
     running: boolean;
     canSteer: boolean;
@@ -276,6 +299,7 @@ export interface API {
   addBookmark(journeyId: string, quote: Quote): Promise<Notebook>;
   removeBookmark(journeyId: string, id: string): Promise<Notebook>;
   settings(value: {
+    permissionMode?: AgentPermissionMode;
     jevExperiments?: JevExperiments;
     runtime?: 'pi' | 'codex';
     codexModel?: string;

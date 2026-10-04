@@ -1,4 +1,6 @@
 import { ItineraryVideoDialog } from './itinerary-video-dialog';
+import { DayNarrationToolbar } from './day-narration-toolbar';
+import type { DayNarrationControls } from './use-day-narration';
 import { QuoteActions } from './quote-actions';
 import { Sources } from './components/assistant-ui/elements/sources';
 import { referenceCards } from '../shared/map-references';
@@ -46,6 +48,8 @@ export function JourneyMap({
   onBrowse,
   onQuoteDay,
   discussion,
+  narration,
+  narrationBusy,
   discussionFocus,
   automaticSelection = false,
 }: {
@@ -59,6 +63,8 @@ export function JourneyMap({
   onBrowse: (url: string) => void;
   onQuoteDay?: (day: number, newConversation: boolean) => void;
   discussion?: DiscussionFollowControls;
+  narration?: DayNarrationControls;
+  narrationBusy?: boolean;
   discussionFocus?: DiscussionFocus;
   automaticSelection?: boolean;
 }) {
@@ -165,6 +171,14 @@ export function JourneyMap({
               journeyId={journeyId}
               plan={plan}
               dayIndex={selection.day}
+            />
+          )}
+          {narration && plan && (
+            <DayNarrationToolbar
+              controls={narration}
+              dayIndex={selection.day}
+              days={plan.days}
+              busy={narrationBusy}
             />
           )}
           {!!preferences.length && (

@@ -11,6 +11,7 @@ import { ToolCall } from './assistant-ui/elements/tool-call';
 import { ToolFallback } from './assistant-ui/elements/tool-fallback.aui';
 
 const labels: Record<string, string> = {
+  apple_calendar: '苹果日历',
   commandExecution: '执行本机命令',
   fileChange: '编辑文件',
   webSearch: '搜索网页',
@@ -39,6 +40,7 @@ const labels: Record<string, string> = {
   press: '操作键盘',
   scroll: '浏览页面',
   plan: '更新行程',
+  day_narration: '准备每日行程讲解',
   map_view: '展示行程地图',
   journal: '整理旅行手册',
   notebook: '整理笔记文档',

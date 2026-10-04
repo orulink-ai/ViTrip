@@ -1,3 +1,5 @@
+import { calendarToolSchema } from './calendar-tool';
+import { narrationSchema } from './day-narration';
 import { mapViewSchema } from './map-view';
 import { googleSearchSchema, googleMapsSchema } from './google-travel';
 import { prepareToolSchema } from './prepare';
@@ -104,6 +106,7 @@ export const jevExperimentsSchema = z.object({
   localSearch: z.boolean(),
 });
 export const settingsSchema = z.object({
+  permissionMode: z.enum(['ask', 'full-access']).optional(),
   jevExperiments: jevExperimentsSchema.optional(),
   runtime: z.enum(['pi', 'codex']).optional(),
   codexModel: z.string().trim().max(200).optional(),
@@ -121,6 +124,7 @@ export const settingsSchema = z.object({
 });
 export const conversationSettingsSchema = settingsSchema
   .pick({
+    permissionMode: true,
     runtime: true,
     codexModel: true,
     codexEffort: true,
@@ -137,7 +141,9 @@ export const boundsSchema = z.object({
   visible: z.boolean(),
 });
 export const toolsSchema = {
+  apple_calendar: calendarToolSchema,
   map_view: mapViewSchema,
+  day_narration: narrationSchema,
   prepare: prepareToolSchema,
   notebook: notebookToolSchema,
   photo_candidates: z.object({

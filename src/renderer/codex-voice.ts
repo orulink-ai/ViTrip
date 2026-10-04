@@ -1,3 +1,4 @@
+import { narrationAudio } from './narration-audio';
 import { VoiceCaptions, type VoiceCaption } from '../shared/voice-captions';
 import { CallTones, type CallFeedback } from './call-tones';
 import { voicePhaseForEvent, type VoicePhase } from '../shared/voice';
@@ -8,6 +9,7 @@ export interface VoiceStreams {
 }
 /** Browser owns media; the main process owns authentication and Codex/tool execution. */
 export class CodexVoice {
+  private unsubscribeNarration?: () => void;
   private peer?: RTCPeerConnection;
   private stream?: MediaStream;
   private channel?: RTCDataChannel;
@@ -59,6 +61,9 @@ export class CodexVoice {
       const peer = (this.peer = new RTCPeerConnection());
       this.audio = new Audio();
       this.audio.autoplay = true;
+      this.unsubscribeNarration = narrationAudio.subscribe((active) => {
+        if (this.audio) this.audio.muted = active;
+      });
       peer.ontrack = (event) => {
         if (this.audio) {
           this.output = event.streams[0] ?? new MediaStream([event.track]);
@@ -96,6 +101,7 @@ export class CodexVoice {
                   : data.type === 'turn.created' && turn === 'user'
                     ? 'hearing'
                     : voicePhaseForEvent(data.type);
+            if (phase === 'hearing') narrationAudio.interrupt();
             if (phase) this.phase?.(phase);
           }
           if (
@@ -166,6 +172,7 @@ export class CodexVoice {
     this.feedback.closed();
     clearTimeout(this.timer);
     this.unsubscribe?.();
+    this.unsubscribeNarration?.();
     if (this.channel) {
       this.channel.onmessage = null;
       this.channel.close();

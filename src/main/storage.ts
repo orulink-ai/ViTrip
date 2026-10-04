@@ -125,6 +125,7 @@ export class Storage {
     if (config) {
       const value = z
         .object({
+          permissionMode: z.enum(['ask', 'full-access']).optional(),
           runtime: z.enum(['pi', 'codex']).optional(),
           codexModel: z.string().optional(),
           codexEffort: z.string().optional(),
@@ -139,6 +140,7 @@ export class Storage {
         .parse(JSON.parse(config));
       this.settings = {
         jevExperiments: value.jevExperiments,
+        permissionMode: value.permissionMode,
         runtime: value.runtime,
         codexModel: value.codexModel,
         codexEffort: value.codexEffort,
@@ -154,12 +156,17 @@ export class Storage {
         apiKey: value.encryptedKey ? cipher.decrypt(Buffer.from(value.encryptedKey, 'base64')) : '',
       };
     }
-    for (const trip of this.trips) trip.settings ??= this.conversationDefaults();
+    for (const trip of this.trips) {
+      trip.settings ??= this.conversationDefaults();
+      // Older conversations must not inherit a later increase in shared permissions.
+      trip.settings.permissionMode ??= 'ask';
+    }
     this.save();
   }
   private conversationDefaults() {
     return {
       ...conversationSettingsSchema.parse(this.settings),
+      permissionMode: this.settings.permissionMode ?? ('ask' as const),
       runtime: this.settings.runtime ?? ('pi' as const),
       codexModel: this.settings.codexModel ?? '',
       codexEffort: this.settings.codexEffort ?? '',
@@ -284,6 +291,7 @@ export class Storage {
       : '';
     this.write('settings', {
       jevExperiments: settings.jevExperiments,
+      permissionMode: settings.permissionMode,
       runtime: settings.runtime,
       codexModel: settings.codexModel,
       codexEffort: settings.codexEffort,

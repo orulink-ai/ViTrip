@@ -1,3 +1,6 @@
+import { useDayNarration } from './use-day-narration';
+import { zoomShortcut } from '../shared/interface-zoom';
+import { usePlacePhotoCollection } from './use-place-photo-collection';
 import { itineraryStops as linkedPlaceStops } from '../shared/itinerary-map';
 import { appendAnnotation, packAnnotations, annotationsOf } from '../shared/quote-annotations';
 import { lazy, Suspense } from 'react';
@@ -146,6 +149,7 @@ function App() {
   }
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const photoCollection = usePlacePhotoCollection();
   const [running, setRunning] = useState(false);
   const [voiceActive, setVoiceActive] = useState(false);
   const [canSteer, setCanSteer] = useState(false);
@@ -158,6 +162,25 @@ function App() {
   const [sourceTarget, setSourceTarget] = useState<string>();
   const [sourceBookmark, setSourceBookmark] = useState<string>();
   const notebook = useNotebook(trip?.journeyId);
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const action = zoomShortcut(
+        {
+          type: 'keyDown',
+          key: event.key,
+          meta: event.metaKey,
+          control: event.ctrlKey,
+          alt: event.altKey,
+        },
+        navigator.platform.startsWith('Mac') ? 'darwin' : 'other',
+      );
+      if (!action || event.defaultPrevented) return;
+      event.preventDefault();
+      void window.vitrip.zoom(action).catch(() => {});
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, []);
   useEffect(() => {
     setQuote((value) => (value?.tripId === trip?.id ? value : undefined));
     setDocumentRequest(undefined);
@@ -334,6 +357,7 @@ function App() {
   useEffect(() => {
     void perform(async () => {
       const initial = await window.vitrip.init();
+      photoCollection.restore(initial.photoCollections ?? []);
       setTrips(initial.trips);
       setJourneys(initial.journeys);
       const active =
@@ -450,6 +474,7 @@ function App() {
   }
   const journey = journeys.find((j) => j.id === trip?.journeyId);
   const discussion = useDiscussionFollow(trip, journey, workspaceOpen && tab === 'plan');
+  const narration = useDayNarration(trip, journey, workspaceOpen && tab === 'plan', discussion);
   const refreshWorkspace = async (id?: string) => {
     const data = await window.vitrip.init();
     setTrips(data.trips);
@@ -694,7 +719,7 @@ function App() {
                         state="request"
                         title={t('需要你确认')}
                         subtitle={approval.label}
-                        description={t('请先检查右侧网页上的操作内容。')}
+                        description={t('请检查操作内容，批准后才会执行。')}
                         allowOnceLabel={t('允许这次操作')}
                         denyLabel={t('拒绝')}
                         onAllowOnce={() =>
@@ -866,13 +891,11 @@ function App() {
                   <JournalPanel
                     key={journey.id}
                     discussion={discussion}
+                    narration={narration}
                     journey={journey}
                     scratchMarkdown={notebook.value?.markdown}
-                    onFindPhotos={(stop) =>
-                      void send(
-                        `请为当前旅行地点「${stop.location!.name}」查找并保存相关真实照片。活动 ID：${stop.id}。先检查本旅行已保存照片，使用真实网页的 photo_candidates 和 save_photo 采集与具体地点、分店一致的图片并关联到该活动；保留来源，不用其他同名地点或生成图片替代，不改变行程安排。`,
-                      )
-                    }
+                    photoCollections={photoCollection.tasks}
+                    onFindPhotos={(stop) => void photoCollection.find(journey, stop)}
                     onOpenDocument={(name) => {
                       setDocumentRequest({ journeyId: journey.id, name, token: Date.now() });
                       setTab('notebook');

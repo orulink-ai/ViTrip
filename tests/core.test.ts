@@ -23,7 +23,12 @@ describe('browser trust boundaries', () => {
   it('never returns a saved key to the renderer', () => {
     expect(
       redactSettings({ baseURL: 'https://api.example.com/v1', model: 'model', apiKey: 'secret' }),
-    ).toEqual({ baseURL: 'https://api.example.com/v1', model: 'model', hasKey: true });
+    ).toEqual({
+      permissionMode: 'ask',
+      baseURL: 'https://api.example.com/v1',
+      model: 'model',
+      hasKey: true,
+    });
   });
 });
 

@@ -14,6 +14,7 @@ export function needsApproval(label: string): boolean {
 }
 export function redactSettings(settings: Settings): PublicSettings {
   return {
+    permissionMode: settings.permissionMode ?? 'ask',
     ...(settings.runtime ? { runtime: settings.runtime } : {}),
     ...(settings.codexModel !== undefined ? { codexModel: settings.codexModel } : {}),
     ...(settings.codexEffort !== undefined ? { codexEffort: settings.codexEffort } : {}),

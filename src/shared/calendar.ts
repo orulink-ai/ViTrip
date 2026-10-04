@@ -40,6 +40,16 @@ export const calendarOptionsSchema = z.object({
   ]),
 });
 export type CalendarOptions = z.infer<typeof calendarOptionsSchema>;
+export function defaultCalendarOptions(journey: Journey): CalendarOptions {
+  return {
+    startDate: journey.plan?.days[0]?.date,
+    timeZone:
+      journey.plan?.days.flatMap((day) => day.activities).find((activity) => activity.timeZone)
+        ?.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
+    durationMinutes: 60,
+    reminderMinutes: 30,
+  };
+}
 export interface CalendarEvent {
   id: string;
   title: string;

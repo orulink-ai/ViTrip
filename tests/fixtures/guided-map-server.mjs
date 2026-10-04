@@ -44,7 +44,13 @@ for await (const line of readline.createInterface({ input: process.stdin })) {
       .join('\n')
       .replace(/^此前对话：[\s\S]*?\n\n/, '');
     const match = !text.includes('[VITRIP_JOURNAL_SYNC]') && text.match(/GUIDED_CASE:(\{[^\n]+\})/);
-    const actions = match ? JSON.parse(match[1]).actions : [];
+    const actions = match
+      ? JSON.parse(match[1]).actions
+      : !text.includes('[VITRIP_JOURNAL_SYNC]') &&
+          text.includes('请启动「每日行程讲解」') &&
+          process.env.VITRIP_NARRATION_FIXTURE
+        ? JSON.parse(readFileSync(process.env.VITRIP_NARRATION_FIXTURE, 'utf8')).actions
+        : [];
     run(actions, turnId, () => {
       send({
         method: 'item/completed',
